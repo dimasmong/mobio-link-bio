@@ -74,7 +74,13 @@ Each installation is completely sovereign: it runs on your own Cloudflare accoun
 
 ### Step 3: Run Database Migrations
 
-MOBIO Studio uses versioned SQLite migrations located in the `migrations/` directory.
+MOBIO Studio uses versioned SQLite migrations located in the `migrations/` directory:
+- `0001_initial_schema.sql`: Core tables, profile, links, contact methods, appearance tokens, publish metadata
+- `0002_draft_isolation.sql`: Isolated draft staging for links and contact methods
+- `0003_media_r2_registry.sql`: Cloudflare R2 media metadata registry and reference counters
+- `0004_explore_items.sql`: 10 flexible content models with draft isolation
+- `0005_click_monitor.sql`: First-party link redirect telemetry table and query indexes
+- `0006_minimal_privacy_clicks.sql`: Final security hardening — drops all user agent telemetry and country fields, enforcing strictly minimal, privacy-first click logging
 
 1. **Apply migrations to your local development database:**
    ```bash
@@ -87,13 +93,13 @@ MOBIO Studio uses versioned SQLite migrations located in the `migrations/` direc
 
 This creates the core database tables and registry:
 - `site_settings`: Global website preferences
-- `profile` & `profile_draft`: Localized name, handle, avatar, avatar media reference, location, and bio
+- `profile`: Localized name, handle, avatar, avatar media reference, location, and bio
 - `links` & `links_draft`: Ordered vertical links with first-party routing `/go/:linkId`
 - `explore_items` & `explore_items_draft`: 10 flexible content models (projects, galleries, music, games, etc.)
 - `contact_methods` & `contact_methods_draft`: Direct action cards (WhatsApp, Telegram, Email, Instagram, custom)
-- `appearance_settings` & `appearance_settings_draft`: Liquid glass tokens, theme presets, cover banner, and fixed background
+- `appearance_settings`: Liquid glass tokens, theme presets, cover banner, and fixed background
 - `publish_metadata`: Version history and publication logs
-- `click_events`: Privacy-first telemetry (indexes: `idx_click_events_time`, `idx_click_events_link_date`)
+- `click_events`: Minimal privacy telemetry (columns: `id`, `link_id`, `clicked_at`, `referrer`; indexes: `idx_click_events_time`, `idx_click_events_link_date`)
 - `media_assets`: Metadata registry for files stored in Cloudflare R2
 
 ---
@@ -119,14 +125,15 @@ All models feature bilingual support (ID/EN), drag-and-drop / sort order reorder
 
 ---
 
-### Step 5: Click Monitor & Privacy-First Link Analytics
+### Step 5: Click Monitor & Minimal Privacy-First Link Analytics
 
-MOBIO Studio Phase 5 includes a built-in telemetry engine:
-- **First-Party Redirects:** Links route through `/go/:linkId` with immediate HTTP 302 redirect and `Cache-Control: no-store, private`.
-- **Zero Personally Identifiable Information (PII):** Raw IP addresses are **never** stored.
-- **Privacy Hashing:** User agents are hashed into a 16-character SHA-256 fingerprint (`user_agent_hash`).
-- **Referrer Sanitization:** Referrer URLs are stripped of sensitive query parameters and paths (only the host domain is logged).
-- **Security Guard:** Non-existent links return 404. Open-redirect injection attempts are rejected.
+MOBIO Studio includes a sovereign, privacy-by-design telemetry engine (hardened in Migration 0006):
+- **First-Party Redirects:** Links route through `/go/:linkId` with immediate HTTP 302 redirect and `Cache-Control: no-store, no-cache, must-revalidate, private`.
+- **Zero Personally Identifiable Information (Zero PII):** IP addresses are **never** logged or stored.
+- **Zero Persistent Identifiers & Zero UA Telemetry:** No user agent strings, no user agent hashes, no device fingerprints, and no country codes are recorded. Each click is recorded purely as an anonymous temporal occurrence: `{ id, link_id, clicked_at, referrer }`.
+- **Sanitized Referrer Domain:** Referrer headers are stripped down strictly to the origin hostname (e.g. `twitter.com`), completely discarding paths, search queries, or sensitive URL parameters.
+- **Data Sovereignty & Reset:** The site owner can wipe all telemetry data at any time via the Studio Settings UI ("Reset Click Analytics") or via direct SQL (`DELETE FROM click_events;`).
+- **Security Guard:** Non-existent links return 404. Open-redirect injection attempts via query parameters (e.g., `?url=...`) are completely ignored. Destination URLs are strictly pulled from the verified D1 database record.
 - **Admin Dashboard:** Real-time metrics across 4 time horizons (`today`, `7d`, `30d`, `all`), daily activity bar chart, per-link leaderboard, and top referrers list.
 
 ---
@@ -212,7 +219,7 @@ In `wrangler.json`:
 
 ---
 
-### Step 9: Local Development & Testing
+### Step 9: Local Development & Verification
 
 1. For local development, copy `.dev.vars.example` to `.dev.vars`:
    ```bash
@@ -228,6 +235,12 @@ In `wrangler.json`:
    ```
 4. Visit [http://localhost:5173/studio](http://localhost:5173/studio) in your browser.
 5. Visit [http://localhost:5173](http://localhost:5173) to verify your public link-in-bio homepage.
+
+> [!IMPORTANT]
+> **Authentication Verification Disclosure:**
+> Automated local tests use development identity emulation (`isLocalDevEnvironment`). In local development, requests to loopback addresses (`localhost`, `127.0.0.1`) without production environment variables can authenticate via `LOCAL_DEV_ADMIN_EMAIL` or `X-Mobio-Dev-Identity`.
+>
+> In production, this bypass is **physically disabled and unreachable**: any production build (`PROD=true`), any non-localhost host, any presence of `CF_ACCESS_TEAM_NAME`, or any proxy forwarding headers (`X-Forwarded-Proto`, non-localhost `X-Forwarded-Host`) completely deactivates the local bypass. Production instances **strictly demand** valid, cryptographically signed Cloudflare Access RS256 JWT tokens. Real Cloudflare Access Email OTP delivery must be configured and tested through your Cloudflare Zero Trust dashboard upon remote deployment.
 
 ---
 
@@ -251,9 +264,11 @@ npx wrangler deploy
 ## 🔒 Security Best Practices
 
 1. **Cryptographic RS256 JWT Verification:** Tokens delivered via `Cf-Access-Jwt-Assertion` are cryptographically verified using public keys fetched from Cloudflare Access JWKS (`/cdn-cgi/access/certs`).
-2. **Never commit `.dev.vars` or `.env` files:** They are already listed in `.gitignore`.
-3. **Never commit real API keys or personal credentials:** MOBIO is designed to run with Zero Trust headers rather than hardcoded credentials.
-4. **Fail-Closed Protection:** If the `Cf-Access-Jwt-Assertion` header is missing, corrupted, or expired, MOBIO Studio immediately denies access with an HTTP 401/403 status.
-5. **CSRF Defense:** State-changing API endpoints automatically reject requests with mismatched `Origin` or `Referer` headers.
-6. **Strict Magic-Byte Media Validation:** File uploads are inspected at the byte level to prevent disguised executable payloads from entering Cloudflare R2.
-7. **Anti-Open-Redirect Guard:** First-party `/go/:linkId` redirects enforce safe URL schemes (`http:`, `https:`, `mailto:`, `tel:`) and reject malicious protocols (`javascript:`, `data:`).
+2. **Hardened Fail-Closed Development Bypass:** The local simulation guard (`isLocalDevEnvironment`) strictly verifies that the environment is in development mode and bound to direct loopback. Forged forwarded headers (`X-Forwarded-Host: attacker.com`, `X-Forwarded-Proto: https`) or configured production variables (`CF_ACCESS_TEAM_NAME`, `CF_ACCESS_AUD`) immediately disable the simulation mode and enforce production JWT verification.
+3. **Never commit `.dev.vars` or `.env` files:** They are already listed in `.gitignore`.
+4. **Never commit real API keys or personal credentials:** MOBIO is designed to run with Zero Trust headers rather than hardcoded credentials.
+5. **Fail-Closed Protection:** If the `Cf-Access-Jwt-Assertion` header is missing, corrupted, expired, or AUD/ISS fails to match, MOBIO Studio immediately denies access with HTTP 401/403.
+6. **Strict CSRF Defense:** State-changing API endpoints automatically reject mutations with mismatched `Origin` or `Referer` headers.
+7. **Strict Magic-Byte Media Validation:** File uploads are inspected at the byte level to prevent disguised executable payloads from entering Cloudflare R2.
+8. **Anti-Open-Redirect Guard:** First-party `/go/:linkId` redirects enforce safe URL schemes (`http:`, `https:`, `mailto:`, `tel:`) and reject malicious protocols (`javascript:`, `data:`). Target destinations are strictly resolved from D1 and never accepted via query parameter overrides.
+9. **Zero PII & Minimal Privacy Telemetry:** Click analytics contain zero visitor IP addresses, zero user-agent hashes, zero device fingerprints, and zero country codes. Referrers are stripped to pure domain origins. Site owners retain complete sovereign control to purge all analytics data at any time.

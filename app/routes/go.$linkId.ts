@@ -58,18 +58,14 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 
 	const destinationUrl = validation.normalizedUrl;
 
-	// 4. Asynchronously record click telemetry
+	// 4. Asynchronously record minimal privacy-first click telemetry
 	try {
 		const referrer = request.headers.get("referer") || "";
-		const userAgent = request.headers.get("user-agent") || "";
-		const country = (request as unknown as { cf?: { country?: string } }).cf?.country || "";
 
-		// We record the click event into D1
+		// Record minimal click event into D1 (no IP, no user-agent, no persistent identifier)
 		await recordClickEvent(env.DB, {
 			linkId,
 			referrer,
-			userAgent,
-			country,
 		});
 	} catch (err: unknown) {
 		console.warn("Failed recording click event:", err);

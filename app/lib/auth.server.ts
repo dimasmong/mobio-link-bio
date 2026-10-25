@@ -163,18 +163,61 @@ export async function verifyCloudflareAccessSignature(
 
 /**
  * Strictly verifies whether the current execution is in a local development environment.
- * Rejects any remote host or production mode.
+ * Rejects any remote host, proxy forwarding, or production mode.
+ *
+ * Guarantees that local dev simulation headers can NEVER authorize production requests,
+ * even if an attacker attempts to spoof Host, Origin, or forwarded headers.
  */
 export function isLocalDevEnvironment(request: Request, env: unknown): boolean {
+	const e = (env || {}) as Record<string, string | undefined>;
+
+	// 1. If running under production build, PROD mode, or NODE_ENV=production, NEVER allow local simulation
+	const globalProcess = (globalThis as unknown as { process?: { env?: { NODE_ENV?: string } } }).process;
+	if (
+		import.meta.env?.PROD === true ||
+		import.meta.env?.MODE === "production" ||
+		globalProcess?.env?.NODE_ENV === "production"
+	) {
+		return false;
+	}
+
+	// 2. If Cloudflare Access production parameters are configured, strictly enforce production mode
+	if (e.CF_ACCESS_TEAM_NAME?.trim() || e.CF_ACCESS_AUD?.trim()) {
+		return false;
+	}
+
 	try {
+		// 3. Reject proxy headers from reverse proxies/tunnels (ngrok, cloudflared, external gateways)
+		if (
+			request.headers.get("x-forwarded-proto") ||
+			request.headers.get("x-forwarded-for") ||
+			request.headers.get("forwarded")
+		) {
+			return false;
+		}
+
+		// Reject forwarded hosts that point to any non-localhost domain
+		const forwardedHost = request.headers.get("x-forwarded-host");
+		if (forwardedHost) {
+			const fwdHostname = forwardedHost.split(":")[0].toLowerCase().trim();
+			if (
+				fwdHostname !== "localhost" &&
+				fwdHostname !== "127.0.0.1" &&
+				fwdHostname !== "[::1]"
+			) {
+				return false;
+			}
+		}
+
+		// 4. Must be direct localhost loopback URL
 		const url = new URL(request.url);
 		const isLocalHost =
 			url.hostname === "localhost" ||
 			url.hostname === "127.0.0.1" ||
 			url.hostname === "[::1]";
 
-		// In Vite / Cloudflare dev plugin, import.meta.env.DEV is true
-		const isDevMode = Boolean(import.meta.env?.DEV) || import.meta.env?.MODE !== "production";
+		// 5. Must strictly have DEV flag and not be in production mode
+		const isDevMode = Boolean(import.meta.env?.DEV) && import.meta.env?.MODE !== "production";
 
 		return isLocalHost && isDevMode;
 	} catch {
@@ -281,7 +324,7 @@ export async function authenticateAdmin(
 		}
 	}
 
-	// Fail closed if JWT is missing
+	// Fail closed if JWT is missing: ALWAYS 401 Unauthorized
 	if (!jwt || jwt.trim() === "") {
 		return {
 			isAuthenticated: false,
@@ -289,6 +332,21 @@ export async function authenticateAdmin(
 			error: "Cloudflare Access JWT assertion missing. Silakan login melalui Cloudflare Access.",
 			statusCode: 401,
 			reason: "missing_jwt",
+		};
+	}
+
+	// In production, when JWT is presented, enforce fail-closed configuration:
+	// CF_ACCESS_TEAM_NAME and CF_ACCESS_AUD must be set
+	const expectedTeam = e.CF_ACCESS_TEAM_NAME?.trim();
+	const expectedAud = e.CF_ACCESS_AUD?.trim();
+
+	if (!expectedTeam || !expectedAud) {
+		return {
+			isAuthenticated: false,
+			user: null,
+			error: "Konfigurasi server Cloudflare Access belum lengkap (CF_ACCESS_TEAM_NAME atau CF_ACCESS_AUD belum diatur). Akses ditolak secara fail-closed demi keamanan.",
+			statusCode: 500,
+			reason: "team_mismatch",
 		};
 	}
 
@@ -328,49 +386,43 @@ export async function authenticateAdmin(
 			};
 		}
 
-		// B. Check Audience (AUD) if configured in environment
-		const expectedAud = e.CF_ACCESS_AUD?.trim();
-		if (expectedAud) {
-			const jwtAud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
-			if (!jwtAud.includes(expectedAud)) {
-				return {
-					isAuthenticated: false,
-					user: null,
-					error: "Audience Cloudflare Access tidak sesuai (AUD mismatch).",
-					statusCode: 403,
-					reason: "aud_mismatch",
-				};
-			}
+		// B. Validate Audience (AUD) against configured production audience tag
+		const jwtAud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+		if (!jwtAud.includes(expectedAud)) {
+			return {
+				isAuthenticated: false,
+				user: null,
+				error: "Audience Cloudflare Access tidak sesuai (AUD mismatch).",
+				statusCode: 403,
+				reason: "aud_mismatch",
+			};
 		}
 
-		// C. Check Issuer / Team Domain if configured in environment
-		const expectedTeam = e.CF_ACCESS_TEAM_NAME?.trim();
-		if (expectedTeam && payload.iss) {
-			const expectedIssuer = `https://${expectedTeam}.cloudflareaccess.com`;
-			if (payload.iss !== expectedIssuer) {
-				return {
-					isAuthenticated: false,
-					user: null,
-					error: "Issuer Cloudflare Access tidak sesuai dengan nama team yang dikonfigurasi.",
-					statusCode: 403,
-					reason: "team_mismatch",
-				};
-			}
-
-			// Cryptographic verification of RS256 signature against Cloudflare Access JWKS
-			const isSignatureValid = await verifyCloudflareAccessSignature(jwt, expectedTeam);
-			if (!isSignatureValid) {
-				return {
-					isAuthenticated: false,
-					user: null,
-					error: "Tanda tangan kriptografis Cloudflare Access JWT (RS256) tidak valid atau kunci JWKS tidak cocok.",
-					statusCode: 401,
-					reason: "invalid_jwt",
-				};
-			}
+		// C. Validate Issuer (Team Domain)
+		const expectedIssuer = `https://${expectedTeam}.cloudflareaccess.com`;
+		if (payload.iss !== expectedIssuer) {
+			return {
+				isAuthenticated: false,
+				user: null,
+				error: "Issuer Cloudflare Access tidak sesuai dengan nama team yang dikonfigurasi.",
+				statusCode: 403,
+				reason: "team_mismatch",
+			};
 		}
 
-		// D. Extract authenticated email
+		// D. Mandatory Cryptographic verification of RS256 signature against Cloudflare Access JWKS
+		const isSignatureValid = await verifyCloudflareAccessSignature(jwt, expectedTeam);
+		if (!isSignatureValid) {
+			return {
+				isAuthenticated: false,
+				user: null,
+				error: "Tanda tangan kriptografis Cloudflare Access JWT (RS256) tidak valid atau kunci JWKS tidak cocok.",
+				statusCode: 401,
+				reason: "invalid_jwt",
+			};
+		}
+
+		// E. Extract authenticated email
 		const authenticatedEmail = payload.email || payload.sub;
 		if (!authenticatedEmail || typeof authenticatedEmail !== "string") {
 			return {
@@ -382,7 +434,7 @@ export async function authenticateAdmin(
 			};
 		}
 
-		// E. Check Authorized Admin Email if explicitly restricted in environment
+		// F. Check Authorized Admin Email if explicitly restricted in environment
 		const requiredAdminEmail = e.ADMIN_EMAIL?.trim();
 		if (requiredAdminEmail) {
 			if (authenticatedEmail.toLowerCase() !== requiredAdminEmail.toLowerCase()) {

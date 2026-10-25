@@ -8,8 +8,6 @@ export interface ClickRecord {
 	link_id: string;
 	clicked_at: string;
 	referrer?: string;
-	country?: string;
-	user_agent_hash?: string;
 }
 
 export interface LinkClickBreakdown {
@@ -50,24 +48,8 @@ export interface ClickAnalyticsSummary {
 }
 
 /**
- * Computes a fast SHA-256 privacy hash for user-agent / client identifiers.
- */
-async function computePrivacyHash(input: string): Promise<string> {
-	if (!input) return "";
-	try {
-		const encoder = new TextEncoder();
-		const data = encoder.encode(input);
-		const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-		const hashArray = Array.from(new Uint8Array(hashBuffer));
-		const hex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-		return hex.slice(0, 16); // Only first 16 chars needed for deduplication without re-identification
-	} catch {
-		return "";
-	}
-}
-
-/**
  * Sanitizes and extracts the referrer domain or platform.
+ * Strips all query parameters, search paths, and individual profile links.
  */
 function sanitizeReferrer(rawReferrer?: string): string {
 	if (!rawReferrer) return "Direct / None";
@@ -83,30 +65,27 @@ function sanitizeReferrer(rawReferrer?: string): string {
 }
 
 /**
- * Records a click event into Cloudflare D1.
+ * Records a minimal, privacy-preserving click event into Cloudflare D1.
+ * Does NOT collect or store IP addresses, User-Agents, or device fingerprints.
  */
 export async function recordClickEvent(
 	db: D1Database,
 	params: {
 		linkId: string;
 		referrer?: string;
-		userAgent?: string;
-		country?: string;
 	}
 ): Promise<void> {
 	const id = crypto.randomUUID();
 	const now = new Date().toISOString();
 	const sanitizedRef = sanitizeReferrer(params.referrer);
-	const uaHash = await computePrivacyHash(params.userAgent || "");
-	const country = (params.country || "").toUpperCase().slice(0, 4);
 
 	try {
 		await db
 			.prepare(
-				`INSERT INTO click_events (id, link_id, clicked_at, referrer, country, user_agent_hash)
-				 VALUES (?, ?, ?, ?, ?, ?);`
+				`INSERT INTO click_events (id, link_id, clicked_at, referrer)
+				 VALUES (?, ?, ?, ?);`
 			)
-			.bind(id, params.linkId, now, sanitizedRef, country, uaHash)
+			.bind(id, params.linkId, now, sanitizedRef)
 			.run();
 	} catch (err: unknown) {
 		console.warn("Failed to record click event:", err);

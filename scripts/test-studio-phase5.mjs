@@ -90,26 +90,34 @@ async function runPhase5Tests() {
 	}
 
 	// -------------------------------------------------------------------------
-	// 3. PRIVACY & SANITIZATION VERIFICATION (NO PII, HASHED UA, STRIPPED REFERRER)
+	// 3. PRIVACY & SANITIZATION VERIFICATION (NO PII, NO UA TELEMETRY, STRIPPED REFERRER)
 	// -------------------------------------------------------------------------
-	console.log("\nTEST 3: Verifying Privacy Telemetry in D1 (Hashed UA, Sanitized Referrer, No PII)...");
+	console.log("\nTEST 3: Verifying Privacy Telemetry in D1 (Zero UA, Sanitized Referrer, No PII)...");
 	try {
 		const stdout = execSync(
-			`npx.cmd wrangler d1 execute mobio-db --local --command "SELECT id, link_id, referrer, user_agent_hash FROM click_events WHERE link_id='${testLinkId}' ORDER BY clicked_at DESC LIMIT 1;"`,
+			`npx.cmd wrangler d1 execute mobio-db --local --command "SELECT id, link_id, referrer FROM click_events WHERE link_id='${testLinkId}' ORDER BY clicked_at DESC LIMIT 1;"`,
 			{ encoding: "utf8" }
 		);
 
 		console.log("  D1 Click Record Query Output:\n", stdout);
 
-		// Check user agent hash is 16 chars hex and NOT the raw user-agent string
-		const rawUaPresent = stdout.includes("Mozilla/5.0") || stdout.includes("TestBrowser");
+		const pragmaOutput = execSync(
+			'npx.cmd wrangler d1 execute mobio-db --local --command "PRAGMA table_info(click_events);"',
+			{ encoding: "utf8" }
+		);
+
+		// Verify zero UA telemetry and zero country fields in database schema
+		const hasUaColumn = pragmaOutput.includes("user_agent_hash") || pragmaOutput.includes("user_agent");
+		const hasCountryColumn = pragmaOutput.includes("country");
+
+		// Check referrer is strictly domain/host without sensitive query params or paths
 		const referrerSanitized = stdout.includes("twitter.com") && !stdout.includes("123456789") && !stdout.includes("xyz");
 
-		if (!rawUaPresent && referrerSanitized) {
-			console.log("  ✅ Telemetry strictly privacy-first: Raw UA not stored, referrer stripped of paths/query params.");
+		if (!hasUaColumn && !hasCountryColumn && referrerSanitized) {
+			console.log("  ✅ Telemetry strictly minimal privacy: Zero UA columns, zero country, referrer stripped of paths/query params.");
 			report.privacySanitizationNoPII = true;
 		} else {
-			console.error("  ❌ Privacy leakage detected! rawUaPresent:", rawUaPresent, "referrerSanitized:", referrerSanitized);
+			console.error("  ❌ Privacy leakage detected! hasUaColumn:", hasUaColumn, "hasCountryColumn:", hasCountryColumn, "referrerSanitized:", referrerSanitized);
 		}
 	} catch (err) {
 		console.error("  ❌ Error inspecting privacy records in D1:", err.message);
