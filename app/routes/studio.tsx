@@ -4884,53 +4884,55 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										/>
 									</div>
 
-									{/* Cover Banner Preview if Enabled */}
-									{Boolean(appearance.cover_enabled) && (
-										<div className="w-full rounded-2xl overflow-hidden mb-[-2rem] z-0 h-24 relative shadow-md border border-[var(--glass-border-specular)]">
-											{appearance.cover_url ? (
-												<img
-													src={appearance.cover_url}
-													alt="Cover"
-													className="w-full h-full object-cover"
-												/>
-											) : (
-												<div className="w-full h-full bg-gradient-to-tr from-violet-200/60 via-sky-100/50 to-pink-200/50 flex items-center justify-center text-[10px] text-slate-800 font-bold">
-													Liquid Aurora Sheen
-												</div>
-											)}
-										</div>
-									)}
+									{/* Profile Card Preview with Unified Cover Banner & Overlapping Avatar */}
+									<div className="w-full glass-liquid-primary rounded-2xl overflow-hidden flex flex-col items-center text-center mb-4 z-10 shadow-md">
+										{/* Cover Banner at top of card */}
+										{Boolean(appearance.cover_enabled) && (
+											<div className="w-full h-24 relative overflow-hidden z-0">
+												{appearance.cover_url ? (
+													<img
+														src={appearance.cover_url}
+														alt="Cover"
+														className="w-full h-full object-cover"
+													/>
+												) : (
+													<div className="w-full h-full bg-gradient-to-tr from-violet-200/60 via-sky-100/50 to-pink-200/50 flex items-center justify-center text-[10px] text-slate-800 font-bold">
+														Liquid Aurora Sheen
+													</div>
+												)}
+											</div>
+										)}
 
-									{/* Profile Card Preview with Real Liquid Glass */}
-									<div className="w-full glass-liquid-primary rounded-2xl p-4 flex flex-col items-center text-center mb-4 z-10 shadow-md">
-										<div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full p-0.5 bg-gradient-to-tr from-white via-[var(--glass-surface-primary)] to-white/70 overflow-hidden mb-2 shadow-lg flex items-center justify-center">
-											{profile.avatar_url ? (
-												<img src={profile.avatar_url} alt={profile.name} className="w-full h-full rounded-full object-cover" />
-											) : (
-												<div
-													className="w-full h-full rounded-full flex items-center justify-center font-bold text-xl sm:text-2xl shadow-inner select-none"
-													style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-foreground)" }}
-												>
-													{profile.name[0] || "?"}
-												</div>
+										<div className={`w-full p-4 flex flex-col items-center ${Boolean(appearance.cover_enabled) ? "pt-0" : ""}`}>
+											<div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full p-0.5 bg-gradient-to-tr from-white via-[var(--glass-surface-primary)] to-white/70 overflow-hidden shadow-lg ring-4 ring-[var(--glass-surface-primary)] flex items-center justify-center z-20 relative ${Boolean(appearance.cover_enabled) ? "-mt-8 sm:-mt-10 mb-2" : "mb-2"}`}>
+												{profile.avatar_url ? (
+													<img src={profile.avatar_url} alt={profile.name} className="w-full h-full rounded-full object-cover" />
+												) : (
+													<div
+														className="w-full h-full rounded-full flex items-center justify-center font-bold text-xl sm:text-2xl shadow-inner select-none"
+														style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-foreground)" }}
+													>
+														{profile.name[0] || "?"}
+													</div>
+												)}
+											</div>
+											<h4 className="text-base font-bold text-theme-primary">{profile.name || "Nama Pengguna"}</h4>
+											<p
+												className="text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 bg-theme-accent-subtle"
+											>
+												{profile.handle || "@handle"}
+											</p>
+											{(previewLang === "id" ? profile.location_id : profile.location_en) && (
+												<span className="text-[11px] text-theme-muted mt-1.5">
+													📍 {previewLang === "id" ? profile.location_id : profile.location_en}
+												</span>
+											)}
+											{(previewLang === "id" ? profile.bio_id : profile.bio_en) && (
+												<p className="text-xs text-theme-secondary mt-2 leading-relaxed">
+													{previewLang === "id" ? profile.bio_id : profile.bio_en}
+												</p>
 											)}
 										</div>
-										<h4 className="text-base font-bold text-theme-primary">{profile.name || "Nama Pengguna"}</h4>
-										<p
-											className="text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 bg-theme-accent-subtle"
-										>
-											{profile.handle || "@handle"}
-										</p>
-										{(previewLang === "id" ? profile.location_id : profile.location_en) && (
-											<span className="text-[11px] text-theme-muted mt-1.5">
-												📍 {previewLang === "id" ? profile.location_id : profile.location_en}
-											</span>
-										)}
-										{(previewLang === "id" ? profile.bio_id : profile.bio_en) && (
-											<p className="text-xs text-theme-secondary mt-2 leading-relaxed">
-												{previewLang === "id" ? profile.bio_id : profile.bio_en}
-											</p>
-										)}
 									</div>
 
 									{/* Links Preview */}

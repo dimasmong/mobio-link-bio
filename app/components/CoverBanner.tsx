@@ -13,7 +13,7 @@ export function CoverBanner({ config, lang }: CoverBannerProps) {
 	const aspectRatio = config.aspectRatio || "aspect-[21/9] sm:aspect-[24/9]";
 
 	return (
-		<div className="w-full mb-[-3.5rem] sm:mb-[-4.5rem] relative z-0">
+		<div className="w-full relative z-0">
 			<div
 				className={`w-full ${aspectRatio} rounded-3xl sm:rounded-4xl overflow-hidden glass-liquid-cover relative transition-all duration-300`}
 			>

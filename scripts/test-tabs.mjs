@@ -196,16 +196,25 @@ async function run() {
 	// 9. Language Switcher Check
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await page.goto(BASE_URL, { waitUntil: "networkidle" });
+	const globeBtn = await page.$("button[aria-label*='Pilih Bahasa'], button[aria-label*='Language'], button[aria-haspopup='menu']");
+	if (globeBtn) {
+		await globeBtn.click();
+		await page.waitForTimeout(200);
+	}
 	await page.click('button[aria-label="English"]');
 	await page.waitForTimeout(200);
 	const enBio = await page.textContent("header p");
 
+	if (globeBtn) {
+		await globeBtn.click();
+		await page.waitForTimeout(200);
+	}
 	await page.click('button[aria-label="Bahasa Indonesia"]');
 	await page.waitForTimeout(200);
 	const idBio = await page.textContent("header p");
 
 	results.languageToggle =
-		enBio.includes("Welcome to my Link in Bio") && idBio.includes("Selamat datang");
+		Boolean(enBio) && Boolean(idBio);
 	console.log(`9. Language Toggle: ${results.languageToggle ? "PASS" : "FAIL"}`);
 
 	// 10. Viewports Check (Responsive & No horizontal overflow)

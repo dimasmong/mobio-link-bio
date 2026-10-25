@@ -13,8 +13,6 @@ import {
 import { computeThemeVariables } from "../lib/theme";
 import { FixedBackground } from "../components/FixedBackground";
 import { FloatingNav, type TabId } from "../components/FloatingNav";
-import { LanguageToggle } from "../components/LanguageToggle";
-import { CoverBanner } from "../components/CoverBanner";
 import { ProfileGlassCard } from "../components/ProfileGlassCard";
 import { VerticalLinkList } from "../components/VerticalLinkList";
 import { ExploreSection } from "../components/ExploreSection";
@@ -278,21 +276,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			{/* Fixed Fullscreen Background (Gradient Mesh, Image, or Video with safe playback & readability overlay) */}
 			<FixedBackground config={profile.background} />
 
-			{/* Floating Navigation Dock (Desktop top bar & Mobile bottom dock: Home, Explore, Contact) */}
+			{/* Floating Navigation Dock with Integrated Language Dropdown */}
 			<FloatingNav
 				profile={profile}
 				lang={lang}
 				activeTab={activeTab}
 				onSelectTab={handleSelectTab}
+				onToggleLang={setLang}
 			/>
 
 			{/* App-Like Centered Container */}
-			<main className="relative z-10 w-full min-h-screen px-4 sm:px-6 pt-4 pb-28 sm:pb-32 flex flex-col items-center">
+			<main className="relative z-10 w-full min-h-screen px-4 sm:px-6 pt-6 sm:pt-8 pb-28 sm:pb-32 flex flex-col items-center">
 				<div className="w-full max-w-xl sm:max-w-2xl mx-auto flex flex-col items-center">
-					{/* Top Utility Bar: Bilingual Switcher (ID / EN) */}
-					<LanguageToggle currentLang={lang} onToggle={setLang} />
-
-					{/* 1. HOME TAB PANEL: Cover Banner + Pure Profile Glass Card + Vertical Links ONLY */}
+					{/* 1. HOME TAB PANEL: Pure Profile Glass Card with Unified Cover & Overlapping Avatar + Vertical Links */}
 					<div
 						role="tabpanel"
 						id="tabpanel-home"
@@ -308,10 +304,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									aria-label={lang === "id" ? "Beranda & Profil" : "Home & Profile"}
 									className="w-full flex flex-col items-center"
 								>
-									{/* Custom Cover Banner with Liquid Glass Fallback */}
-									<CoverBanner config={profile.cover} lang={lang} />
-
-									{/* Pure Profile Card (Avatar, Name, Handle, Bio ONLY) */}
+									{/* Unified Profile Glass Card with full-bleed cover banner & overlapping avatar */}
 									<ProfileGlassCard profile={profile} lang={lang} />
 								</section>
 

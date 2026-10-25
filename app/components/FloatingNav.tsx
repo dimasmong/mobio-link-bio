@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import type { ProfileData, Language } from "../data/profile";
-import { HomeIcon, CompassIcon, ContactIcon } from "./Icons";
+import { HomeIcon, CompassIcon, ContactIcon, GlobeIcon } from "./Icons";
 
 export type TabId = "home" | "explore" | "contact";
 
@@ -9,6 +9,7 @@ interface FloatingNavProps {
 	lang: Language;
 	activeTab: TabId;
 	onSelectTab: (tabId: TabId) => void;
+	onToggleLang?: (lang: Language) => void;
 }
 
 interface NavItem {
@@ -22,11 +23,38 @@ export function FloatingNav({
 	lang,
 	activeTab,
 	onSelectTab,
+	onToggleLang,
 }: FloatingNavProps) {
 	const [isScrollingDown, setIsScrollingDown] = useState<boolean>(false);
+	const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
 	const lastScrollY = useRef<number>(0);
 	const desktopTabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 	const mobileTabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+	const desktopLangRef = useRef<HTMLDivElement | null>(null);
+	const mobileLangRef = useRef<HTMLDivElement | null>(null);
+
+	// Close language dropdown on outside click or Escape key
+	useEffect(() => {
+		const handleClickOutside = (e: MouseEvent) => {
+			if (
+				desktopLangRef.current &&
+				!desktopLangRef.current.contains(e.target as Node) &&
+				mobileLangRef.current &&
+				!mobileLangRef.current.contains(e.target as Node)
+			) {
+				setIsLangOpen(false);
+			}
+		};
+		const handleEscape = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setIsLangOpen(false);
+		};
+		document.addEventListener("mousedown", handleClickOutside);
+		document.addEventListener("keydown", handleEscape);
+		return () => {
+			document.removeEventListener("mousedown", handleClickOutside);
+			document.removeEventListener("keydown", handleEscape);
+		};
+	}, []);
 
 	// 3 Dedicated App-Like Tabs (Strictly Home, Explore, Contact — NO Links)
 	const navItems: NavItem[] = [
@@ -129,6 +157,73 @@ export function FloatingNav({
 							</button>
 						);
 					})}
+
+					{/* Vertical Separator */}
+					<div className="w-px h-4 bg-[var(--glass-border-subtle)] mx-1" aria-hidden="true" />
+
+					{/* Integrated Language Globe Button & Dropdown */}
+					<div className="relative" ref={desktopLangRef}>
+						<button
+							type="button"
+							aria-label="Pilih Bahasa / Language"
+							aria-haspopup="menu"
+							aria-expanded={isLangOpen}
+							onClick={() => setIsLangOpen((prev) => !prev)}
+							className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
+								isLangOpen
+									? "bg-[var(--glass-surface-hover)] text-theme-primary"
+									: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
+							}`}
+						>
+							<GlobeIcon className="w-3.5 h-3.5" />
+							<span className="uppercase text-[11px] font-bold">{lang}</span>
+							<span className={`text-[8px] transition-transform duration-200 ${isLangOpen ? "rotate-180" : ""}`}>▾</span>
+						</button>
+
+						{/* Dropdown Menu */}
+						{isLangOpen && (
+							<div
+								role="menu"
+								aria-label="Pilihan Bahasa"
+								className="absolute top-full mt-2.5 right-0 glass-liquid-secondary rounded-2xl p-1.5 shadow-2xl border border-[var(--glass-border-specular)] min-w-[150px] flex flex-col gap-1 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
+							>
+								<button
+									type="button"
+									role="menuitem"
+									aria-label="Bahasa Indonesia"
+									onClick={() => {
+										onToggleLang?.("id");
+										setIsLangOpen(false);
+									}}
+									className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+										lang === "id"
+											? "bg-theme-accent-subtle text-theme-accent font-bold"
+											: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
+									}`}
+								>
+									<span>ID (Indonesia)</span>
+									{lang === "id" && <span className="text-[11px] font-bold">✓</span>}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									aria-label="English"
+									onClick={() => {
+										onToggleLang?.("en");
+										setIsLangOpen(false);
+									}}
+									className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+										lang === "en"
+											? "bg-theme-accent-subtle text-theme-accent font-bold"
+											: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
+									}`}
+								>
+									<span>EN (English)</span>
+									{lang === "en" && <span className="text-[11px] font-bold">✓</span>}
+								</button>
+							</div>
+						)}
+					</div>
 				</div>
 			</aside>
 
@@ -175,6 +270,73 @@ export function FloatingNav({
 							</button>
 						);
 					})}
+
+					{/* Vertical Separator */}
+					<div className="w-px h-4 bg-[var(--glass-border-subtle)] mx-0.5" aria-hidden="true" />
+
+					{/* Integrated Language Globe Button & Dropdown (Pops up above bottom dock) */}
+					<div className="relative" ref={mobileLangRef}>
+						<button
+							type="button"
+							aria-label="Pilih Bahasa / Language"
+							aria-haspopup="menu"
+							aria-expanded={isLangOpen}
+							onClick={() => setIsLangOpen((prev) => !prev)}
+							className={`px-2.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
+								isLangOpen
+									? "bg-[var(--glass-surface-hover)] text-theme-primary"
+									: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
+							}`}
+						>
+							<GlobeIcon className="w-3.5 h-3.5" />
+							<span className="uppercase text-[10px] font-bold">{lang}</span>
+							<span className={`text-[8px] transition-transform duration-200 ${isLangOpen ? "rotate-180" : ""}`}>▴</span>
+						</button>
+
+						{/* Dropdown Menu (pops up above bottom dock) */}
+						{isLangOpen && (
+							<div
+								role="menu"
+								aria-label="Pilihan Bahasa"
+								className="absolute bottom-full mb-3 right-0 glass-liquid-secondary rounded-2xl p-1.5 shadow-2xl border border-[var(--glass-border-specular)] min-w-[145px] flex flex-col gap-1 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
+							>
+								<button
+									type="button"
+									role="menuitem"
+									aria-label="Bahasa Indonesia"
+									onClick={() => {
+										onToggleLang?.("id");
+										setIsLangOpen(false);
+									}}
+									className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+										lang === "id"
+											? "bg-theme-accent-subtle text-theme-accent font-bold"
+											: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
+									}`}
+								>
+									<span>ID (Indonesia)</span>
+									{lang === "id" && <span className="text-[11px] font-bold">✓</span>}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									aria-label="English"
+									onClick={() => {
+										onToggleLang?.("en");
+										setIsLangOpen(false);
+									}}
+									className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+										lang === "en"
+											? "bg-theme-accent-subtle text-theme-accent font-bold"
+											: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
+									}`}
+								>
+									<span>EN (English)</span>
+									{lang === "en" && <span className="text-[11px] font-bold">✓</span>}
+								</button>
+							</div>
+						)}
+					</div>
 				</div>
 			</aside>
 		</>

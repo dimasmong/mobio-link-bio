@@ -125,10 +125,22 @@ async function run() {
 	console.log("\nTEST 4: Verifying Bilingual Toggle (ID / EN)...");
 	await page.click("button:has-text('Home'), button:has-text('Beranda')");
 	await page.waitForTimeout(200);
+
+	// Open dropdown from navbar globe button if present
+	const globeBtn = await page.$("button[aria-label*='Pilih Bahasa'], button[aria-label*='Language'], button[aria-haspopup='menu']");
+	if (globeBtn) {
+		await globeBtn.click();
+		await page.waitForTimeout(200);
+	}
 	await page.click("button:has-text('EN')");
 	await page.waitForTimeout(200);
 	const enLinksText = await page.textContent("#tabpanel-home");
 	const hasEnglish = enLinksText.includes("No Links Configured Yet");
+
+	if (globeBtn) {
+		await globeBtn.click();
+		await page.waitForTimeout(200);
+	}
 	await page.click("button:has-text('ID')");
 	await page.waitForTimeout(200);
 	const idLinksText = await page.textContent("#tabpanel-home");

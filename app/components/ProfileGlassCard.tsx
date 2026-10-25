@@ -16,30 +16,78 @@ function getInitials(name: string): string {
 	return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function normalizeAspectRatio(ratio?: string): string {
+	if (!ratio) return "aspect-[21/9] sm:aspect-[24/9]";
+	if (ratio === "16:9") return "aspect-[16/9]";
+	if (ratio === "21:9") return "aspect-[21/9] sm:aspect-[24/9]";
+	if (ratio === "3:1") return "aspect-[3/1]";
+	if (ratio.startsWith("aspect-")) return ratio;
+	return `aspect-[${ratio}]`;
+}
+
 export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 	const [imageError, setImageError] = useState(false);
 	const initials = getInitials(profile.name);
 	const hasAvatar = Boolean(profile.avatarUrl && profile.avatarUrl.trim() !== "");
 	const hasLocation = Boolean(profile.location && profile.location[lang]?.trim());
 	const hasBio = Boolean(profile.bio && profile.bio[lang]?.trim());
+	const hasCover = Boolean(profile.cover?.enabled);
+	const hasCustomCover = Boolean(profile.cover?.coverUrl && profile.cover.coverUrl.trim() !== "");
+	const coverAspectRatio = normalizeAspectRatio(profile.cover?.aspectRatio);
 
 	return (
 		<header className="w-full relative z-10">
-			<div className="glass-liquid-primary rounded-3xl sm:rounded-4xl p-6 sm:p-8 md:p-10 relative overflow-hidden transition-all duration-300">
-				{/* Optical refraction ambient highlights */}
-				<div
-					className="absolute -top-16 -right-16 w-44 h-44 rounded-full bg-[var(--accent-subtle)] blur-3xl pointer-events-none opacity-60"
-					aria-hidden="true"
-				/>
-				<div
-					className="absolute -bottom-16 -left-16 w-44 h-44 rounded-full bg-[var(--accent-subtle)] blur-3xl pointer-events-none opacity-40"
-					aria-hidden="true"
-				/>
+			<div className="glass-liquid-primary rounded-3xl sm:rounded-4xl relative overflow-hidden transition-all duration-300">
+				{/* 1. Full Uninterrupted Cover Banner (One whole banner, zero grey capsule overlay) */}
+				{hasCover && (
+					<div className={`w-full ${coverAspectRatio} relative overflow-hidden z-0`}>
+						{hasCustomCover ? (
+							<img
+								src={profile.cover.coverUrl}
+								alt={profile.cover.alt ? profile.cover.alt[lang] : "Cover banner"}
+								className="w-full h-full object-cover"
+								style={{ objectPosition: profile.cover.focalPoint || "center" }}
+								loading="eager"
+							/>
+						) : (
+							/* Liquid Aurora Specular Fallback Banner */
+							<div className="w-full h-full relative overflow-hidden bg-gradient-to-tr from-violet-200/60 via-sky-100/50 to-pink-200/50">
+								<div
+									className="absolute -top-12 -left-12 w-48 h-48 rounded-full bg-[var(--accent-subtle)] blur-2xl pointer-events-none opacity-60"
+									aria-hidden="true"
+								/>
+								<div
+									className="absolute -bottom-10 -right-10 w-56 h-56 rounded-full bg-sky-300/30 blur-2xl pointer-events-none"
+									aria-hidden="true"
+								/>
+								<div
+									className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-32 rounded-full bg-pink-300/20 blur-3xl pointer-events-none"
+									aria-hidden="true"
+								/>
+								<div
+									className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/10 pointer-events-none"
+									aria-hidden="true"
+								/>
+							</div>
+						)}
+					</div>
+				)}
 
-				<div className="relative flex flex-col items-center text-center">
-					{/* Circular Avatar with Polished Liquid Glass Ring */}
-					<div className="relative mb-4 sm:mb-5">
-						<div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-tr from-white via-violet-200 to-white/80 shadow-md flex items-center justify-center">
+				{/* 2. Profile Card Body */}
+				<div className={`relative flex flex-col items-center text-center p-6 sm:p-8 md:p-10 ${hasCover ? "pt-0" : ""}`}>
+					{/* Optical refraction ambient highlights */}
+					<div
+						className="absolute -top-16 -right-16 w-44 h-44 rounded-full bg-[var(--accent-subtle)] blur-3xl pointer-events-none opacity-60"
+						aria-hidden="true"
+					/>
+					<div
+						className="absolute -bottom-16 -left-16 w-44 h-44 rounded-full bg-[var(--accent-subtle)] blur-3xl pointer-events-none opacity-40"
+						aria-hidden="true"
+					/>
+
+					{/* Circular Avatar overlapping the cover boundary */}
+					<div className={`relative ${hasCover ? "-mt-12 sm:-mt-14 md:-mt-16 mb-3 sm:mb-4" : "mb-4 sm:mb-5"} z-20`}>
+						<div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-tr from-white/90 via-[var(--glass-surface-primary)] to-white/70 shadow-xl ring-4 ring-[var(--glass-surface-primary)] flex items-center justify-center">
 							{hasAvatar && !imageError ? (
 								<img
 									src={profile.avatarUrl}

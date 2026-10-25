@@ -102,11 +102,20 @@ async function run() {
 	const initialBio = await page.textContent("header p");
 	console.log(`Initial Bio (ID): "${initialBio}"`);
 
+	const globeBtn = await page.$("button[aria-label*='Pilih Bahasa'], button[aria-label*='Language'], button[aria-haspopup='menu']");
+	if (globeBtn) {
+		await globeBtn.click();
+		await page.waitForTimeout(200);
+	}
 	await page.click('button[aria-label="English"]');
 	await page.waitForTimeout(200);
 	const enBio = await page.textContent("header p");
 	console.log(`Switched Bio (EN): "${enBio}"`);
 
+	if (globeBtn) {
+		await globeBtn.click();
+		await page.waitForTimeout(200);
+	}
 	await page.click('button[aria-label="Bahasa Indonesia"]');
 	await page.waitForTimeout(200);
 	const revertedBio = await page.textContent("header p");
