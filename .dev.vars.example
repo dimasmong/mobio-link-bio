@@ -1,0 +1,11 @@
+# MOBIO STUDIO — Local Development Variables Example
+# Copy this file to .dev.vars for local testing.
+# .dev.vars is ignored by Git and will NEVER be pushed to public repositories.
+
+# 1. Cloudflare Access (Production settings - optional in local dev)
+CF_ACCESS_TEAM_NAME="your-team-name"
+CF_ACCESS_AUD="your-access-application-aud-tag"
+ADMIN_EMAIL="owner@example.com"
+
+# 2. Local Development Identity Simulation (Active ONLY on localhost, forbidden in production)
+LOCAL_DEV_ADMIN_EMAIL="dev-admin@localhost.local"
