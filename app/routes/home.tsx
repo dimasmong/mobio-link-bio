@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { Route } from "./+types/home";
 import { profileData, type Language } from "../data/profile";
+import { getProfileRecord, getLinks, getContactMethods, getPublishMetadata } from "../lib/db.server";
 import { FixedBackground } from "../components/FixedBackground";
 import { FloatingNav, type TabId } from "../components/FloatingNav";
 import { LanguageToggle } from "../components/LanguageToggle";
@@ -11,27 +12,99 @@ import { ExploreSection } from "../components/ExploreSection";
 import { ContactSection } from "../components/ContactSection";
 import { Footer } from "../components/Footer";
 
-export function meta({}: Route.MetaArgs) {
-	const displayName = profileData.name || "Personal Link Bio";
+export function meta({ data }: Route.MetaArgs) {
+	const currentProfile = data?.profile || profileData;
+	const isNeutralDefault = !currentProfile.name || currentProfile.name === "Your Name";
+	const title = isNeutralDefault
+		? "MOBIO Link in Bio — Full Premium Liquid Glass"
+		: `${currentProfile.name} — Link in Bio`;
+	const description = currentProfile.bio?.id?.trim()
+		? `${currentProfile.name} (${currentProfile.handle}) — ${currentProfile.bio.id}`
+		: isNeutralDefault
+		? "Self-hosted personal link in bio experience inspired by modern Liquid Glass interfaces."
+		: `${currentProfile.name} (${currentProfile.handle}) — Link in Bio`;
+
 	return [
-		{ title: `${displayName} — Link in Bio` },
+		{ title },
 		{
 			name: "description",
-			content: `${displayName} (${profileData.handle}) — ${profileData.bio.id}`,
+			content: description,
 		},
 		{ name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-		{ property: "og:title", content: `${displayName} — Link in Bio` },
+		{ property: "og:title", content: title },
 		{
 			property: "og:description",
-			content: profileData.bio.id,
+			content: description,
 		},
 		{ property: "og:type", content: "profile" },
 	];
 }
 
-export function loader({}: Route.LoaderArgs) {
+export async function loader({ context }: Route.LoaderArgs) {
+	const env = context.cloudflare?.env;
+	let profile = { ...profileData };
+
+	if (env?.DB) {
+		try {
+			const [dbProfile, dbLinks, dbContacts, pubMeta] = await Promise.all([
+				getProfileRecord(env.DB, "published"),
+				getLinks(env.DB, "published", true),
+				getContactMethods(env.DB, "published", true),
+				getPublishMetadata(env.DB),
+			]);
+
+			const isPublishedActive = Boolean(
+				(pubMeta && pubMeta.version > 1) ||
+				(dbProfile && dbProfile.name.trim().length > 0) ||
+				dbLinks.length > 0
+			);
+
+			if (isPublishedActive && dbProfile) {
+				profile = {
+					...profileData,
+					name: dbProfile.name || profileData.name,
+					handle: dbProfile.handle || profileData.handle,
+					avatarUrl: dbProfile.avatar_url || profileData.avatarUrl,
+					location: {
+						id: dbProfile.location_id || "",
+						en: dbProfile.location_en || "",
+					},
+					bio: {
+						id: dbProfile.bio_id || "",
+						en: dbProfile.bio_en || "",
+					},
+					links: dbLinks.map((l) => ({
+						id: l.id,
+						title: { id: l.title_id, en: l.title_en },
+						description:
+							l.description_id || l.description_en
+								? { id: l.description_id || "", en: l.description_en || "" }
+								: undefined,
+						url: l.url,
+						platform: l.platform,
+						icon: l.icon || "globe",
+						enabled: Boolean(l.is_enabled),
+					})),
+					contact: {
+						...profileData.contact,
+						methods: dbContacts.map((c) => ({
+							id: c.id,
+							platform: (c.platform === "custom" ? "other" : c.platform) as any,
+							label: { id: c.label_id, en: c.label_en },
+							value: c.value,
+							url: c.url,
+						})),
+					},
+				};
+			}
+		} catch (err) {
+			// Fail-safe: if D1 fails, gracefully fallback to static profileData
+			console.warn("Could not load published profile from D1, using static profileData:", err);
+		}
+	}
+
 	return {
-		profile: profileData,
+		profile,
 		initialLang: "id" as Language,
 	};
 }
