@@ -47,7 +47,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		});
 	}
 
-	const incoming = body.appearance || {};
+	const incoming = (body.appearance || body || {}) as Partial<AppearanceRecord>;
 
 	// Validate design tokens and bounds
 	if (incoming.accent_color && !/^#([0-9a-fA-F]{3,8})$|^rgba?\(/.test(incoming.accent_color.trim())) {

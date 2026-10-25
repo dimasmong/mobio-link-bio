@@ -98,7 +98,7 @@ export function FloatingNav({
 				<div
 					role="tablist"
 					aria-label={lang === "id" ? "Menu navigasi tab" : "Tab navigation menu"}
-					className="glass-liquid-nav rounded-full p-1.5 flex items-center gap-1 shadow-lg border border-white/80"
+					className="glass-liquid-nav rounded-full p-1.5 flex items-center gap-1 shadow-lg border border-[var(--glass-border-specular)]"
 				>
 					{navItems.map((item, index) => {
 						const isActive = activeTab === item.id;
@@ -118,10 +118,10 @@ export function FloatingNav({
 								onKeyDown={(e) =>
 									handleKeyDown(e, index, desktopTabRefs.current)
 								}
-								className={`relative px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
+								className={`relative px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
 									isActive
 										? "glass-nav-active shadow-sm"
-										: "text-slate-600 hover:text-slate-950 hover:bg-white/40"
+										: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
 								}`}
 							>
 								{item.icon}
@@ -144,7 +144,7 @@ export function FloatingNav({
 				<div
 					role="tablist"
 					aria-label={lang === "id" ? "Menu tab navigasi mobile" : "Mobile tab navigation menu"}
-					className="glass-liquid-nav rounded-full px-3 py-2 flex items-center gap-1.5 shadow-xl border border-white/85"
+					className="glass-liquid-nav rounded-full px-3 py-2 flex items-center gap-1.5 shadow-xl border border-[var(--glass-border-specular)]"
 				>
 					{navItems.map((item, index) => {
 						const isActive = activeTab === item.id;
@@ -164,10 +164,10 @@ export function FloatingNav({
 								onKeyDown={(e) =>
 									handleKeyDown(e, index, mobileTabRefs.current)
 								}
-								className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
+								className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
 									isActive
 										? "glass-nav-active shadow-sm"
-										: "text-slate-600 hover:text-slate-950 hover:bg-white/40"
+										: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
 								}`}
 							>
 								{item.icon}

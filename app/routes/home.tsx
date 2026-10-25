@@ -10,6 +10,7 @@ import {
 	getPublishMetadata,
 	type AppearanceRecord,
 } from "../lib/db.server";
+import { computeThemeVariables } from "../lib/theme";
 import { FixedBackground } from "../components/FixedBackground";
 import { FloatingNav, type TabId } from "../components/FloatingNav";
 import { LanguageToggle } from "../components/LanguageToggle";
@@ -221,8 +222,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	const profile = loaderData.profile || profileData;
 	const appearance = loaderData.appearance;
 
+	const themeVariables = computeThemeVariables(appearance);
 	const dynamicStyles: React.CSSProperties = {
-		...(appearance?.accent_color ? ({ "--aurora-violet": appearance.accent_color } as React.CSSProperties) : {}),
+		...(themeVariables as unknown as React.CSSProperties),
+		...(appearance?.accent_color ? ({ "--aurora-violet": appearance.accent_color, "--accent-color": appearance.accent_color } as React.CSSProperties) : {}),
 		...(appearance?.glass_blur ? ({ "--glass-blur": appearance.glass_blur } as React.CSSProperties) : {}),
 		...(appearance?.glass_tint ? ({ "--glass-surface-primary": appearance.glass_tint } as React.CSSProperties) : {}),
 	};
@@ -268,8 +271,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div
-			className="relative min-h-screen text-slate-900 selection:bg-violet-200 selection:text-violet-900"
-			data-theme={appearance?.palette === "dark-liquid" ? "dark" : undefined}
+			className="relative min-h-screen text-theme-primary selection:bg-[var(--accent-subtle)] selection:text-[var(--accent-color)]"
+			data-theme={themeVariables["--theme-mode"]}
 			style={dynamicStyles}
 		>
 			{/* Fixed Fullscreen Background (Gradient Mesh, Image, or Video with safe playback & readability overlay) */}

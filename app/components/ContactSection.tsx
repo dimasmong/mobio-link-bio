@@ -50,12 +50,12 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 		>
 			{/* Section Header */}
 			<div className="flex flex-col items-center text-center mb-6 px-2">
-				<div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-violet-100/70 text-violet-700 border border-violet-200/60 mb-2">
+				<div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-theme-accent-subtle border mb-2">
 					<ContactIcon className="w-3.5 h-3.5" />
 					<h2 id="contact-heading">{config.title[lang]}</h2>
 				</div>
 				{config.description && config.description[lang]?.trim() && (
-					<p className="text-xs sm:text-sm text-slate-500 max-w-md">
+					<p className="text-xs sm:text-sm text-theme-muted max-w-md">
 						{config.description[lang]}
 					</p>
 				)}
@@ -73,22 +73,22 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 								href={method.url}
 								target={isEmail ? undefined : "_blank"}
 								rel={isEmail ? undefined : "noopener noreferrer"}
-								className="glass-liquid-card rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-left"
+								className="glass-liquid-card rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 							>
 								<div className="flex items-center gap-3.5 min-w-0 flex-1">
-									<div className="w-11 h-11 rounded-xl bg-white/80 border border-white/90 shadow-2xs flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+									<div className="w-11 h-11 rounded-xl bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-specular)] shadow-2xs flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
 										{getContactPlatformIcon(method.platform)}
 									</div>
 									<div className="min-w-0 flex-1">
-										<h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-violet-700 transition-colors leading-snug">
+										<h3 className="text-sm sm:text-base font-bold text-theme-primary group-hover:text-[var(--accent-color)] transition-colors leading-snug">
 											{method.label[lang]}
 										</h3>
-										<p className="text-xs text-slate-500 truncate mt-0.5">
+										<p className="text-xs text-theme-secondary truncate mt-0.5">
 											{method.value}
 										</p>
 									</div>
 								</div>
-								<div className="w-7 h-7 rounded-full bg-slate-100/70 flex items-center justify-center text-slate-400 group-hover:text-violet-600 group-hover:bg-violet-50 transition-colors shrink-0">
+								<div className="w-7 h-7 rounded-full bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-subtle)] flex items-center justify-center text-theme-muted group-hover:text-[var(--accent-color)] group-hover:bg-[var(--accent-subtle)] group-hover:border-[var(--accent-border)] transition-colors shrink-0">
 									<ExternalLinkIcon className="w-3.5 h-3.5" />
 								</div>
 							</a>
@@ -101,10 +101,10 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 					<div className="w-12 h-12 rounded-full bg-emerald-100/80 border border-emerald-200/50 text-emerald-600 flex items-center justify-center mb-4 shadow-2xs">
 						<ContactIcon className="w-6 h-6" />
 					</div>
-					<h3 className="text-base sm:text-lg font-bold text-slate-900 mb-1.5">
+					<h3 className="text-base sm:text-lg font-bold text-theme-primary mb-1.5">
 						{lang === "id" ? "Kontak Belum Dikonfigurasi" : "No Contact Methods Configured Yet"}
 					</h3>
-					<p className="text-xs sm:text-sm text-slate-500 max-w-md leading-relaxed">
+					<p className="text-xs sm:text-sm text-theme-muted max-w-md leading-relaxed">
 						{lang === "id"
 							? "Saluran komunikasi langsung seperti WhatsApp, Telegram, atau Email akan muncul di sini setelah diatur pada file app/data/profile.ts."
 							: "Direct communication channels like WhatsApp, Telegram, or Email will appear here once configured in app/data/profile.ts."}

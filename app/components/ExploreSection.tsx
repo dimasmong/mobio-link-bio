@@ -72,12 +72,12 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 		>
 			{/* Section Header */}
 			<div className="flex flex-col items-center text-center mb-6 px-2">
-				<div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-violet-100/70 text-violet-700 border border-violet-200/60 mb-2">
+				<div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-theme-accent-subtle border mb-2">
 					<CompassIcon className="w-3.5 h-3.5" />
 					<h2 id="explore-heading">{config.title[lang]}</h2>
 				</div>
 				{config.description && config.description[lang]?.trim() && (
-					<p className="text-xs sm:text-sm text-slate-500 max-w-md">
+					<p className="text-xs sm:text-sm text-theme-muted max-w-md">
 						{config.description[lang]}
 					</p>
 				)}
@@ -101,7 +101,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 								tabIndex={0}
 								role="button"
 								aria-label={`Lihat gambar ${item.title[lang]}`}
-								className="glass-liquid-card rounded-2xl overflow-hidden group cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+								className="glass-liquid-card rounded-2xl overflow-hidden group cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)]"
 							>
 								<div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
 									<img
@@ -140,7 +140,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 								href={item.url || "#"}
 								target={item.url ? "_blank" : undefined}
 								rel={item.url ? "noopener noreferrer" : undefined}
-								className="glass-liquid-card rounded-2xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-left block"
+								className="glass-liquid-card rounded-2xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left block"
 							>
 								{item.coverImage ? (
 									<div className="relative aspect-video w-full overflow-hidden bg-slate-900">
@@ -174,7 +174,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 									</div>
 								)}
 								<div className="p-5 pt-3">
-									<h3 className="text-base font-bold text-slate-900 group-hover:text-purple-700 transition-colors leading-snug mb-1">
+									<h3 className="text-base font-bold text-theme-primary group-hover:text-purple-700 transition-colors leading-snug mb-1">
 										{item.title[lang]}
 									</h3>
 									{item.subtitle && (
@@ -183,7 +183,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										</p>
 									)}
 									{item.description && (
-										<p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+										<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal">
 											{item.description[lang]}
 										</p>
 									)}
@@ -200,7 +200,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 								href={item.url || "#"}
 								target={item.url ? "_blank" : undefined}
 								rel={item.url ? "noopener noreferrer" : undefined}
-								className="glass-liquid-card rounded-2xl p-5 flex flex-col justify-between group focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-left"
+								className="glass-liquid-card rounded-2xl p-5 flex flex-col justify-between group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 							>
 								<div>
 									<div className="flex items-center justify-between gap-2 mb-3">
@@ -214,7 +214,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											</span>
 										)}
 									</div>
-									<h3 className="text-base font-bold text-slate-900 group-hover:text-amber-700 transition-colors leading-snug mb-1">
+									<h3 className="text-base font-bold text-theme-primary group-hover:text-amber-700 transition-colors leading-snug mb-1">
 										{item.title[lang]}
 									</h3>
 									{item.subtitle && (
@@ -223,24 +223,24 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										</p>
 									)}
 									{item.description && (
-										<p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal mb-3">
+										<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal mb-3">
 											{item.description[lang]}
 										</p>
 									)}
 								</div>
 
-								<div className="flex items-center justify-between pt-3 border-t border-slate-200/50">
+								<div className="flex items-center justify-between pt-3 border-t border-[var(--glass-border-subtle)]">
 									<div className="flex items-center gap-1.5 flex-wrap">
 										{item.metadata?.tags?.map((tag) => (
 											<span
 												key={tag}
-												className="text-[10px] font-medium text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded-md"
+												className="text-[10px] font-medium text-theme-secondary bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-subtle)] px-2 py-0.5 rounded-md"
 											>
 												{tag}
 											</span>
 										))}
 									</div>
-									<div className="w-7 h-7 rounded-full bg-slate-100/80 flex items-center justify-center text-slate-400 group-hover:text-amber-600 group-hover:bg-amber-50 transition-colors">
+									<div className="w-7 h-7 rounded-full bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-subtle)] flex items-center justify-center text-theme-muted group-hover:text-amber-600 group-hover:bg-amber-500/20 transition-colors">
 										<ExternalLinkIcon className="w-3.5 h-3.5" />
 									</div>
 								</div>
@@ -267,7 +267,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											</span>
 										)}
 									</div>
-									<h3 className="text-base font-bold text-slate-900 leading-snug mb-1">
+									<h3 className="text-base font-bold text-theme-primary leading-snug mb-1">
 										{item.title[lang]}
 									</h3>
 									{item.subtitle && (
@@ -276,14 +276,14 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										</p>
 									)}
 									{item.description && (
-										<p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal mb-3">
+										<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal mb-3">
 											{item.description[lang]}
 										</p>
 									)}
 								</div>
 
 								{item.url && (
-									<div className="pt-3 border-t border-slate-200/50 flex justify-end">
+									<div className="pt-3 border-t border-[var(--glass-border-subtle)] flex justify-end">
 										<a
 											href={item.url}
 											target="_blank"
@@ -307,7 +307,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 								href={item.url || "#"}
 								target={item.url ? "_blank" : undefined}
 								rel={item.url ? "noopener noreferrer" : undefined}
-								className="glass-liquid-card rounded-2xl p-5 flex items-center justify-between group focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-left"
+								className="glass-liquid-card rounded-2xl p-5 flex items-center justify-between group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 							>
 								<div className="min-w-0 flex-1 pr-3">
 									<div className="flex items-center gap-1.5 mb-1.5">
@@ -316,7 +316,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											<span>{item.badge ? item.badge[lang] : "Link"}</span>
 										</span>
 									</div>
-									<h3 className="text-base font-bold text-slate-900 group-hover:text-blue-700 transition-colors leading-snug truncate">
+									<h3 className="text-base font-bold text-theme-primary group-hover:text-blue-700 transition-colors leading-snug truncate">
 										{item.title[lang]}
 									</h3>
 									{item.subtitle && (
@@ -325,7 +325,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										</p>
 									)}
 									{item.description && (
-										<p className="text-xs text-slate-600 line-clamp-2 mt-1">
+										<p className="text-xs text-theme-secondary line-clamp-2 mt-1">
 											{item.description[lang]}
 										</p>
 									)}
@@ -345,7 +345,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 								href={item.url || "#"}
 								target={item.url ? "_blank" : undefined}
 								rel={item.url ? "noopener noreferrer" : undefined}
-								className="glass-liquid-card rounded-2xl p-5 flex flex-col justify-between group focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-left"
+								className="glass-liquid-card rounded-2xl p-5 flex flex-col justify-between group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 							>
 								<div>
 									<div className="flex items-center justify-between gap-2 mb-3">
@@ -359,28 +359,28 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											</span>
 										)}
 									</div>
-									<h3 className="text-base font-bold text-slate-900 group-hover:text-violet-700 transition-colors leading-snug mb-1">
+									<h3 className="text-base font-bold text-theme-primary group-hover:text-violet-700 transition-colors leading-snug mb-1">
 										{item.title[lang]}
 									</h3>
 									{item.description && (
-										<p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal mb-3">
+										<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal mb-3">
 											{item.description[lang]}
 										</p>
 									)}
 								</div>
 
-								<div className="flex items-center justify-between pt-3 border-t border-slate-200/50">
+								<div className="flex items-center justify-between pt-3 border-t border-[var(--glass-border-subtle)]">
 									<div className="flex items-center gap-1.5 flex-wrap">
 										{item.metadata?.tags?.map((tag) => (
 											<span
 												key={tag}
-												className="text-[10px] font-medium text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded-md"
+												className="text-[10px] font-medium text-theme-secondary bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-subtle)] px-2 py-0.5 rounded-md"
 											>
 												{tag}
 											</span>
 										))}
 									</div>
-									<div className="w-7 h-7 rounded-full bg-slate-100/80 flex items-center justify-center text-slate-400 group-hover:text-violet-600 group-hover:bg-violet-50 transition-colors">
+									<div className="w-7 h-7 rounded-full bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-subtle)] flex items-center justify-center text-theme-muted group-hover:text-[var(--accent-color)] group-hover:bg-[var(--accent-subtle)] transition-colors">
 										<ExternalLinkIcon className="w-3.5 h-3.5" />
 									</div>
 								</div>
@@ -396,7 +396,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 								href={item.url || "#"}
 								target={item.url ? "_blank" : undefined}
 								rel={item.url ? "noopener noreferrer" : undefined}
-								className="glass-liquid-card rounded-2xl p-5 flex items-center gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-left"
+								className="glass-liquid-card rounded-2xl p-5 flex items-center gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 							>
 								<div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-400/30 flex items-center justify-center text-emerald-600 shrink-0 border border-emerald-200/50 group-hover:scale-105 transition-transform">
 									<MusicIcon className="w-6 h-6" />
@@ -405,7 +405,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 									<span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider block mb-0.5">
 										{item.badge ? item.badge[lang] : "Music"}
 									</span>
-									<h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors leading-snug truncate">
+									<h3 className="text-sm sm:text-base font-bold text-theme-primary group-hover:text-emerald-700 transition-colors leading-snug truncate">
 										{item.title[lang]}
 									</h3>
 									{item.subtitle && (
@@ -438,16 +438,16 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 									</span>
 								)}
 							</div>
-							<h3 className="text-sm sm:text-base font-bold text-slate-900 mb-1.5">
+							<h3 className="text-sm sm:text-base font-bold text-theme-primary mb-1.5">
 								{item.title[lang]}
 							</h3>
 							{item.description && (
-								<p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+								<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal">
 									{item.description[lang]}
 								</p>
 							)}
 							{item.url && (
-								<div className="mt-3 pt-3 border-t border-slate-200/50 flex justify-end">
+								<div className="mt-3 pt-3 border-t border-[var(--glass-border-subtle)] flex justify-end">
 									<a
 										href={item.url}
 										target="_blank"
@@ -466,13 +466,13 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 			) : (
 				/* Professional Liquid Glass Empty State */
 				<div className="glass-liquid-secondary rounded-3xl p-8 sm:p-10 flex flex-col items-center text-center">
-					<div className="w-12 h-12 rounded-full bg-violet-100/80 border border-violet-200/50 text-violet-600 flex items-center justify-center mb-4 shadow-2xs">
+					<div className="w-12 h-12 rounded-full bg-theme-accent-subtle text-theme-accent border flex items-center justify-center mb-4 shadow-2xs">
 						<CompassIcon className="w-6 h-6" />
 					</div>
-					<h3 className="text-base sm:text-lg font-bold text-slate-900 mb-1.5">
+					<h3 className="text-base sm:text-lg font-bold text-theme-primary mb-1.5">
 						{lang === "id" ? "Eksplorasi Belum Dikonfigurasi" : "No Highlights Configured Yet"}
 					</h3>
-					<p className="text-xs sm:text-sm text-slate-500 max-w-md leading-relaxed">
+					<p className="text-xs sm:text-sm text-theme-muted max-w-md leading-relaxed">
 						{lang === "id"
 							? "Bagian ini dapat menampilkan proyek pilihan, galeri foto, playlist musik, atau catatan Anda. Tambahkan item di file app/data/profile.ts."
 							: "This section showcases your featured projects, photo gallery, music playlists, or notes. Add items in app/data/profile.ts."}
@@ -497,7 +497,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 							type="button"
 							onClick={() => setActiveLightboxImage(null)}
 							aria-label="Tutup"
-							className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-white/90 text-slate-700 hover:text-slate-950 hover:bg-white flex items-center justify-center shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+							className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-[var(--glass-surface-primary)] border border-[var(--glass-border-specular)] text-theme-primary hover:bg-[var(--glass-surface-hover)] flex items-center justify-center shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)]"
 						>
 							<CloseIcon className="w-5 h-5" />
 						</button>
@@ -512,16 +512,16 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 							</div>
 						)}
 
-						<h3 className="text-lg font-bold text-slate-900 mb-1">
+						<h3 className="text-lg font-bold text-theme-primary mb-1">
 							{activeLightboxImage.title[lang]}
 						</h3>
 						{activeLightboxImage.subtitle && (
-							<p className="text-xs sm:text-sm text-violet-600 font-medium mb-2">
+							<p className="text-xs sm:text-sm text-theme-accent font-medium mb-2">
 								{activeLightboxImage.subtitle[lang]}
 							</p>
 						)}
 						{activeLightboxImage.description && (
-							<p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+							<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal">
 								{activeLightboxImage.description[lang]}
 							</p>
 						)}

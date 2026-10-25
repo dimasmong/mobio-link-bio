@@ -22,6 +22,15 @@ import type { MediaAssetRecord } from "../lib/media.server";
 import { getClickSummary, type ClickAnalyticsSummary } from "../lib/analytics.server";
 import { IconPicker } from "../components/IconPicker";
 import { LinkIconRenderer, getRecommendedIcon } from "../components/IconLibrary";
+import {
+	THEME_PRESETS,
+	ACCENT_PRESETS,
+	getThemePreset,
+	computeThemeVariables,
+	getContrastForeground,
+	type ThemePreset,
+	type AccentColorPreset,
+} from "../lib/theme";
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -184,6 +193,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 	const [previewLang, setPreviewLang] = useState<"id" | "en">("id");
 	const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
 	const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
+	const [presetFilter, setPresetFilter] = useState<"all" | "light" | "dark">("all");
 
 	// Links modals & state
 	const [isAddLinkOpen, setIsAddLinkOpen] = useState(false);
@@ -2210,104 +2220,125 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 							{/* 1. Theme Presets Panel */}
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
-								<h3 className="text-sm font-bold text-white mb-1">Preset Tema Visual</h3>
-								<p className="text-xs text-slate-400 mb-4">
-									Pilih salah satu preset tema teruji untuk menerapkan palet warna dan karakteristik Liquid Glass secara instan.
-								</p>
+								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+									<div>
+										<h3 className="text-sm font-bold text-white mb-1">Preset Tema Visual (16 Koleksi)</h3>
+										<p className="text-xs text-slate-400">
+											Pilih salah satu dari 16 preset premium teruji (8 Light Mode & 8 Dark Mode) untuk menerapkan karakteristik tema dan warna aksen secara instan.
+										</p>
+									</div>
+									{/* Filter Tabs */}
+									<div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 shrink-0 text-xs">
+										<button
+											type="button"
+											onClick={() => setPresetFilter("all")}
+											className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+												presetFilter === "all" ? "bg-violet-600 text-white shadow-xs" : "text-slate-400 hover:text-white"
+											}`}
+										>
+											Semua (16)
+										</button>
+										<button
+											type="button"
+											onClick={() => setPresetFilter("light")}
+											className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+												presetFilter === "light" ? "bg-violet-600 text-white shadow-xs" : "text-slate-400 hover:text-white"
+											}`}
+										>
+											☀️ Light (8)
+										</button>
+										<button
+											type="button"
+											onClick={() => setPresetFilter("dark")}
+											className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+												presetFilter === "dark" ? "bg-violet-600 text-white shadow-xs" : "text-slate-400 hover:text-white"
+											}`}
+										>
+											🌙 Dark (8)
+										</button>
+									</div>
+								</div>
 
-								<div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-									{/* Frost Aurora */}
-									<button
-										type="button"
-										onClick={() => {
-											setAppearance((prev) => ({
-												...prev,
-												palette: "frost-aurora",
-												glass_intensity: "medium",
-												accent_color: "#8b5cf6",
-												glass_blur: "16px",
-												glass_opacity: 0.70,
-												glass_tint: "rgba(255, 255, 255, 0.65)",
-												background_overlay_color: "rgba(248, 250, 252, 0.45)",
-												background_overlay_opacity: 0.45,
-											}));
-											markUnpublished();
-											showToast("Preset Frost Aurora diterapkan.", "info");
-										}}
-										className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden ${
-											appearance.palette === "frost-aurora"
-												? "bg-violet-950/40 border-violet-500 ring-2 ring-violet-500/30"
-												: "bg-slate-950/60 border-slate-800 hover:border-slate-700"
-										}`}
-									>
-										<div className="w-full h-12 rounded-lg bg-gradient-to-r from-violet-200 via-sky-100 to-pink-200 mb-2 border border-white/40 flex items-center justify-center text-xs text-slate-800 font-bold">
-											Frost Aurora
-										</div>
-										<div className="text-xs font-bold text-white">Frost Aurora (Default)</div>
-										<div className="text-[11px] text-slate-400 mt-0.5">Icy lavender & violet glow</div>
-									</button>
+								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+									{THEME_PRESETS.filter(
+										(p) => presetFilter === "all" || p.mode === presetFilter
+									).map((preset) => {
+										const isSelected =
+											appearance.palette === preset.id ||
+											(preset.id === "ocean-breeze" && appearance.palette === "sky-aurora");
 
-									{/* Dark Liquid */}
-									<button
-										type="button"
-										onClick={() => {
-											setAppearance((prev) => ({
-												...prev,
-												palette: "dark-liquid",
-												glass_intensity: "deep",
-												accent_color: "#a78bfa",
-												glass_blur: "24px",
-												glass_opacity: 0.85,
-												glass_tint: "rgba(15, 23, 42, 0.75)",
-												background_overlay_color: "rgba(2, 6, 23, 0.65)",
-												background_overlay_opacity: 0.65,
-											}));
-											markUnpublished();
-											showToast("Preset Dark Liquid diterapkan.", "info");
-										}}
-										className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden ${
-											appearance.palette === "dark-liquid"
-												? "bg-violet-950/40 border-violet-500 ring-2 ring-violet-500/30"
-												: "bg-slate-950/60 border-slate-800 hover:border-slate-700"
-										}`}
-									>
-										<div className="w-full h-12 rounded-lg bg-gradient-to-r from-slate-950 via-slate-900 to-violet-950 mb-2 border border-slate-800 flex items-center justify-center text-xs text-violet-300 font-bold">
-											Dark Liquid
-										</div>
-										<div className="text-xs font-bold text-white">Dark Liquid</div>
-										<div className="text-[11px] text-slate-400 mt-0.5">Obsidian slate & deep glass</div>
-									</button>
+										return (
+											<button
+												key={preset.id}
+												type="button"
+												onClick={() => {
+													setAppearance((prev) => ({
+														...prev,
+														palette: preset.id,
+														glass_intensity: preset.mode === "dark" ? "deep" : "medium",
+														accent_color: preset.tokens.defaultAccent,
+														glass_blur: preset.tokens.glassBlur,
+														glass_opacity: preset.tokens.glassOpacity,
+														glass_tint: preset.tokens.glassSurfacePrimary,
+														background_overlay_color: preset.tokens.overlayColor,
+														background_overlay_opacity: preset.tokens.overlayOpacity,
+													}));
+													markUnpublished();
+													showToast(`Preset ${preset.name.id} diterapkan.`, "info");
+												}}
+												className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+													isSelected
+														? "bg-violet-950/40 border-violet-500 ring-2 ring-violet-500/40 shadow-md"
+														: "bg-slate-950/60 border-slate-800 hover:border-slate-700 hover:bg-slate-950/90"
+												}`}
+											>
+												<div>
+													{/* Preview Gradient Chip */}
+													<div
+														className={`w-full h-12 rounded-lg bg-gradient-to-r ${preset.previewGradient} mb-2.5 border flex items-center justify-between px-3 text-xs font-bold shadow-inner ${
+															preset.mode === "light"
+																? "border-slate-300/40 text-slate-800"
+																: "border-slate-700/50 text-white"
+														}`}
+													>
+														<span className="truncate">{preset.name.id}</span>
+														<span
+															className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+																preset.mode === "light"
+																	? "bg-white/80 text-slate-700 shadow-2xs"
+																	: "bg-black/60 text-slate-200"
+															}`}
+														>
+															{preset.mode}
+														</span>
+													</div>
+													<div className="flex items-center justify-between gap-1">
+														<span className="text-xs font-bold text-white truncate">
+															{preset.name.id}
+														</span>
+														{isSelected && (
+															<span className="text-[10px] text-violet-400 font-bold shrink-0">
+																✓ Aktif
+															</span>
+														)}
+													</div>
+													<p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+														{preset.description.id}
+													</p>
+												</div>
 
-									{/* Sky Aurora */}
-									<button
-										type="button"
-										onClick={() => {
-											setAppearance((prev) => ({
-												...prev,
-												palette: "sky-aurora",
-												glass_intensity: "medium",
-												accent_color: "#0284c7",
-												glass_blur: "16px",
-												glass_opacity: 0.70,
-												glass_tint: "rgba(240, 249, 255, 0.70)",
-												background_overlay_color: "rgba(240, 249, 255, 0.45)",
-												background_overlay_opacity: 0.45,
-											}));
-											markUnpublished();
-											showToast("Preset Sky Aurora diterapkan.", "info");
-										}}
-										className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden ${
-											appearance.palette === "sky-aurora"
-												? "bg-sky-950/40 border-sky-500 ring-2 ring-sky-500/30"
-												: "bg-slate-950/60 border-slate-800 hover:border-slate-700"
-										}`}
-									>
-										<div className="w-full h-12 rounded-lg bg-gradient-to-r from-cyan-100 via-sky-200 to-indigo-100 mb-2 border border-white/40 flex items-center justify-center text-xs text-slate-800 font-bold">
-											Sky Aurora
-										</div>
-										<div className="text-xs font-bold text-white">Sky Aurora</div>
-										<div className="text-[11px] text-slate-400 mt-0.5">Fresh cyan mesh & sky blue</div>
-									</button>
+												{/* Mini Token Indicators */}
+												<div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-slate-800/80 text-[10px] text-slate-400">
+													<span
+														className="w-3.5 h-3.5 rounded-full border border-white/20 shrink-0"
+														style={{ backgroundColor: preset.tokens.defaultAccent }}
+														title={`Default Accent: ${preset.tokens.defaultAccent}`}
+													/>
+													<span className="truncate">Aksen: {preset.tokens.defaultAccent}</span>
+												</div>
+											</button>
+										);
+									})}
 								</div>
 							</div>
 
@@ -2746,45 +2777,125 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									Kendalikan intensitas blur optik, tingkat transparansi, garis tepi specular, dan warna aksen tombol.
 								</p>
 
-								{/* Accent Color Picker */}
-								<div className="mb-6 pb-4 border-b border-slate-800">
-									<label className="block text-xs font-semibold text-slate-300 mb-2">
-										Warna Aksen Antarmuka
-									</label>
-									<div className="flex items-center gap-3">
-										<input
-											type="color"
-											value={appearance.accent_color || "#8b5cf6"}
-											onChange={(e) => {
-												setAppearance({ ...appearance, accent_color: e.target.value });
-												markUnpublished();
-											}}
-											className="w-10 h-10 rounded-xl bg-transparent border border-slate-700 cursor-pointer"
-										/>
-										<input
-											type="text"
-											value={appearance.accent_color || "#8b5cf6"}
-											onChange={(e) => {
-												setAppearance({ ...appearance, accent_color: e.target.value });
-												markUnpublished();
-											}}
-											className="w-28 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono uppercase focus:outline-none focus:border-violet-500"
-										/>
-										{/* Quick chips */}
-										<div className="flex flex-wrap gap-1.5">
-											{["#8b5cf6", "#3b82f6", "#06b6d4", "#10b981", "#ec4899", "#f59e0b"].map((c) => (
+								{/* Accent Color Picker & 16 Presets Engine */}
+								<div className="mb-6 pb-5 border-b border-slate-800">
+									<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+										<div>
+											<label className="block text-xs font-semibold text-slate-300">
+												Warna Aksen Antarmuka (Interface Accent Color)
+											</label>
+											<p className="text-[11px] text-slate-400">
+												Mengatur warna navigasi aktif, badge, tombol aksi utama, ring fokus aksesibilitas, dan indikator interaktif.
+											</p>
+										</div>
+										{/* Reset Accent to Preset Default */}
+										{(() => {
+											const currentPreset = getThemePreset(appearance.palette);
+											const isOverridden =
+												appearance.accent_color &&
+												appearance.accent_color.toLowerCase() !== currentPreset.tokens.defaultAccent.toLowerCase();
+											if (!isOverridden) return null;
+											return (
 												<button
-													key={c}
 													type="button"
 													onClick={() => {
-														setAppearance({ ...appearance, accent_color: c });
+														setAppearance((prev) => ({
+															...prev,
+															accent_color: currentPreset.tokens.defaultAccent,
+														}));
 														markUnpublished();
+														showToast(`Aksen dikembalikan ke default preset: ${currentPreset.tokens.defaultAccent}`, "info");
 													}}
-													className="w-6 h-6 rounded-full border border-white/20 transition-transform hover:scale-110 cursor-pointer"
-													style={{ backgroundColor: c }}
-													title={c}
-												/>
-											))}
+													className="text-[11px] text-violet-400 hover:text-violet-300 font-semibold flex items-center gap-1 self-start sm:self-auto cursor-pointer"
+												>
+													↺ Reset ke Default Preset ({currentPreset.tokens.defaultAccent})
+												</button>
+											);
+										})()}
+									</div>
+
+									<div className="flex flex-wrap items-center gap-4 mb-4">
+										{/* Color Input Controls */}
+										<div className="flex items-center gap-2">
+											<input
+												type="color"
+												value={appearance.accent_color || "#8b5cf6"}
+												onChange={(e) => {
+													setAppearance({ ...appearance, accent_color: e.target.value });
+													markUnpublished();
+												}}
+												className="w-10 h-10 rounded-xl bg-transparent border border-slate-700 cursor-pointer"
+											/>
+											<input
+												type="text"
+												value={appearance.accent_color || "#8b5cf6"}
+												onChange={(e) => {
+													setAppearance({ ...appearance, accent_color: e.target.value });
+													markUnpublished();
+												}}
+												placeholder="#8B5CF6"
+												maxLength={9}
+												className="w-28 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono uppercase focus:outline-none focus:border-violet-500"
+											/>
+										</div>
+
+										{/* Live Contrast Foreground & WCAG Indicator */}
+										{(() => {
+											const activeHex = appearance.accent_color || "#8b5cf6";
+											const fg = getContrastForeground(activeHex);
+											return (
+												<div
+													className="px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-semibold shadow-xs"
+													style={{
+														backgroundColor: activeHex,
+														color: fg,
+														borderColor: `${activeHex}50`,
+													}}
+												>
+													<span className="font-extrabold text-sm">Aa</span>
+													<span>Teks Kontras Otomatis ({fg === "#ffffff" ? "Putih" : "Gelap"})</span>
+													<span className="text-[10px] uppercase font-bold opacity-80 border-l border-current/30 pl-1.5">
+														WCAG AA
+													</span>
+												</div>
+											);
+										})()}
+									</div>
+
+									{/* 16 Accent Color Chips */}
+									<div>
+										<span className="block text-[11px] font-semibold text-slate-400 mb-2">
+											Pilihan Cepat Palet Aksen (16 Warna Terkurasi):
+										</span>
+										<div className="flex flex-wrap gap-2">
+											{ACCENT_PRESETS.map((accent) => {
+												const isSelected =
+													(appearance.accent_color || "#8b5cf6").toLowerCase() === accent.hex.toLowerCase();
+												return (
+													<button
+														key={accent.id}
+														type="button"
+														onClick={() => {
+															setAppearance({ ...appearance, accent_color: accent.hex });
+															markUnpublished();
+														}}
+														className={`w-7 h-7 rounded-full border transition-all cursor-pointer relative flex items-center justify-center ${
+															isSelected
+																? "ring-2 ring-white scale-110 shadow-md border-white"
+																: "border-white/20 hover:scale-110 hover:border-white/50 opacity-90 hover:opacity-100"
+														}`}
+														style={{ backgroundColor: accent.hex }}
+														title={`${accent.name.id} (${accent.hex})`}
+													>
+														{isSelected && (
+															<span
+																className="w-2 h-2 rounded-full"
+																style={{ backgroundColor: getContrastForeground(accent.hex) }}
+															/>
+														)}
+													</button>
+												);
+											})}
 										</div>
 									</div>
 								</div>
@@ -4717,118 +4828,175 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							</button>
 						</div>
 
-						{/* Phone Simulator Body */}
-						<div
-							className="bg-slate-950 border border-slate-800 rounded-[2rem] p-4 sm:p-5 flex flex-col items-center max-h-[75vh] overflow-y-auto relative overflow-hidden"
-							style={{
-								...(appearance?.accent_color ? { borderColor: `${appearance.accent_color}40` } : {}),
-							}}
-						>
-							{/* Cover Banner Preview if Enabled */}
-							{Boolean(appearance.cover_enabled) && (
-								<div className="w-full rounded-2xl overflow-hidden mb-[-2rem] z-0 h-24 relative shadow-md">
-									{appearance.cover_url ? (
-										<img
-											src={appearance.cover_url}
-											alt="Cover"
-											className="w-full h-full object-cover"
+						{/* Phone Simulator Body with Real Liquid Glass Theme Engine */}
+						{(() => {
+							const previewThemeVars = computeThemeVariables(appearance);
+							return (
+								<div
+									className="rounded-[2.2rem] p-4 sm:p-5 flex flex-col items-center max-h-[75vh] overflow-y-auto relative overflow-hidden text-theme-primary transition-all duration-300 shadow-2xl border"
+									data-theme={previewThemeVars["--theme-mode"]}
+									style={{
+										...(previewThemeVars as unknown as React.CSSProperties),
+										borderColor: "var(--glass-border-specular)",
+									}}
+								>
+									{/* Live Background Preview in Phone Simulator */}
+									<div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
+										{appearance.background_type === "gradient" && (
+											<div
+												className={`w-full h-full ${Boolean(appearance.background_animation) ? "frost-aurora-mesh" : ""}`}
+												style={{
+													background: "var(--bg-mesh-gradient)",
+													filter: `brightness(${appearance.background_brightness ?? 1})`,
+												}}
+											/>
+										)}
+										{appearance.background_type === "image" && appearance.background_src && (
+											<img
+												src={appearance.background_src}
+												alt=""
+												className="w-full h-full object-cover"
+												style={{
+													objectPosition: `${appearance.background_position_x ?? 50}% ${appearance.background_position_y ?? 50}%`,
+													transform: appearance.background_scale ? `scale(${appearance.background_scale})` : undefined,
+													filter: `blur(${appearance.glass_blur || "0px"}) brightness(${appearance.background_brightness ?? 1})`,
+												}}
+											/>
+										)}
+										{appearance.background_type === "video" && (
+											<div
+												className="w-full h-full bg-slate-900 flex items-center justify-center text-xs text-slate-400"
+												style={{
+													backgroundImage: appearance.background_poster ? `url(${appearance.background_poster})` : undefined,
+													backgroundSize: "cover",
+												}}
+											>
+												{!appearance.background_poster && "🎥 Video Background Active"}
+											</div>
+										)}
+										{/* Overlay */}
+										<div
+											className="absolute inset-0"
+											style={{
+												backgroundColor: appearance.background_overlay_color || previewThemeVars["--bg-overlay-color"],
+												opacity: appearance.background_overlay_opacity ?? parseFloat(previewThemeVars["--bg-overlay-opacity"]),
+											}}
 										/>
-									) : (
-										<div className="w-full h-full bg-gradient-to-tr from-violet-200/60 via-sky-100/50 to-pink-200/50 flex items-center justify-center text-[10px] text-slate-800 font-bold">
-											Liquid Aurora Sheen
+									</div>
+
+									{/* Cover Banner Preview if Enabled */}
+									{Boolean(appearance.cover_enabled) && (
+										<div className="w-full rounded-2xl overflow-hidden mb-[-2rem] z-0 h-24 relative shadow-md border border-[var(--glass-border-specular)]">
+											{appearance.cover_url ? (
+												<img
+													src={appearance.cover_url}
+													alt="Cover"
+													className="w-full h-full object-cover"
+												/>
+											) : (
+												<div className="w-full h-full bg-gradient-to-tr from-violet-200/60 via-sky-100/50 to-pink-200/50 flex items-center justify-center text-[10px] text-slate-800 font-bold">
+													Liquid Aurora Sheen
+												</div>
+											)}
 										</div>
 									)}
-								</div>
-							)}
 
-							{/* Profile Card Preview */}
-							<div className="w-full flex flex-col items-center text-center mb-6 z-10">
-								<div className="w-20 h-20 rounded-full border-2 border-white/20 overflow-hidden bg-slate-800 mb-2 shadow-lg">
-									{profile.avatar_url ? (
-										<img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover" />
-									) : (
-										<span className="text-2xl font-bold text-slate-400 flex items-center justify-center h-full">
-											{profile.name[0] || "?"}
-										</span>
-									)}
-								</div>
-								<h4 className="text-base font-bold text-white">{profile.name || "Nama Pengguna"}</h4>
-								<p
-									className="text-xs font-medium"
-									style={{ color: appearance.accent_color || "#a78bfa" }}
-								>
-									{profile.handle || "@handle"}
-								</p>
-								{(previewLang === "id" ? profile.location_id : profile.location_en) && (
-									<span className="text-[11px] text-slate-400 mt-1">
-										📍 {previewLang === "id" ? profile.location_id : profile.location_en}
-									</span>
-								)}
-								{(previewLang === "id" ? profile.bio_id : profile.bio_en) && (
-									<p className="text-xs text-slate-300 mt-2 leading-relaxed">
-										{previewLang === "id" ? profile.bio_id : profile.bio_en}
-									</p>
-								)}
-							</div>
+									{/* Profile Card Preview with Real Liquid Glass */}
+									<div className="w-full glass-liquid-primary rounded-2xl p-4 flex flex-col items-center text-center mb-4 z-10 shadow-md">
+										<div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full p-0.5 bg-gradient-to-tr from-white via-[var(--glass-surface-primary)] to-white/70 overflow-hidden mb-2 shadow-lg flex items-center justify-center">
+											{profile.avatar_url ? (
+												<img src={profile.avatar_url} alt={profile.name} className="w-full h-full rounded-full object-cover" />
+											) : (
+												<div
+													className="w-full h-full rounded-full flex items-center justify-center font-bold text-xl sm:text-2xl shadow-inner select-none"
+													style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-foreground)" }}
+												>
+													{profile.name[0] || "?"}
+												</div>
+											)}
+										</div>
+										<h4 className="text-base font-bold text-theme-primary">{profile.name || "Nama Pengguna"}</h4>
+										<p
+											className="text-xs font-semibold px-2 py-0.5 rounded-full border mt-1 bg-theme-accent-subtle"
+										>
+											{profile.handle || "@handle"}
+										</p>
+										{(previewLang === "id" ? profile.location_id : profile.location_en) && (
+											<span className="text-[11px] text-theme-muted mt-1.5">
+												📍 {previewLang === "id" ? profile.location_id : profile.location_en}
+											</span>
+										)}
+										{(previewLang === "id" ? profile.bio_id : profile.bio_en) && (
+											<p className="text-xs text-theme-secondary mt-2 leading-relaxed">
+												{previewLang === "id" ? profile.bio_id : profile.bio_en}
+											</p>
+										)}
+									</div>
 
-							{/* Links Preview */}
-							<div className="w-full flex flex-col gap-2 mb-6">
-								<div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-									Tautan ({links.filter((l) => l.is_enabled).length})
-								</div>
-								{links.filter((l) => l.is_enabled).length === 0 ? (
-									<p className="text-xs text-slate-500 italic">Tidak ada tautan aktif.</p>
-								) : (
-									links
-										.filter((l) => l.is_enabled)
-										.map((l) => (
-											<div
-												key={l.id}
-												className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-left flex items-center justify-between gap-3"
-											>
-												<div className="flex items-center gap-2.5 min-w-0">
-													<div className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700/60 flex items-center justify-center shrink-0 overflow-hidden p-1">
-														<LinkIconRenderer link={l} isStudioPreview={true} className="w-4 h-4" />
+									{/* Links Preview */}
+									<div className="w-full flex flex-col gap-2 mb-4">
+										<div className="text-[10px] font-bold uppercase tracking-wider text-theme-muted px-1">
+											Tautan ({links.filter((l) => l.is_enabled).length})
+										</div>
+										{links.filter((l) => l.is_enabled).length === 0 ? (
+											<div className="glass-liquid-card rounded-xl p-3 text-center text-xs text-theme-muted italic">
+												Tidak ada tautan aktif.
+											</div>
+										) : (
+											links
+												.filter((l) => l.is_enabled)
+												.map((l) => (
+													<div
+														key={l.id}
+														className="w-full p-2.5 rounded-xl glass-liquid-card text-left flex items-center justify-between gap-3 group"
+													>
+														<div className="flex items-center gap-2.5 min-w-0">
+															<div className="w-7 h-7 rounded-lg bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-specular)] flex items-center justify-center shrink-0 overflow-hidden p-1 shadow-2xs">
+																<LinkIconRenderer link={l} isStudioPreview={true} className="w-4 h-4" />
+															</div>
+															<span className="text-xs font-semibold text-theme-primary truncate">
+																{previewLang === "id" ? l.title_id || l.title_en : l.title_en || l.title_id}
+															</span>
+														</div>
+														<span className="text-xs text-theme-muted group-hover:text-[var(--accent-color)] shrink-0">↗</span>
 													</div>
-													<span className="text-xs font-semibold text-white truncate">
-														{previewLang === "id" ? l.title_id || l.title_en : l.title_en || l.title_id}
-													</span>
-												</div>
-												<span className="text-xs text-slate-500 shrink-0">↗</span>
-											</div>
-										))
-								)}
-							</div>
+												))
+										)}
+									</div>
 
-							{/* Contacts Preview */}
-							<div className="w-full flex flex-col gap-2">
-								<div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-									Kontak ({contacts.filter((c) => c.is_enabled).length})
-								</div>
-								{contacts.filter((c) => c.is_enabled).length === 0 ? (
-									<p className="text-xs text-slate-500 italic">Tidak ada metode kontak aktif.</p>
-								) : (
-									contacts
-										.filter((c) => c.is_enabled)
-										.map((c) => (
-											<div
-												key={c.id}
-												className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-left flex items-center justify-between"
-											>
-												<div className="flex items-center gap-2">
-													<span className="text-[10px] uppercase font-bold text-violet-400">
-														{c.platform}
-													</span>
-													<span className="text-xs font-semibold text-white">
-														{previewLang === "id" ? c.label_id || c.label_en : c.label_en || c.label_id}
-													</span>
-												</div>
-												<span className="text-[11px] text-slate-400 font-mono">{c.value}</span>
+									{/* Contacts Preview */}
+									<div className="w-full flex flex-col gap-2">
+										<div className="text-[10px] font-bold uppercase tracking-wider text-theme-muted px-1">
+											Kontak ({contacts.filter((c) => c.is_enabled).length})
+										</div>
+										{contacts.filter((c) => c.is_enabled).length === 0 ? (
+											<div className="glass-liquid-card rounded-xl p-3 text-center text-xs text-theme-muted italic">
+												Tidak ada metode kontak aktif.
 											</div>
-										))
-								)}
-							</div>
-						</div>
+										) : (
+											contacts
+												.filter((c) => c.is_enabled)
+												.map((c) => (
+													<div
+														key={c.id}
+														className="w-full p-2.5 rounded-xl glass-liquid-card text-left flex items-center justify-between"
+													>
+														<div className="flex items-center gap-2">
+															<span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border bg-theme-accent-subtle">
+																{c.platform}
+															</span>
+															<span className="text-xs font-semibold text-theme-primary">
+																{previewLang === "id" ? c.label_id || c.label_en : c.label_en || c.label_id}
+															</span>
+														</div>
+														<span className="text-[11px] text-theme-secondary font-mono">{c.value}</span>
+													</div>
+												))
+										)}
+									</div>
+								</div>
+							);
+						})()}
 					</div>
 				</div>
 			)}

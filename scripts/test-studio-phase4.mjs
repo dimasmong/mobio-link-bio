@@ -41,6 +41,7 @@ async function runPhase4Tests() {
 		responsiveChecks: {},
 		consoleErrors: [],
 	};
+	let uploadedExploreMediaId = null;
 
 	// -------------------------------------------------------------------------
 	// 1. D1 SCHEMA & MIGRATION VERIFICATION
@@ -291,6 +292,7 @@ async function runPhase4Tests() {
 		});
 		const uploadData = await uploadRes.json();
 		const testMediaId = uploadData.asset?.id;
+		uploadedExploreMediaId = testMediaId;
 
 		if (testMediaId) {
 			console.log("  ✅ Uploaded test media asset:", testMediaId);
@@ -462,6 +464,30 @@ async function runPhase4Tests() {
 		await browser.close();
 	} catch (err) {
 		console.error("  ❌ Playwright UI check failed:", err.message);
+	}
+
+	// Cleanup test records to maintain pristine neutral defaults
+	console.log("\nCleaning up temporary Phase 4 test records...");
+	try {
+		execSync(
+			'npx.cmd wrangler d1 execute mobio-studio-db --local --command "DELETE FROM explore_items; DELETE FROM explore_items_draft;"',
+			{ stdio: "ignore" }
+		);
+		if (uploadedExploreMediaId) {
+			execSync(
+				`npx.cmd wrangler d1 execute mobio-studio-db --local --command "DELETE FROM media_assets WHERE id = '${uploadedExploreMediaId}';"`,
+				{ stdio: "ignore" }
+			);
+		}
+		// Publish the clean empty state so SSR public has no residual explore items
+		await fetch(`${BASE_URL}/api/studio/publish`, {
+			method: "POST",
+			headers: authHeaders,
+			body: JSON.stringify({ note: "Cleanup Phase 4 test explore items" }),
+		});
+		console.log("  ✅ Temporary explore test records cleaned up & published to neutral state.");
+	} catch (cleanupErr) {
+		console.warn("  ⚠️ Cleanup warning:", cleanupErr.message);
 	}
 
 	console.log("\n============================================================");

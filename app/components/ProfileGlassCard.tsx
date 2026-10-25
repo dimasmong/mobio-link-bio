@@ -28,11 +28,11 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 			<div className="glass-liquid-primary rounded-3xl sm:rounded-4xl p-6 sm:p-8 md:p-10 relative overflow-hidden transition-all duration-300">
 				{/* Optical refraction ambient highlights */}
 				<div
-					className="absolute -top-16 -right-16 w-44 h-44 rounded-full bg-violet-300/25 blur-3xl pointer-events-none"
+					className="absolute -top-16 -right-16 w-44 h-44 rounded-full bg-[var(--accent-subtle)] blur-3xl pointer-events-none opacity-60"
 					aria-hidden="true"
 				/>
 				<div
-					className="absolute -bottom-16 -left-16 w-44 h-44 rounded-full bg-indigo-200/25 blur-3xl pointer-events-none"
+					className="absolute -bottom-16 -left-16 w-44 h-44 rounded-full bg-[var(--accent-subtle)] blur-3xl pointer-events-none opacity-40"
 					aria-hidden="true"
 				/>
 
@@ -52,7 +52,8 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 								/>
 							) : (
 								<div
-									className="w-full h-full rounded-full flex items-center justify-center bg-gradient-to-tr from-violet-600 to-indigo-500 text-white font-bold text-2xl sm:text-3xl md:text-4xl shadow-inner ring-2 ring-white/95 select-none"
+									className="w-full h-full rounded-full flex items-center justify-center bg-theme-accent font-bold text-2xl sm:text-3xl md:text-4xl shadow-inner ring-2 ring-white/95 select-none"
+									style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-foreground)" }}
 									aria-label={profile.name}
 								>
 									{initials}
@@ -62,24 +63,24 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 					</div>
 
 					{/* Display Name */}
-					<h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900 mb-1.5">
+					<h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-theme-primary mb-1.5">
 						{profile.name}
 					</h1>
 
 					{/* Username / Handle and Optional Location */}
 					<div
-						className={`flex items-center justify-center flex-wrap gap-2 text-xs sm:text-sm text-slate-500 ${
+						className={`flex items-center justify-center flex-wrap gap-2 text-xs sm:text-sm text-theme-muted ${
 							hasBio ? "mb-4" : "mb-0"
 						}`}
 					>
-						<span className="font-semibold text-violet-700 bg-violet-100/70 px-2.5 py-0.5 rounded-full border border-violet-200/50">
+						<span className="font-semibold px-2.5 py-0.5 rounded-full border bg-theme-accent-subtle">
 							{profile.handle}
 						</span>
 						{hasLocation && (
 							<>
-								<span className="text-slate-300">•</span>
-								<span className="inline-flex items-center gap-1 font-medium text-slate-600">
-									<GlobeIcon className="w-3.5 h-3.5 text-slate-400" />
+								<span className="opacity-40">•</span>
+								<span className="inline-flex items-center gap-1 font-medium text-theme-secondary">
+									<GlobeIcon className="w-3.5 h-3.5 text-theme-muted" />
 									{profile.location?.[lang]}
 								</span>
 							</>
@@ -88,7 +89,7 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 
 					{/* Biography (Rendered only if bio is non-empty) */}
 					{hasBio && (
-						<p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md sm:max-w-lg md:max-w-xl mx-auto font-normal">
+						<p className="text-sm sm:text-base text-theme-secondary leading-relaxed max-w-md sm:max-w-lg md:max-w-xl mx-auto font-normal">
 							{profile.bio[lang]}
 						</p>
 					)}

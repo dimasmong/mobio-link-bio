@@ -51,8 +51,11 @@ export function FixedBackground({ config }: FixedBackgroundProps) {
 			{/* 1. Gradient / Animated Frost Aurora Mesh */}
 			{config.type === "gradient" && (
 				<div
-					className={`w-full h-full ${config.animation !== false ? "frost-aurora-mesh" : "bg-slate-50"}`}
-					style={filterStyle}
+					className={`w-full h-full ${config.animation !== false ? "frost-aurora-mesh" : ""}`}
+					style={{
+						...filterStyle,
+						...(config.animation === false ? { background: "var(--bg-mesh-gradient)" } : {}),
+					}}
 				/>
 			)}
 

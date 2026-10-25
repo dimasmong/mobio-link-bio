@@ -15,10 +15,10 @@ export function Footer({ profile, lang }: FooterProps) {
 	const customText = profile.footer.customText?.[lang];
 
 	return (
-		<footer className="w-full mt-12 sm:mt-16 text-center text-xs text-slate-500 py-6 border-t border-slate-200/60">
-			<p className="font-medium text-slate-600">
+		<footer className="w-full mt-12 sm:mt-16 text-center text-xs text-theme-muted py-6 border-t border-[var(--glass-border-subtle)]">
+			<p className="font-medium text-theme-secondary">
 				© {currentYear} {profile.name}
-				{customText && <span className="text-slate-400"> • {customText}</span>}
+				{customText && <span className="text-theme-muted"> • {customText}</span>}
 			</p>
 		</footer>
 	);
