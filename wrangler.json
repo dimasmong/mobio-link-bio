@@ -23,7 +23,7 @@
 		{
 			"binding": "DB",
 			"database_name": "mobio-studio-db",
-			"database_id": "local-mobio-studio-db",
+			"database_id": "00e8060a-0372-4b1a-8de3-84f9905edf51",
 			"migrations_dir": "migrations"
 		}
 	],
