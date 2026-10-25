@@ -6,12 +6,15 @@ import {
 	getProfileRecord,
 	getLinks,
 	getContactMethods,
+	getExploreItems,
 	getAppearanceRecord,
 	getPublishMetadata,
 	type DatabaseStatus,
 	type ProfileRecord,
 	type LinkRecord,
 	type ContactMethodRecord,
+	type ExploreItemRecord,
+	type ExploreBlockType,
 	type AppearanceRecord,
 	type PublishMetadataRecord,
 } from "../lib/db.server";
@@ -42,16 +45,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			draftLinks: [] as LinkRecord[],
 			draftContacts: [] as ContactMethodRecord[],
 			draftAppearance: null as AppearanceRecord | null,
+			draftExplore: [] as ExploreItemRecord[],
 			publishMetadata: null as PublishMetadataRecord | null,
 			envMode: import.meta.env.MODE,
 		};
 	}
 
-	const [dbStatus, draftProfile, draftLinks, draftContacts, draftAppearance, publishMetadata] = await Promise.all([
+	const [dbStatus, draftProfile, draftLinks, draftContacts, draftExplore, draftAppearance, publishMetadata] = await Promise.all([
 		getDatabaseStatus(env?.DB),
 		env?.DB ? getProfileRecord(env.DB, "draft") : null,
 		env?.DB ? getLinks(env.DB, "draft") : [],
 		env?.DB ? getContactMethods(env.DB, "draft") : [],
+		env?.DB ? getExploreItems(env.DB, "draft") : [],
 		env?.DB ? getAppearanceRecord(env.DB, "draft") : null,
 		env?.DB ? getPublishMetadata(env.DB) : null,
 	]);
@@ -65,6 +70,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		draftProfile,
 		draftLinks,
 		draftContacts,
+		draftExplore,
 		draftAppearance,
 		publishMetadata,
 		envMode: import.meta.env.MODE,
@@ -94,9 +100,9 @@ const navTabs: NavTab[] = [
 	{ id: "links", label: "Links", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
 	{ id: "contact", label: "Contact", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
 	{ id: "appearance", label: "Appearance", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
-	{ id: "clicks", label: "Click Monitor", badge: "Phase 4" },
-	{ id: "explore", label: "Explore", badge: "Phase 4" },
-	{ id: "settings", label: "Settings", badge: "Phase 4" },
+	{ id: "explore", label: "Explore", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
+	{ id: "clicks", label: "Click Monitor", badge: "Phase 5" },
+	{ id: "settings", label: "Settings", badge: "Phase 6" },
 ];
 
 const defaultAppearanceFallback: AppearanceRecord = {
@@ -215,13 +221,42 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 	// Media Library Modal state (Cloudflare R2 + D1 Registry)
 	const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
-	const [mediaTarget, setMediaTarget] = useState<"avatar" | "cover" | "background" | "background_poster" | null>(null);
+	const [mediaTarget, setMediaTarget] = useState<"avatar" | "cover" | "background" | "background_poster" | "explore_cover" | null>(null);
 	const [mediaCategoryFilter, setMediaCategoryFilter] = useState<string>("all");
 	const [mediaList, setMediaList] = useState<MediaAssetRecord[]>([]);
 	const [isLoadingMedia, setIsLoadingMedia] = useState(false);
 	const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 	const [uploadError, setUploadError] = useState<string | null>(null);
 	const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
+
+	// Explore items state (Phase 4)
+	const [exploreItems, setExploreItems] = useState<ExploreItemRecord[]>(loaderData.draftExplore || []);
+	const [exploreFilterType, setExploreFilterType] = useState<string>("all");
+	const [exploreSearchQuery, setExploreSearchQuery] = useState("");
+	const [isAddExploreOpen, setIsAddExploreOpen] = useState(false);
+	const [isEditExploreOpen, setIsEditExploreOpen] = useState(false);
+	const [editingExplore, setEditingExplore] = useState<ExploreItemRecord | null>(null);
+	const [isDeleteExploreOpen, setIsDeleteExploreOpen] = useState(false);
+	const [deletingExplore, setDeletingExplore] = useState<ExploreItemRecord | null>(null);
+	const [isSubmittingExplore, setIsSubmittingExplore] = useState(false);
+	const [exploreForm, setExploreForm] = useState({
+		type: "project" as ExploreBlockType,
+		title_id: "",
+		title_en: "",
+		subtitle_id: "",
+		subtitle_en: "",
+		description_id: "",
+		description_en: "",
+		url: "",
+		cover_image: "",
+		badge_id: "",
+		badge_en: "",
+		tags: "",
+		year: "",
+		rating: "",
+		artist: "",
+		is_enabled: true,
+	});
 
 	// Sync initial section from URL query parameter e.g. /studio?tab=profile
 	useEffect(() => {
@@ -828,9 +863,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		}
 	}, []);
 
-	const handleOpenMediaLibrary = (target: "avatar" | "cover" | "background" | "background_poster") => {
+	const handleOpenMediaLibrary = (target: "avatar" | "cover" | "background" | "background_poster" | "explore_cover") => {
 		setMediaTarget(target);
-		const initialCategory = target === "avatar" ? "avatar" : target === "cover" ? "cover" : "background";
+		const initialCategory = target === "avatar" ? "avatar" : target === "cover" ? "cover" : target === "explore_cover" ? "all" : "background";
 		setMediaCategoryFilter(initialCategory);
 		setIsMediaModalOpen(true);
 		fetchMediaList(initialCategory);
@@ -881,9 +916,247 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 				background_poster: `/api/studio/media/${asset.id}/preview`,
 			}));
 			markUnpublished();
+		} else if (mediaTarget === "explore_cover") {
+			setExploreForm((prev) => ({
+				...prev,
+				cover_image: `/api/studio/media/${asset.id}/preview`,
+			}));
 		}
 		setIsMediaModalOpen(false);
 		showToast(`Media berhasil dipilih untuk ${mediaTarget}.`, "success");
+	};
+
+	// HANDLERS: EXPLORE EDITOR (PHASE 4)
+	// =========================================================================
+	const handleOpenAddExplore = () => {
+		setExploreForm({
+			type: "project",
+			title_id: "",
+			title_en: "",
+			subtitle_id: "",
+			subtitle_en: "",
+			description_id: "",
+			description_en: "",
+			url: "",
+			cover_image: "",
+			badge_id: "",
+			badge_en: "",
+			tags: "",
+			year: "",
+			rating: "",
+			artist: "",
+			is_enabled: true,
+		});
+		setIsAddExploreOpen(true);
+	};
+
+	const handleOpenEditExplore = (item: ExploreItemRecord) => {
+		let meta: Record<string, any> = {};
+		if (item.metadata_json) {
+			try {
+				meta = JSON.parse(item.metadata_json);
+			} catch {}
+		}
+		setEditingExplore(item);
+		setExploreForm({
+			type: (item.type as ExploreBlockType) || "project",
+			title_id: item.title_id || "",
+			title_en: item.title_en || "",
+			subtitle_id: item.subtitle_id || "",
+			subtitle_en: item.subtitle_en || "",
+			description_id: item.description_id || "",
+			description_en: item.description_en || "",
+			url: item.url || "",
+			cover_image: item.cover_image || "",
+			badge_id: item.badge_id || "",
+			badge_en: item.badge_en || "",
+			tags: Array.isArray(meta.tags) ? meta.tags.join(", ") : "",
+			year: meta.year || "",
+			rating: meta.rating || "",
+			artist: meta.artist || "",
+			is_enabled: Boolean(item.is_enabled),
+		});
+		setIsEditExploreOpen(true);
+	};
+
+	const buildExplorePayload = () => {
+		const meta: Record<string, any> = {};
+		if (exploreForm.tags) meta.tags = exploreForm.tags.split(",").map((s) => s.trim()).filter(Boolean);
+		if (exploreForm.year) meta.year = exploreForm.year.trim();
+		if (exploreForm.rating) meta.rating = exploreForm.rating.trim();
+		if (exploreForm.artist) meta.artist = exploreForm.artist.trim();
+
+		return {
+			type: exploreForm.type,
+			title_id: exploreForm.title_id.trim(),
+			title_en: exploreForm.title_en.trim() || exploreForm.title_id.trim(),
+			subtitle_id: exploreForm.subtitle_id.trim(),
+			subtitle_en: exploreForm.subtitle_en.trim(),
+			description_id: exploreForm.description_id.trim(),
+			description_en: exploreForm.description_en.trim(),
+			url: exploreForm.url.trim(),
+			cover_image: exploreForm.cover_image.trim(),
+			badge_id: exploreForm.badge_id.trim(),
+			badge_en: exploreForm.badge_en.trim(),
+			metadata_json: JSON.stringify(meta),
+			is_enabled: exploreForm.is_enabled ? 1 : 0,
+		};
+	};
+
+	const handleSaveNewExplore = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!exploreForm.title_id.trim()) {
+			showToast("Judul item Explore wajib diisi.", "error");
+			return;
+		}
+
+		setIsSubmittingExplore(true);
+		try {
+			const res = await fetch("/api/studio/explore", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(buildExplorePayload()),
+			});
+			const data = (await res.json()) as { status: string; item?: ExploreItemRecord; error?: string };
+			if (!res.ok || data.error || !data.item) {
+				showToast(data.error || "Gagal menambahkan item Explore.", "error");
+			} else {
+				setExploreItems((prev) => [...prev, data.item!]);
+				setIsAddExploreOpen(false);
+				showToast("Item Explore berhasil ditambahkan ke draft!", "success");
+				markUnpublished();
+			}
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : "Kesalahan jaringan.";
+			showToast(msg, "error");
+		} finally {
+			setIsSubmittingExplore(false);
+		}
+	};
+
+	const handleSaveEditExplore = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!editingExplore) return;
+		if (!exploreForm.title_id.trim()) {
+			showToast("Judul item Explore wajib diisi.", "error");
+			return;
+		}
+
+		setIsSubmittingExplore(true);
+		try {
+			const res = await fetch("/api/studio/explore", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ id: editingExplore.id, ...buildExplorePayload() }),
+			});
+			const data = (await res.json()) as { status: string; error?: string };
+			if (!res.ok || data.error) {
+				showToast(data.error || "Gagal memperbarui item Explore.", "error");
+			} else {
+				setExploreItems((prev) =>
+					prev.map((item) =>
+						item.id === editingExplore.id
+							? { ...item, ...buildExplorePayload(), updated_at: new Date().toISOString() }
+							: item
+					)
+				);
+				setIsEditExploreOpen(false);
+				setEditingExplore(null);
+				showToast("Item Explore berhasil diperbarui di draft!", "success");
+				markUnpublished();
+			}
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : "Kesalahan jaringan.";
+			showToast(msg, "error");
+		} finally {
+			setIsSubmittingExplore(false);
+		}
+	};
+
+	const handleToggleExploreVisibility = async (item: ExploreItemRecord) => {
+		const newStatus = item.is_enabled ? 0 : 1;
+		try {
+			const res = await fetch("/api/studio/explore", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ id: item.id, is_enabled: newStatus }),
+			});
+			if (res.ok) {
+				setExploreItems((prev) =>
+					prev.map((x) => (x.id === item.id ? { ...x, is_enabled: newStatus } : x))
+				);
+				showToast(`Item Explore ${newStatus ? "diaktifkan" : "dinonaktifkan"}.`, "success");
+				markUnpublished();
+			} else {
+				showToast("Gagal mengubah visibilitas item.", "error");
+			}
+		} catch {
+			showToast("Kesalahan jaringan.", "error");
+		}
+	};
+
+	const handleDuplicateExplore = async (item: ExploreItemRecord) => {
+		try {
+			const res = await fetch("/api/studio/explore", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ action: "duplicate", id: item.id }),
+			});
+			const data = (await res.json()) as { status: string; item?: ExploreItemRecord; error?: string };
+			if (res.ok && data.item) {
+				setExploreItems((prev) => [...prev, data.item!]);
+				showToast("Item Explore berhasil diduplikasi!", "success");
+				markUnpublished();
+			} else {
+				showToast(data.error || "Gagal menduplikasi item.", "error");
+			}
+		} catch {
+			showToast("Kesalahan jaringan.", "error");
+		}
+	};
+
+	const handleMoveExplore = async (index: number, direction: "up" | "down") => {
+		const targetIndex = direction === "up" ? index - 1 : index + 1;
+		if (targetIndex < 0 || targetIndex >= exploreItems.length) return;
+
+		const updated = [...exploreItems];
+		const temp = updated[index];
+		updated[index] = updated[targetIndex];
+		updated[targetIndex] = temp;
+
+		setExploreItems(updated);
+		try {
+			await fetch("/api/studio/explore", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ orderedIds: updated.map((x) => x.id) }),
+			});
+			markUnpublished();
+		} catch (err) {
+			console.error("Gagal memperbarui urutan Explore:", err);
+		}
+	};
+
+	const handleDeleteExplore = async (id: string) => {
+		try {
+			const res = await fetch("/api/studio/explore", {
+				method: "DELETE",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ id }),
+			});
+			if (res.ok) {
+				setExploreItems((prev) => prev.filter((x) => x.id !== id));
+				setIsDeleteExploreOpen(false);
+				setDeletingExplore(null);
+				showToast("Item Explore berhasil dihapus dari draft.", "success");
+				markUnpublished();
+			} else {
+				const data = (await res.json()) as { error?: string };
+				showToast(data.error || "Gagal menghapus item Explore.", "error");
+			}
+		} catch {
+			showToast("Kesalahan jaringan.", "error");
+		}
 	};
 
 	const handleRemoveMedia = (target: "avatar" | "cover" | "background" | "background_poster") => {
@@ -2500,9 +2773,266 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 					)}
 
 					{/* =========================================================================
-					    ROADMAP SECTIONS (HONEST PHASE 4 / FUTURE)
+					    EXPLORE EDITOR (PHASE 4)
 					    ========================================================================= */}
-					{["clicks", "explore", "settings"].includes(activeSection) && (
+					{activeSection === "explore" && (
+						<div className="flex flex-col gap-6">
+							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+									<div>
+										<h2 className="text-lg font-bold text-white">Editor Explore Showcase (Draft)</h2>
+										<p className="text-xs text-slate-400">
+											Kelola item konten modular (Galeri, Foto, Video, Musik, Game, Review, Portofolio Proyek, Catatan, Tautan, dan Blok Kustom).
+										</p>
+									</div>
+									<button
+										type="button"
+										onClick={handleOpenAddExplore}
+										className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs sm:text-sm font-semibold transition-all shadow-md cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
+									>
+										<span>+ Tambah Item Explore</span>
+									</button>
+								</div>
+
+								{/* Filters & Search */}
+								<div className="flex flex-col sm:flex-row gap-3 mb-6">
+									<div className="flex-1 relative">
+										<input
+											type="text"
+											placeholder="Cari item explore berdasarkan judul atau deskripsi..."
+											value={exploreSearchQuery}
+											onChange={(e) => setExploreSearchQuery(e.target.value)}
+											className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500"
+										/>
+									</div>
+									<div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs">
+										{[
+											{ id: "all", label: "Semua" },
+											{ id: "project", label: "Proyek" },
+											{ id: "gallery", label: "Galeri" },
+											{ id: "image", label: "Foto" },
+											{ id: "video", label: "Video" },
+											{ id: "music", label: "Musik" },
+											{ id: "game", label: "Game" },
+											{ id: "review", label: "Review" },
+											{ id: "note", label: "Catatan" },
+											{ id: "link", label: "Link" },
+											{ id: "custom", label: "Kustom" },
+										].map((cat) => (
+											<button
+												key={cat.id}
+												type="button"
+												onClick={() => setExploreFilterType(cat.id)}
+												className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap font-medium transition-all cursor-pointer ${
+													exploreFilterType === cat.id
+														? "bg-violet-600 text-white"
+														: "bg-slate-800 text-slate-400 hover:text-slate-200"
+												}`}
+											>
+												{cat.label}
+											</button>
+										))}
+									</div>
+								</div>
+
+								{/* Explore Items List */}
+								{(() => {
+									const filtered = exploreItems.filter((item) => {
+										const matchesType = exploreFilterType === "all" || item.type === exploreFilterType;
+										const matchesQuery =
+											!exploreSearchQuery ||
+											item.title_id.toLowerCase().includes(exploreSearchQuery.toLowerCase()) ||
+											item.title_en.toLowerCase().includes(exploreSearchQuery.toLowerCase()) ||
+											(item.description_id && item.description_id.toLowerCase().includes(exploreSearchQuery.toLowerCase()));
+										return matchesType && matchesQuery;
+									});
+
+									if (filtered.length === 0) {
+										return (
+											<div className="py-12 text-center border-2 border-dashed border-slate-800 rounded-2xl p-6">
+												<div className="w-12 h-12 rounded-2xl bg-slate-800/80 text-violet-400 flex items-center justify-center mx-auto mb-3">
+													<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+													</svg>
+												</div>
+												<p className="text-sm font-semibold text-slate-300 mb-1">
+													{exploreItems.length === 0 ? "Belum ada item Explore di draft." : "Tidak ada item Explore yang cocok dengan filter."}
+												</p>
+												<p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
+													{exploreItems.length === 0
+														? "Tambahkan portofolio, foto galeri, video, atau musik untuk memperkaya profil publik Anda."
+														: "Coba ubah kata kunci pencarian atau pilih kategori Semua."}
+												</p>
+												{exploreItems.length === 0 && (
+													<button
+														type="button"
+														onClick={handleOpenAddExplore}
+														className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+													>
+														+ Tambah Item Explore Pertama
+													</button>
+												)}
+											</div>
+										);
+									}
+
+									return (
+										<div className="flex flex-col gap-3">
+											{filtered.map((item) => {
+												const realIndex = exploreItems.findIndex((x) => x.id === item.id);
+												return (
+													<div
+														key={item.id}
+														className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+															item.is_enabled
+																? "bg-slate-950 border-slate-800 hover:border-slate-700"
+																: "bg-slate-950/50 border-slate-850 opacity-60"
+														}`}
+													>
+														{/* Left: Reorder, Thumbnail & Content Details */}
+														<div className="flex items-center gap-3 min-w-0">
+															{/* Reorder Up / Down */}
+															<div className="flex flex-col gap-1 shrink-0">
+																<button
+																	type="button"
+																	disabled={realIndex === 0}
+																	onClick={() => handleMoveExplore(realIndex, "up")}
+																	className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+																	title="Pindahkan ke atas"
+																>
+																	<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+																	</svg>
+																</button>
+																<button
+																	type="button"
+																	disabled={realIndex === exploreItems.length - 1}
+																	onClick={() => handleMoveExplore(realIndex, "down")}
+																	className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+																	title="Pindahkan ke bawah"
+																>
+																	<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+																	</svg>
+																</button>
+															</div>
+
+															{/* Thumbnail */}
+															{item.cover_image ? (
+																<div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 shrink-0">
+																	<img
+																		src={item.cover_image}
+																		alt={item.title_id}
+																		className="w-full h-full object-cover"
+																		loading="lazy"
+																	/>
+																</div>
+															) : (
+																<div className="w-14 h-14 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 shrink-0 uppercase font-mono text-xs font-bold">
+																	{item.type.slice(0, 3)}
+																</div>
+															)}
+
+															{/* Text Info */}
+															<div className="min-w-0">
+																<div className="flex items-center gap-2 mb-1 flex-wrap">
+																	<span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-violet-950 text-violet-300 border border-violet-800">
+																		{item.type}
+																	</span>
+																	{item.badge_id && (
+																		<span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300">
+																			{item.badge_id}
+																		</span>
+																	)}
+																	{!item.is_enabled && (
+																		<span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-950 text-rose-300 border border-rose-800">
+																			Nonaktif
+																		</span>
+																	)}
+																</div>
+																<h3 className="text-sm font-bold text-white truncate">
+																	{item.title_id}
+																</h3>
+																{item.subtitle_id && (
+																	<p className="text-xs text-slate-400 truncate">
+																		{item.subtitle_id}
+																	</p>
+																)}
+																{item.url && (
+																	<a
+																		href={item.url}
+																		target="_blank"
+																		rel="noopener noreferrer"
+																		className="text-[11px] text-violet-400 hover:underline truncate block max-w-xs mt-0.5"
+																	>
+																		{item.url}
+																	</a>
+																)}
+															</div>
+														</div>
+
+														{/* Right: Actions */}
+														<div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+															<button
+																type="button"
+																onClick={() => handleToggleExploreVisibility(item)}
+																className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+																	item.is_enabled
+																		? "bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800"
+																		: "bg-slate-800 hover:bg-slate-700 text-slate-400"
+																}`}
+																title={item.is_enabled ? "Klik untuk menonaktifkan" : "Klik untuk mengaktifkan"}
+															>
+																{item.is_enabled ? "Aktif" : "Nonaktif"}
+															</button>
+															<button
+																type="button"
+																onClick={() => handleDuplicateExplore(item)}
+																className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-colors cursor-pointer"
+																title="Duplikasi item ini"
+															>
+																<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+																</svg>
+															</button>
+															<button
+																type="button"
+																onClick={() => handleOpenEditExplore(item)}
+																className="p-1.5 rounded-lg bg-slate-800 hover:bg-violet-600 hover:text-white text-slate-300 text-xs transition-colors cursor-pointer"
+																title="Edit item ini"
+															>
+																<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+																</svg>
+															</button>
+															<button
+																type="button"
+																onClick={() => {
+																	setDeletingExplore(item);
+																	setIsDeleteExploreOpen(true);
+																}}
+																className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-400 text-xs transition-colors cursor-pointer"
+																title="Hapus item ini"
+															>
+																<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+																</svg>
+															</button>
+														</div>
+													</div>
+												);
+											})}
+										</div>
+									);
+								})()}
+							</div>
+						</div>
+					)}
+
+					{/* =========================================================================
+					    ROADMAP SECTIONS (HONEST PHASE 5 & 6)
+					    ========================================================================= */}
+					{["clicks", "settings"].includes(activeSection) && (
 						<div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 sm:p-12 text-center flex flex-col items-center">
 							<div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 flex items-center justify-center mb-4">
 								<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2920,6 +3450,376 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 							>
 								Ya, Hapus Kontak
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* =========================================================================
+			    MODALS: ADD / EDIT EXPLORE ITEM (PHASE 4)
+			    ========================================================================= */}
+			{(isAddExploreOpen || isEditExploreOpen) && (
+				<div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+					<div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl my-8">
+						<div className="flex items-center justify-between mb-4">
+							<h3 className="text-base font-bold text-white">
+								{isAddExploreOpen ? "Tambah Item Explore Baru" : "Edit Item Explore"}
+							</h3>
+							<button
+								type="button"
+								onClick={() => {
+									setIsAddExploreOpen(false);
+									setIsEditExploreOpen(false);
+									setEditingExplore(null);
+								}}
+								className="text-slate-400 hover:text-white text-sm cursor-pointer"
+							>
+								✕
+							</button>
+						</div>
+
+						<form onSubmit={isAddExploreOpen ? handleSaveNewExplore : handleSaveEditExplore} className="flex flex-col gap-4">
+							{/* Content Type Selector */}
+							<div>
+								<label htmlFor="ef-type" className="block text-xs font-semibold text-slate-300 mb-1">
+									Tipe Konten Modular <span className="text-rose-400">*</span>
+								</label>
+								<select
+									id="ef-type"
+									value={exploreForm.type}
+									onChange={(e) => setExploreForm({ ...exploreForm, type: e.target.value as ExploreBlockType })}
+									className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
+								>
+									<option value="project">Proyek (Portfolio Project)</option>
+									<option value="gallery">Galeri Foto (Photo Showcase)</option>
+									<option value="image">Foto Tunggal (Single Artwork)</option>
+									<option value="video">Video (Video Player / Embed)</option>
+									<option value="music">Musik (Audio Track / Playlist)</option>
+									<option value="game">Game (Interactive Demo / Game)</option>
+									<option value="review">Review (Media Review / Book)</option>
+									<option value="note">Catatan (Announcement / Note)</option>
+									<option value="link">Tautan (External Feature Link)</option>
+									<option value="custom">Kustom (Custom Flexible Block)</option>
+								</select>
+							</div>
+
+							{/* Localized Title */}
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+								<div>
+									<label htmlFor="ef-title-id" className="block text-xs font-semibold text-slate-300 mb-1">
+										Judul (Indonesia) <span className="text-rose-400">*</span>
+									</label>
+									<input
+										id="ef-title-id"
+										type="text"
+										required
+										value={exploreForm.title_id}
+										onChange={(e) => setExploreForm({ ...exploreForm, title_id: e.target.value })}
+										placeholder="e.g. Desain Dashboard Liquid Glass"
+										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
+									/>
+								</div>
+								<div>
+									<label htmlFor="ef-title-en" className="block text-xs font-semibold text-slate-300 mb-1">
+										Title (English)
+									</label>
+									<input
+										id="ef-title-en"
+										type="text"
+										value={exploreForm.title_en}
+										onChange={(e) => setExploreForm({ ...exploreForm, title_en: e.target.value })}
+										placeholder="e.g. Liquid Glass Dashboard Design"
+										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
+									/>
+								</div>
+							</div>
+
+							{/* Localized Subtitle */}
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+								<div>
+									<label htmlFor="ef-subtitle-id" className="block text-xs font-semibold text-slate-300 mb-1">
+										Subjudul / Keterangan Singkat (ID)
+									</label>
+									<input
+										id="ef-subtitle-id"
+										type="text"
+										value={exploreForm.subtitle_id}
+										onChange={(e) => setExploreForm({ ...exploreForm, subtitle_id: e.target.value })}
+										placeholder="e.g. Desain UI Eksperimental"
+										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
+									/>
+								</div>
+								<div>
+									<label htmlFor="ef-subtitle-en" className="block text-xs font-semibold text-slate-300 mb-1">
+										Subtitle (EN)
+									</label>
+									<input
+										id="ef-subtitle-en"
+										type="text"
+										value={exploreForm.subtitle_en}
+										onChange={(e) => setExploreForm({ ...exploreForm, subtitle_en: e.target.value })}
+										placeholder="e.g. Experimental UI Design"
+										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
+									/>
+								</div>
+							</div>
+
+							{/* Localized Description */}
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+								<div>
+									<label htmlFor="ef-desc-id" className="block text-xs font-semibold text-slate-300 mb-1">
+										Deskripsi Lengkap (ID)
+									</label>
+									<textarea
+										id="ef-desc-id"
+										rows={2}
+										value={exploreForm.description_id}
+										onChange={(e) => setExploreForm({ ...exploreForm, description_id: e.target.value })}
+										placeholder="Ringkasan proyek atau konten..."
+										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
+									/>
+								</div>
+								<div>
+									<label htmlFor="ef-desc-en" className="block text-xs font-semibold text-slate-300 mb-1">
+										Description (EN)
+									</label>
+									<textarea
+										id="ef-desc-en"
+										rows={2}
+										value={exploreForm.description_en}
+										onChange={(e) => setExploreForm({ ...exploreForm, description_en: e.target.value })}
+										placeholder="Project or content summary..."
+										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
+									/>
+								</div>
+							</div>
+
+							{/* URL & Cover Image */}
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+								<div>
+									<label htmlFor="ef-url" className="block text-xs font-semibold text-slate-300 mb-1">
+										Tautan Tujuan (URL)
+									</label>
+									<input
+										id="ef-url"
+										type="text"
+										value={exploreForm.url}
+										onChange={(e) => setExploreForm({ ...exploreForm, url: e.target.value })}
+										placeholder="https://..."
+										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none font-mono"
+									/>
+								</div>
+								<div>
+									<label htmlFor="ef-cover" className="block text-xs font-semibold text-slate-300 mb-1">
+										Gambar Sampul / Thumbnail
+									</label>
+									<div className="flex gap-2">
+										<input
+											id="ef-cover"
+											type="text"
+											value={exploreForm.cover_image}
+											onChange={(e) => setExploreForm({ ...exploreForm, cover_image: e.target.value })}
+											placeholder="https://... atau media R2"
+											className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none font-mono text-xs"
+										/>
+										<button
+											type="button"
+											onClick={() => handleOpenMediaLibrary("explore_cover")}
+											className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold whitespace-nowrap cursor-pointer"
+											title="Pilih gambar dari Media Library R2"
+										>
+											Pilih Media
+										</button>
+									</div>
+								</div>
+							</div>
+
+							{/* Type-Specific Dynamic Fields */}
+							<div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col gap-3">
+								<span className="text-[11px] font-semibold uppercase tracking-wider text-violet-400">
+									Pengaturan Tambahan ({exploreForm.type})
+								</span>
+
+								{(exploreForm.type === "project" || exploreForm.type === "game") && (
+									<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+										<div>
+											<label htmlFor="ef-tags" className="block text-xs text-slate-400 mb-1">
+												Tags (Pisahkan dengan koma)
+											</label>
+											<input
+												id="ef-tags"
+												type="text"
+												value={exploreForm.tags}
+												onChange={(e) => setExploreForm({ ...exploreForm, tags: e.target.value })}
+												placeholder="React, Tailwind, Workers"
+												className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
+											/>
+										</div>
+										<div>
+											<label htmlFor="ef-year" className="block text-xs text-slate-400 mb-1">
+												Tahun Rilis / Versi
+											</label>
+											<input
+												id="ef-year"
+												type="text"
+												value={exploreForm.year}
+												onChange={(e) => setExploreForm({ ...exploreForm, year: e.target.value })}
+												placeholder="2026"
+												className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
+											/>
+										</div>
+									</div>
+								)}
+
+								{(exploreForm.type === "review" || (exploreForm.type as string) === "book") && (
+									<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+										<div>
+											<label htmlFor="ef-rating" className="block text-xs text-slate-400 mb-1">
+												Skor / Rating (e.g. 4.9/5 atau 9.5)
+											</label>
+											<input
+												id="ef-rating"
+												type="text"
+												value={exploreForm.rating}
+												onChange={(e) => setExploreForm({ ...exploreForm, rating: e.target.value })}
+												placeholder="4.9/5"
+												className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
+											/>
+										</div>
+										<div>
+											<label htmlFor="ef-author" className="block text-xs text-slate-400 mb-1">
+												Pencipta / Penulis
+											</label>
+											<input
+												id="ef-author"
+												type="text"
+												value={exploreForm.artist}
+												onChange={(e) => setExploreForm({ ...exploreForm, artist: e.target.value })}
+												placeholder="Nama Pengarang"
+												className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
+											/>
+										</div>
+									</div>
+								)}
+
+								{exploreForm.type === "music" && (
+									<div>
+										<label htmlFor="ef-artist" className="block text-xs text-slate-400 mb-1">
+											Artis / Musisi
+										</label>
+										<input
+											id="ef-artist"
+											type="text"
+											value={exploreForm.artist}
+											onChange={(e) => setExploreForm({ ...exploreForm, artist: e.target.value })}
+											placeholder="Nama Artis / Band"
+											className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
+										/>
+									</div>
+								)}
+
+								<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+									<div>
+										<label htmlFor="ef-badge-id" className="block text-xs text-slate-400 mb-1">
+											Teks Badge ID (Opsional)
+										</label>
+										<input
+											id="ef-badge-id"
+											type="text"
+											value={exploreForm.badge_id}
+											onChange={(e) => setExploreForm({ ...exploreForm, badge_id: e.target.value })}
+											placeholder="e.g. Featured, Terbaru, Top Pick"
+											className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
+										/>
+									</div>
+									<div>
+										<label htmlFor="ef-badge-en" className="block text-xs text-slate-400 mb-1">
+											Badge Text EN
+										</label>
+										<input
+											id="ef-badge-en"
+											type="text"
+											value={exploreForm.badge_en}
+											onChange={(e) => setExploreForm({ ...exploreForm, badge_en: e.target.value })}
+											placeholder="e.g. Featured, New, Top Pick"
+											className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
+										/>
+									</div>
+								</div>
+							</div>
+
+							{/* Enabled Switch */}
+							<label className="flex items-center gap-2.5 cursor-pointer pt-1">
+								<input
+									type="checkbox"
+									checked={exploreForm.is_enabled}
+									onChange={(e) => setExploreForm({ ...exploreForm, is_enabled: e.target.checked })}
+									className="w-4 h-4 rounded accent-violet-600 bg-slate-950 border-slate-800"
+								/>
+								<span className="text-xs font-semibold text-slate-300">
+									Tampilkan item ini di halaman Explore publik (Aktif)
+								</span>
+							</label>
+
+							{/* Actions */}
+							<div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+								<button
+									type="button"
+									onClick={() => {
+										setIsAddExploreOpen(false);
+										setIsEditExploreOpen(false);
+										setEditingExplore(null);
+									}}
+									className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+								>
+									Batal
+								</button>
+								<button
+									type="submit"
+									disabled={isSubmittingExplore}
+									className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors cursor-pointer"
+								>
+									{isSubmittingExplore ? "Menyimpan..." : isAddExploreOpen ? "Simpan ke Draft" : "Perbarui Draft"}
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			)}
+
+			{/* =========================================================================
+			    MODALS: DELETE EXPLORE CONFIRMATION (PHASE 4)
+			    ========================================================================= */}
+			{isDeleteExploreOpen && deletingExplore && (
+				<div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+					<div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+						<div className="w-12 h-12 rounded-2xl bg-rose-950/80 border border-rose-800/60 text-rose-400 flex items-center justify-center mb-4">
+							<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+							</svg>
+						</div>
+						<h3 className="text-lg font-bold text-white mb-2">Hapus Item Explore?</h3>
+						<p className="text-xs sm:text-sm text-slate-400 mb-4 leading-relaxed">
+							Anda yakin ingin menghapus <strong className="text-white">"{deletingExplore.title_id}"</strong> ({deletingExplore.type}) dari draft Explore? Tindakan ini akan dicatat sebagai perubahan belum terbit.
+						</p>
+						<div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+							<button
+								type="button"
+								onClick={() => {
+									setIsDeleteExploreOpen(false);
+									setDeletingExplore(null);
+								}}
+								className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+							>
+								Batal
+							</button>
+							<button
+								type="button"
+								onClick={() => handleDeleteExplore(deletingExplore.id)}
+								className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+							>
+								Ya, Hapus Item
 							</button>
 						</div>
 					</div>

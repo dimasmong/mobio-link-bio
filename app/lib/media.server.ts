@@ -359,6 +359,41 @@ export async function isMediaReferenced(
 			};
 		}
 
+		// 3. Check explore items (draft and published)
+		const exploreDraftMatch = await db
+			.prepare(
+				`SELECT id, title_id FROM explore_items_draft
+				 WHERE cover_image LIKE '%' || ? || '%'
+				    OR metadata_json LIKE '%' || ? || '%'
+				 LIMIT 1;`
+			)
+			.bind(mediaId, mediaId)
+			.first<{ id: string; title_id: string }>();
+
+		if (exploreDraftMatch) {
+			return {
+				referenced: true,
+				reason: `Media ini sedang digunakan di bagian Explore draft (${exploreDraftMatch.title_id || exploreDraftMatch.id}).`,
+			};
+		}
+
+		const explorePubMatch = await db
+			.prepare(
+				`SELECT id, title_id FROM explore_items
+				 WHERE cover_image LIKE '%' || ? || '%'
+				    OR metadata_json LIKE '%' || ? || '%'
+				 LIMIT 1;`
+			)
+			.bind(mediaId, mediaId)
+			.first<{ id: string; title_id: string }>();
+
+		if (explorePubMatch) {
+			return {
+				referenced: true,
+				reason: `Media ini sedang digunakan di bagian Explore publik (${explorePubMatch.title_id || explorePubMatch.id}).`,
+			};
+		}
+
 		return { referenced: false };
 	} catch (err: unknown) {
 		const msg = err instanceof Error ? err.message : "Error querying references";

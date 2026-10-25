@@ -43,9 +43,21 @@ export interface LinkRecord {
 	updated_at: string;
 }
 
+export type ExploreBlockType =
+	| "gallery"
+	| "image"
+	| "video"
+	| "music"
+	| "game"
+	| "review"
+	| "project"
+	| "note"
+	| "link"
+	| "custom";
+
 export interface ExploreItemRecord {
 	id: string;
-	type: "project" | "gallery" | "music" | "note";
+	type: ExploreBlockType | string;
 	title_id: string;
 	title_en: string;
 	subtitle_id?: string;
@@ -324,6 +336,7 @@ export async function getDatabaseStatus(db?: D1Database): Promise<DatabaseStatus
 			"links",
 			"links_draft",
 			"explore_items",
+			"explore_items_draft",
 			"contact_methods",
 			"contact_methods_draft",
 			"appearance_settings",
@@ -366,7 +379,7 @@ export async function getDatabaseStatus(db?: D1Database): Promise<DatabaseStatus
 
 		// 3. Quick counts for dashboard
 		const linksCount = tableBreakdown.find((t) => t.name === "links_draft")?.rows ?? 0;
-		const exploreCount = tableBreakdown.find((t) => t.name === "explore_items")?.rows ?? 0;
+		const exploreCount = tableBreakdown.find((t) => t.name === "explore_items_draft")?.rows ?? 0;
 		const contactCount = tableBreakdown.find((t) => t.name === "contact_methods_draft")?.rows ?? 0;
 		const clicksCount = tableBreakdown.find((t) => t.name === "click_events")?.rows ?? 0;
 		const mediaCount = tableBreakdown.find((t) => t.name === "media_assets")?.rows ?? 0;
@@ -895,6 +908,293 @@ export async function reorderDraftContacts(db: D1Database, orderedIds: string[])
 }
 
 /**
+ * Fetches explore items from either published or draft tables.
+ */
+export async function getExploreItems(
+	db: D1Database,
+	mode: "published" | "draft" = "published",
+	activeOnly = false
+): Promise<ExploreItemRecord[]> {
+	const table = mode === "draft" ? "explore_items_draft" : "explore_items";
+	const query = activeOnly
+		? `SELECT * FROM ${table} WHERE is_enabled = 1 ORDER BY sort_order ASC, created_at ASC;`
+		: `SELECT * FROM ${table} ORDER BY sort_order ASC, created_at ASC;`;
+
+	try {
+		const res = await db.prepare(query).all<ExploreItemRecord>();
+		return res.results ?? [];
+	} catch (err: unknown) {
+		console.warn(`Failed to fetch explore items from ${table}:`, err);
+		return [];
+	}
+}
+
+/**
+ * Fetches single explore item by ID.
+ */
+export async function getExploreItemById(
+	db: D1Database,
+	id: string,
+	mode: "published" | "draft" = "draft"
+): Promise<ExploreItemRecord | null> {
+	const table = mode === "draft" ? "explore_items_draft" : "explore_items";
+	try {
+		return await db
+			.prepare(`SELECT * FROM ${table} WHERE id = ? LIMIT 1;`)
+			.bind(id)
+			.first<ExploreItemRecord>();
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Creates a new draft explore item.
+ */
+export async function createDraftExploreItem(
+	db: D1Database,
+	item: {
+		type: string;
+		title_id: string;
+		title_en: string;
+		subtitle_id?: string;
+		subtitle_en?: string;
+		description_id?: string;
+		description_en?: string;
+		url?: string;
+		cover_image?: string;
+		badge_id?: string;
+		badge_en?: string;
+		metadata_json?: string;
+		sort_order?: number;
+		is_enabled?: number;
+	}
+): Promise<ExploreItemRecord> {
+	const id = crypto.randomUUID();
+	const now = new Date().toISOString();
+
+	let sortOrder = item.sort_order;
+	if (typeof sortOrder !== "number") {
+		const maxOrder = await db
+			.prepare("SELECT MAX(sort_order) as maxOrder FROM explore_items_draft;")
+			.first<{ maxOrder: number | null }>();
+		sortOrder = (maxOrder?.maxOrder ?? -1) + 1;
+	}
+
+	const newRecord: ExploreItemRecord = {
+		id,
+		type: item.type.trim().toLowerCase(),
+		title_id: item.title_id.trim(),
+		title_en: item.title_en.trim() || item.title_id.trim(),
+		subtitle_id: item.subtitle_id?.trim() || "",
+		subtitle_en: item.subtitle_en?.trim() || "",
+		description_id: item.description_id?.trim() || "",
+		description_en: item.description_en?.trim() || "",
+		url: item.url?.trim() || "",
+		cover_image: item.cover_image?.trim() || "",
+		badge_id: item.badge_id?.trim() || "",
+		badge_en: item.badge_en?.trim() || "",
+		metadata_json: item.metadata_json?.trim() || "{}",
+		sort_order: sortOrder,
+		is_enabled: item.is_enabled ?? 1,
+		created_at: now,
+		updated_at: now,
+	};
+
+	await db.batch([
+		db
+			.prepare(
+				`INSERT INTO explore_items_draft (id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+			)
+			.bind(
+				newRecord.id,
+				newRecord.type,
+				newRecord.title_id,
+				newRecord.title_en,
+				newRecord.subtitle_id,
+				newRecord.subtitle_en,
+				newRecord.description_id,
+				newRecord.description_en,
+				newRecord.url,
+				newRecord.cover_image,
+				newRecord.badge_id,
+				newRecord.badge_en,
+				newRecord.metadata_json,
+				newRecord.sort_order,
+				newRecord.is_enabled,
+				newRecord.created_at,
+				newRecord.updated_at
+			),
+		db
+			.prepare(
+				`UPDATE publish_metadata
+				 SET has_unpublished_changes = 1, draft_updated_at = ?
+				 WHERE id = 'current';`
+			)
+			.bind(now),
+	]);
+
+	return newRecord;
+}
+
+/**
+ * Updates an existing draft explore item.
+ */
+export async function updateDraftExploreItem(
+	db: D1Database,
+	id: string,
+	data: Partial<ExploreItemRecord>
+): Promise<void> {
+	const now = new Date().toISOString();
+	const current = await db
+		.prepare("SELECT * FROM explore_items_draft WHERE id = ? LIMIT 1;")
+		.bind(id)
+		.first<ExploreItemRecord>();
+
+	if (!current) {
+		throw new Error(`Item Explore dengan ID '${id}' tidak ditemukan.`);
+	}
+
+	const updated: ExploreItemRecord = {
+		...current,
+		...data,
+		type: data.type !== undefined ? data.type.trim().toLowerCase() : current.type,
+		title_id: data.title_id !== undefined ? data.title_id.trim() : current.title_id,
+		title_en: data.title_en !== undefined ? data.title_en.trim() : current.title_en,
+		subtitle_id: data.subtitle_id !== undefined ? data.subtitle_id.trim() : current.subtitle_id,
+		subtitle_en: data.subtitle_en !== undefined ? data.subtitle_en.trim() : current.subtitle_en,
+		description_id: data.description_id !== undefined ? data.description_id.trim() : current.description_id,
+		description_en: data.description_en !== undefined ? data.description_en.trim() : current.description_en,
+		url: data.url !== undefined ? data.url.trim() : current.url,
+		cover_image: data.cover_image !== undefined ? data.cover_image.trim() : current.cover_image,
+		badge_id: data.badge_id !== undefined ? data.badge_id.trim() : current.badge_id,
+		badge_en: data.badge_en !== undefined ? data.badge_en.trim() : current.badge_en,
+		metadata_json: data.metadata_json !== undefined ? data.metadata_json.trim() : current.metadata_json,
+		sort_order: data.sort_order !== undefined ? data.sort_order : current.sort_order,
+		is_enabled: data.is_enabled !== undefined ? data.is_enabled : current.is_enabled,
+		updated_at: now,
+	};
+
+	await db.batch([
+		db
+			.prepare(
+				`UPDATE explore_items_draft
+				 SET type = ?, title_id = ?, title_en = ?, subtitle_id = ?, subtitle_en = ?, description_id = ?, description_en = ?, url = ?, cover_image = ?, badge_id = ?, badge_en = ?, metadata_json = ?, sort_order = ?, is_enabled = ?, updated_at = ?
+				 WHERE id = ?;`
+			)
+			.bind(
+				updated.type,
+				updated.title_id,
+				updated.title_en,
+				updated.subtitle_id,
+				updated.subtitle_en,
+				updated.description_id,
+				updated.description_en,
+				updated.url,
+				updated.cover_image,
+				updated.badge_id,
+				updated.badge_en,
+				updated.metadata_json,
+				updated.sort_order,
+				updated.is_enabled,
+				updated.updated_at,
+				id
+			),
+		db
+			.prepare(
+				`UPDATE publish_metadata
+				 SET has_unpublished_changes = 1, draft_updated_at = ?
+				 WHERE id = 'current';`
+			)
+			.bind(now),
+	]);
+}
+
+/**
+ * Deletes a draft explore item.
+ */
+export async function deleteDraftExploreItem(db: D1Database, id: string): Promise<void> {
+	const now = new Date().toISOString();
+	await db.batch([
+		db.prepare("DELETE FROM explore_items_draft WHERE id = ?;").bind(id),
+		db
+			.prepare(
+				`UPDATE publish_metadata
+				 SET has_unpublished_changes = 1, draft_updated_at = ?
+				 WHERE id = 'current';`
+			)
+			.bind(now),
+	]);
+}
+
+/**
+ * Duplicates a draft explore item.
+ */
+export async function duplicateDraftExploreItem(
+	db: D1Database,
+	id: string
+): Promise<ExploreItemRecord> {
+	const current = await db
+		.prepare("SELECT * FROM explore_items_draft WHERE id = ? LIMIT 1;")
+		.bind(id)
+		.first<ExploreItemRecord>();
+
+	if (!current) {
+		throw new Error(`Item Explore dengan ID '${id}' tidak ditemukan untuk diduplikasi.`);
+	}
+
+	const maxOrder = await db
+		.prepare("SELECT MAX(sort_order) as maxOrder FROM explore_items_draft;")
+		.first<{ maxOrder: number | null }>();
+	const newOrder = (maxOrder?.maxOrder ?? current.sort_order) + 1;
+
+	return await createDraftExploreItem(db, {
+		type: current.type,
+		title_id: `${current.title_id} (Copy)`,
+		title_en: `${current.title_en} (Copy)`,
+		subtitle_id: current.subtitle_id,
+		subtitle_en: current.subtitle_en,
+		description_id: current.description_id,
+		description_en: current.description_en,
+		url: current.url,
+		cover_image: current.cover_image,
+		badge_id: current.badge_id,
+		badge_en: current.badge_en,
+		metadata_json: current.metadata_json,
+		sort_order: newOrder,
+		is_enabled: current.is_enabled,
+	});
+}
+
+/**
+ * Reorders draft explore items based on ordered array of IDs.
+ */
+export async function reorderDraftExploreItems(
+	db: D1Database,
+	orderedIds: string[]
+): Promise<void> {
+	const now = new Date().toISOString();
+	const statements = orderedIds.map((id, index) =>
+		db
+			.prepare("UPDATE explore_items_draft SET sort_order = ?, updated_at = ? WHERE id = ?;")
+			.bind(index, now, id)
+	);
+
+	statements.push(
+		db
+			.prepare(
+				`UPDATE publish_metadata
+				 SET has_unpublished_changes = 1, draft_updated_at = ?
+				 WHERE id = 'current';`
+			)
+			.bind(now)
+	);
+
+	await db.batch(statements);
+}
+
+/**
  * Reads publication metadata.
  */
 export async function getPublishMetadata(db: D1Database): Promise<PublishMetadataRecord | null> {
@@ -1125,6 +1425,14 @@ export async function publishAllDrafts(
 			 FROM contact_methods_draft;`
 		),
 
+		// 3b. Promote explore_items_draft to explore_items
+		db.prepare("DELETE FROM explore_items;"),
+		db.prepare(
+			`INSERT INTO explore_items (id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, created_at, updated_at)
+			 SELECT id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, created_at, updated_at
+			 FROM explore_items_draft;`
+		),
+
 		// 4. Promote appearance_settings draft to published
 		db.prepare(
 			`INSERT INTO appearance_settings (
@@ -1243,6 +1551,14 @@ export async function discardAllDrafts(db: D1Database): Promise<void> {
 			`INSERT INTO contact_methods_draft (id, platform, label_id, label_en, value, url, sort_order, is_enabled, created_at, updated_at)
 			 SELECT id, platform, label_id, label_en, value, url, sort_order, is_enabled, created_at, updated_at
 			 FROM contact_methods;`
+		),
+
+		// 3b. Reset explore_items_draft from explore_items
+		db.prepare("DELETE FROM explore_items_draft;"),
+		db.prepare(
+			`INSERT INTO explore_items_draft (id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, created_at, updated_at)
+			 SELECT id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, created_at, updated_at
+			 FROM explore_items;`
 		),
 
 		// 4. Reset appearance_settings draft from published

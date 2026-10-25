@@ -54,13 +54,17 @@ export interface VerticalLink {
 
 // 4. Explore Section — Modular Content System
 export type ExploreContentType =
-	| "project"
 	| "gallery"
+	| "image"
+	| "video"
 	| "music"
 	| "game"
-	| "book"
-	| "video"
-	| "note";
+	| "review"
+	| "project"
+	| "note"
+	| "link"
+	| "custom"
+	| "book";
 
 export interface ExploreItem {
 	id: string;

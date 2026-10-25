@@ -9,6 +9,7 @@ export default [
 	route("api/studio/profile", "routes/api.studio.profile.ts"),
 	route("api/studio/links", "routes/api.studio.links.ts"),
 	route("api/studio/contact", "routes/api.studio.contact.ts"),
+	route("api/studio/explore", "routes/api.studio.explore.ts"),
 	route("api/studio/appearance", "routes/api.studio.appearance.ts"),
 	route("api/studio/media", "routes/api.studio.media.ts"),
 	route("api/studio/media/:id/preview", "routes/api.studio.media.$id.preview.ts"),

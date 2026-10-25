@@ -5,6 +5,7 @@ import {
 	getProfileRecord,
 	getLinks,
 	getContactMethods,
+	getExploreItems,
 	getAppearanceRecord,
 	getPublishMetadata,
 	type AppearanceRecord,
@@ -54,10 +55,11 @@ export async function loader({ context }: Route.LoaderArgs) {
 
 	if (env?.DB) {
 		try {
-			const [dbProfile, dbLinks, dbContacts, dbAppearance, pubMeta] = await Promise.all([
+			const [dbProfile, dbLinks, dbContacts, dbExplore, dbAppearance, pubMeta] = await Promise.all([
 				getProfileRecord(env.DB, "published"),
 				getLinks(env.DB, "published", true),
 				getContactMethods(env.DB, "published", true),
+				getExploreItems(env.DB, "published", true),
 				getAppearanceRecord(env.DB, "published"),
 				getPublishMetadata(env.DB),
 			]);
@@ -111,6 +113,44 @@ export async function loader({ context }: Route.LoaderArgs) {
 							url: c.url,
 						})),
 					},
+				};
+			}
+
+			// Apply explore items if published in D1
+			if (dbExplore.length > 0) {
+				profile.explore = {
+					...profile.explore,
+					enabled: true,
+					items: dbExplore.map((item) => {
+						let metadata = undefined;
+						if (item.metadata_json) {
+							try {
+								metadata = JSON.parse(item.metadata_json);
+							} catch {
+								metadata = undefined;
+							}
+						}
+						return {
+							id: item.id,
+							type: item.type as any,
+							title: { id: item.title_id, en: item.title_en },
+							subtitle:
+								item.subtitle_id || item.subtitle_en
+									? { id: item.subtitle_id || "", en: item.subtitle_en || "" }
+									: undefined,
+							description:
+								item.description_id || item.description_en
+									? { id: item.description_id || "", en: item.description_en || "" }
+									: undefined,
+							url: item.url || undefined,
+							coverImage: item.cover_image || undefined,
+							badge:
+								item.badge_id || item.badge_en
+									? { id: item.badge_id || "", en: item.badge_en || "" }
+									: undefined,
+							metadata,
+						};
+					}),
 				};
 			}
 
