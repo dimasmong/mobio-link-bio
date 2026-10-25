@@ -1,13 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import type { Route } from "./+types/home";
-import { profileData, type Language, type BioLink } from "../data/profile";
-import { FloatingGlassProfile } from "../components/FloatingGlassProfile";
-import { SocialIcons } from "../components/SocialIcons";
-import { FeaturedLinkCard } from "../components/FeaturedLinkCard";
-import { LinkCard } from "../components/LinkCard";
+import { profileData, type Language } from "../data/profile";
+import { FixedBackground } from "../components/FixedBackground";
+import { FloatingNav, type TabId } from "../components/FloatingNav";
 import { LanguageToggle } from "../components/LanguageToggle";
+import { CoverBanner } from "../components/CoverBanner";
+import { ProfileGlassCard } from "../components/ProfileGlassCard";
+import { VerticalLinkList } from "../components/VerticalLinkList";
+import { ExploreSection } from "../components/ExploreSection";
+import { ContactSection } from "../components/ContactSection";
 import { Footer } from "../components/Footer";
-import { SparklesIcon } from "../components/Icons";
 
 export function meta({}: Route.MetaArgs) {
 	const displayName = profileData.name || "Personal Link Bio";
@@ -34,101 +36,145 @@ export function loader({}: Route.LoaderArgs) {
 	};
 }
 
-function isValidLink(link: BioLink): boolean {
-	if (!link || !link.url) return false;
-	const trimmed = link.url.trim();
-	return trimmed.length > 0 && trimmed !== "#";
+function parseHashToTab(hash: string): TabId {
+	const clean = hash.replace("#", "").toLowerCase().trim();
+	if (clean === "explore") return "explore";
+	if (clean === "contact") return "contact";
+	return "home";
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
 	const [lang, setLang] = useState<Language>(loaderData.initialLang || "id");
+	const [activeTab, setActiveTab] = useState<TabId>("home");
 	const profile = loaderData.profile || profileData;
 
-	const validLinks = (profile.links || []).filter(isValidLink);
-	const featuredLinks = validLinks.filter((l) => l.featured);
-	const regularLinks = validLinks.filter((l) => !l.featured);
+	// Synchronize tab state with URL hash and browser history (Back / Forward buttons)
+	useEffect(() => {
+		const syncTabFromLocation = () => {
+			if (typeof window !== "undefined") {
+				const currentTab = parseHashToTab(window.location.hash);
+				setActiveTab(currentTab);
+			}
+		};
+
+		// Read initial hash on client mount without causing SSR mismatch
+		syncTabFromLocation();
+
+		window.addEventListener("hashchange", syncTabFromLocation);
+		window.addEventListener("popstate", syncTabFromLocation);
+
+		return () => {
+			window.removeEventListener("hashchange", syncTabFromLocation);
+			window.removeEventListener("popstate", syncTabFromLocation);
+		};
+	}, []);
+
+	// Handle tab selection: update state, history, and scroll to top
+	const handleSelectTab = useCallback(
+		(newTab: TabId) => {
+			if (newTab === activeTab) return;
+
+			setActiveTab(newTab);
+
+			if (typeof window !== "undefined") {
+				const targetHash = `#${newTab}`;
+				if (window.location.hash !== targetHash) {
+					window.history.pushState(null, "", targetHash);
+				}
+				window.scrollTo({ top: 0, behavior: "instant" });
+			}
+		},
+		[activeTab]
+	);
 
 	return (
-		<main className="min-h-screen px-4 sm:px-6 py-6 sm:py-10 md:py-14 flex flex-col items-center justify-start overflow-x-hidden">
-			{/* Adaptive container: narrow & thumb-friendly on mobile, comfortably proportioned on desktop */}
-			<div className="w-full max-w-xl sm:max-w-2xl lg:max-w-3xl mx-auto flex flex-col items-center">
-				{/* Top Bar: Language Switcher */}
-				<LanguageToggle currentLang={lang} onToggle={setLang} />
+		<div className="relative min-h-screen text-slate-900 selection:bg-violet-200 selection:text-violet-900">
+			{/* Fixed Fullscreen Background (Gradient Mesh, Image, or Video with safe playback & readability overlay) */}
+			<FixedBackground config={profile.background} />
 
-				{/* 1. Floating Glass Profile Card */}
-				<FloatingGlassProfile profile={profile} lang={lang} />
+			{/* Floating Navigation Dock (Desktop top bar & Mobile bottom dock: Home, Explore, Contact) */}
+			<FloatingNav
+				profile={profile}
+				lang={lang}
+				activeTab={activeTab}
+				onSelectTab={handleSelectTab}
+			/>
 
-				{/* 2. Social Media Icons (Outside the Profile Card - hidden if no active URLs) */}
-				<SocialIcons
-					socials={profile.socials}
-					navLabel={profile.labels.socialNavLabel[lang]}
-				/>
+			{/* App-Like Centered Container */}
+			<main className="relative z-10 w-full min-h-screen px-4 sm:px-6 pt-4 pb-28 sm:pb-32 flex flex-col items-center">
+				<div className="w-full max-w-xl sm:max-w-2xl mx-auto flex flex-col items-center">
+					{/* Top Utility Bar: Bilingual Switcher (ID / EN) */}
+					<LanguageToggle currentLang={lang} onToggle={setLang} />
 
-				{/* 3. Featured Links Section (Rendered only if valid featured links exist) */}
-				{featuredLinks.length > 0 && (
-					<section
-						aria-label={profile.labels.featuredSection[lang]}
-						className="w-full mb-6 sm:mb-8"
+					{/* 1. HOME TAB PANEL: Cover Banner + Pure Profile Glass Card + Vertical Links ONLY */}
+					<div
+						role="tabpanel"
+						id="tabpanel-home"
+						aria-labelledby="desktop-tab-home"
+						hidden={activeTab !== "home"}
+						className={`w-full flex flex-col items-center ${
+							activeTab === "home" ? "tab-panel-enter" : "hidden"
+						}`}
 					>
-						<div className="flex items-center gap-2 mb-3 px-1">
-							<span className="w-2 h-2 rounded-full bg-violet-600" aria-hidden="true" />
-							<h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-								{profile.labels.featuredSection[lang]}
-							</h2>
-						</div>
-						<div className="flex flex-col gap-3.5">
-							{featuredLinks.map((link) => (
-								<FeaturedLinkCard key={link.id} link={link} lang={lang} />
-							))}
-						</div>
-					</section>
-				)}
+						{activeTab === "home" && (
+							<>
+								<section
+									aria-label={lang === "id" ? "Beranda & Profil" : "Home & Profile"}
+									className="w-full flex flex-col items-center"
+								>
+									{/* Custom Cover Banner with Liquid Glass Fallback */}
+									<CoverBanner config={profile.cover} lang={lang} />
 
-				{/* 4. Regular Link Cards Section (1-col on mobile/tablet, 2-col on desktop) */}
-				{regularLinks.length > 0 && (
-					<section
-						aria-label={profile.labels.linksSection[lang]}
-						className="w-full mb-6 sm:mb-8"
+									{/* Pure Profile Card (Avatar, Name, Handle, Bio ONLY) */}
+									<ProfileGlassCard profile={profile} lang={lang} />
+								</section>
+
+								{/* Regular Links: Strict Single Vertical Column */}
+								<VerticalLinkList links={profile.links} lang={lang} />
+
+								{/* Minimalist Personal Footer */}
+								<Footer profile={profile} lang={lang} />
+							</>
+						)}
+					</div>
+
+					{/* 2. EXPLORE TAB PANEL: Modular showcase (Projects, Lightbox Photo Gallery, Music, Notes) ONLY */}
+					<div
+						role="tabpanel"
+						id="tabpanel-explore"
+						aria-labelledby="desktop-tab-explore"
+						hidden={activeTab !== "explore"}
+						className={`w-full flex flex-col items-center ${
+							activeTab === "explore" ? "tab-panel-enter" : "hidden"
+						}`}
 					>
-						<div className="flex items-center gap-2 mb-3 px-1">
-							<span className="w-2 h-2 rounded-full bg-slate-400" aria-hidden="true" />
-							<h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-								{profile.labels.linksSection[lang]}
-							</h2>
-						</div>
-						<div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 sm:gap-4">
-							{regularLinks.map((link) => (
-								<LinkCard key={link.id} link={link} lang={lang} />
-							))}
-						</div>
-					</section>
-				)}
+						{activeTab === "explore" && (
+							<>
+								<ExploreSection config={profile.explore} lang={lang} />
+								<Footer profile={profile} lang={lang} />
+							</>
+						)}
+					</div>
 
-				{/* 5. Neutral Placeholder State (Shown if no active links are configured yet) */}
-				{validLinks.length === 0 && (
-					<section
-						aria-label={lang === "id" ? "Status Tautan" : "Links Status"}
-						className="w-full my-6 text-center"
+					{/* 3. CONTACT TAB PANEL: Direct interaction cards (Email, WhatsApp, Telegram, Instagram) ONLY */}
+					<div
+						role="tabpanel"
+						id="tabpanel-contact"
+						aria-labelledby="desktop-tab-contact"
+						hidden={activeTab !== "contact"}
+						className={`w-full flex flex-col items-center ${
+							activeTab === "contact" ? "tab-panel-enter" : "hidden"
+						}`}
 					>
-						<div className="glass-card rounded-2xl p-6 sm:p-8 flex flex-col items-center">
-							<div className="w-10 h-10 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center mb-3">
-								<SparklesIcon className="w-5 h-5" />
-							</div>
-							<h2 className="text-base font-semibold text-slate-800 mb-1">
-								{lang === "id" ? "Tautan Belum Dikonfigurasi" : "No Links Configured Yet"}
-							</h2>
-							<p className="text-xs sm:text-sm text-slate-500 max-w-sm leading-relaxed">
-								{lang === "id"
-									? "Tautan Anda akan muncul otomatis di sini setelah diisi pada file app/data/profile.ts."
-									: "Your links will appear automatically here once added to app/data/profile.ts."}
-							</p>
-						</div>
-					</section>
-				)}
-
-				{/* 6. Minimalist Personal Footer */}
-				<Footer profile={profile} lang={lang} />
-			</div>
-		</main>
+						{activeTab === "contact" && (
+							<>
+								<ContactSection config={profile.contact} lang={lang} />
+								<Footer profile={profile} lang={lang} />
+							</>
+						)}
+					</div>
+				</div>
+			</main>
+		</div>
 	);
 }

@@ -13,7 +13,7 @@ export function LanguageToggle({ currentLang, onToggle }: LanguageToggleProps) {
 			<div
 				role="region"
 				aria-label={currentLang === "id" ? "Pengaturan bahasa" : "Language settings"}
-				className="inline-flex items-center gap-1.5 p-1 rounded-full glass-panel border border-white/80 shadow-2xs"
+				className="inline-flex items-center gap-1.5 p-1 rounded-full glass-liquid-secondary border border-white/85 shadow-sm"
 			>
 				<div className="flex items-center pl-2.5 text-slate-400" aria-hidden="true">
 					<GlobeIcon className="w-3.5 h-3.5" />

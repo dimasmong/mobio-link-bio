@@ -5,113 +5,238 @@
 }
 
 :root {
-	--frost-bg: radial-gradient(120% 80% at 50% -10%, #ede9fe 0%, #f8fafc 45%, #f1f5f9 100%);
-	--frost-panel-bg: rgba(255, 255, 255, 0.82);
-	--frost-card-bg: rgba(255, 255, 255, 0.74);
-	--frost-card-hover: rgba(255, 255, 255, 0.94);
-	--frost-border: rgba(255, 255, 255, 0.9);
-	--frost-border-subtle: rgba(226, 232, 240, 0.8);
-	--frost-border-hover: rgba(167, 139, 250, 0.6);
-	--frost-accent: #7c3aed;
-	--frost-accent-hover: #6d28d9;
-	--frost-accent-light: #f5f3ff;
-	--frost-text-main: #0f172a;
-	--frost-text-sub: #475569;
-	--frost-text-muted: #64748b;
+	/* Frost Aurora Palette */
+	--aurora-lavender: #ede9fe;
+	--aurora-ice-blue: #e0f2fe;
+	--aurora-soft-pink: #fce7f3;
+	--aurora-violet: #7c3aed;
+	--aurora-violet-subtle: #f5f3ff;
+	
+	/* Liquid Glass Material Tokens (Light default) */
+	--glass-surface-primary: rgba(255, 255, 255, 0.72);
+	--glass-surface-secondary: rgba(255, 255, 255, 0.58);
+	--glass-surface-interactive: rgba(255, 255, 255, 0.64);
+	--glass-surface-hover: rgba(255, 255, 255, 0.88);
+	--glass-surface-active: rgba(255, 255, 255, 0.96);
+	--glass-surface-nav: rgba(255, 255, 255, 0.78);
+	
+	--glass-border-specular: rgba(255, 255, 255, 0.85);
+	--glass-border-subtle: rgba(255, 255, 255, 0.55);
+	--glass-border-hover: rgba(167, 139, 250, 0.65);
+	
+	--glass-shadow-primary: 0 20px 48px -12px rgba(124, 58, 237, 0.1), 0 8px 16px -4px rgba(15, 23, 42, 0.04);
+	--glass-shadow-card: 0 10px 28px -8px rgba(15, 23, 42, 0.05), 0 4px 10px -2px rgba(15, 23, 42, 0.02);
+	--glass-shadow-hover: 0 18px 36px -10px rgba(124, 58, 237, 0.16), 0 6px 16px -3px rgba(15, 23, 42, 0.04);
+	
+	--glass-highlight-top: inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.95);
+	--glass-highlight-bottom: inset 0 -1px 1px 0 rgba(255, 255, 255, 0.3);
+
+	--text-primary: #0f172a;
+	--text-secondary: #475569;
+	--text-muted: #64748b;
+}
+
+/* Dark mode variation */
+[data-theme="dark"] {
+	--glass-surface-primary: rgba(15, 23, 42, 0.75);
+	--glass-surface-secondary: rgba(30, 41, 59, 0.65);
+	--glass-surface-interactive: rgba(30, 41, 59, 0.68);
+	--glass-surface-hover: rgba(51, 65, 85, 0.85);
+	--glass-surface-active: rgba(71, 85, 105, 0.95);
+	--glass-surface-nav: rgba(15, 23, 42, 0.85);
+	
+	--glass-border-specular: rgba(255, 255, 255, 0.2);
+	--glass-border-subtle: rgba(255, 255, 255, 0.12);
+	--glass-border-hover: rgba(167, 139, 250, 0.6);
+	
+	--glass-shadow-primary: 0 24px 52px -12px rgba(0, 0, 0, 0.5), 0 8px 20px -4px rgba(0, 0, 0, 0.3);
+	--glass-shadow-card: 0 12px 30px -8px rgba(0, 0, 0, 0.4);
+	--glass-shadow-hover: 0 20px 40px -10px rgba(124, 58, 237, 0.35);
+	
+	--glass-highlight-top: inset 0 1px 1px 0 rgba(255, 255, 255, 0.25);
+	--glass-highlight-bottom: inset 0 -1px 1px 0 rgba(0, 0, 0, 0.4);
+
+	--text-primary: #f8fafc;
+	--text-secondary: #cbd5e1;
+	--text-muted: #94a3b8;
+}
+
+html {
+	scroll-behavior: smooth;
+	overflow-x: hidden;
 }
 
 body {
 	font-family: var(--font-sans);
-	background: var(--frost-bg);
 	min-height: 100vh;
-	color: var(--frost-text-main);
+	color: var(--text-primary);
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+	position: relative;
 	overflow-x: hidden;
 }
 
-/* Glassmorphism Classes with Smooth Inset Lighting */
-.glass-panel {
-	background: var(--frost-panel-bg);
-	backdrop-filter: blur(16px);
-	-webkit-backdrop-filter: blur(16px);
-	border: 1px solid var(--frost-border);
-	box-shadow:
-		0 10px 30px -10px rgba(15, 23, 42, 0.05),
-		0 4px 6px -2px rgba(15, 23, 42, 0.02),
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+/* Sections with scroll offset for fixed navigation */
+section[id],
+div[id] {
+	scroll-margin-top: 5.5rem;
 }
 
-.glass-card {
-	background: var(--frost-card-bg);
-	backdrop-filter: blur(12px);
-	-webkit-backdrop-filter: blur(12px);
-	border: 1px solid var(--frost-border-subtle);
-	box-shadow:
-		0 6px 20px -6px rgba(15, 23, 42, 0.04),
-		0 2px 4px -2px rgba(15, 23, 42, 0.02),
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
-	transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+@media (min-width: 640px) {
+	section[id],
+	div[id] {
+		scroll-margin-top: 6.5rem;
+	}
 }
 
-.glass-card:hover {
-	background: var(--frost-card-hover);
-	border-color: var(--frost-border-hover);
+/* ==========================================================================
+   LIQUID GLASS MATERIAL PRIMITIVES
+   ========================================================================== */
+
+/* 1. Primary Glass Panel (Profile card, Explore spotlight) */
+.glass-liquid-primary {
+	background: var(--glass-surface-primary);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	border: 1px solid var(--glass-border-specular);
 	box-shadow:
-		0 14px 28px -8px rgba(124, 58, 237, 0.12),
-		0 4px 8px -2px rgba(15, 23, 42, 0.03),
-		inset 0 1px 0 0 #ffffff;
-	transform: translateY(-2px);
+		var(--glass-shadow-primary),
+		var(--glass-highlight-top),
+		var(--glass-highlight-bottom);
 }
 
-.glass-card-featured {
-	background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 243, 255, 0.88) 100%);
-	backdrop-filter: blur(16px);
-	-webkit-backdrop-filter: blur(16px);
-	border: 1.5px solid rgba(167, 139, 250, 0.55);
+/* 2. Secondary Glass Panel (Modal/Lightbox, Content boxes) */
+.glass-liquid-secondary {
+	background: var(--glass-surface-secondary);
+	backdrop-filter: blur(16px) saturate(160%);
+	-webkit-backdrop-filter: blur(16px) saturate(160%);
+	border: 1px solid var(--glass-border-subtle);
 	box-shadow:
-		0 12px 30px -8px rgba(124, 58, 237, 0.14),
-		0 4px 8px -2px rgba(15, 23, 42, 0.03),
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.95);
+		var(--glass-shadow-card),
+		var(--glass-highlight-top);
+}
+
+/* 3. Interactive Liquid Glass Card (Pill links, Contact items) */
+.glass-liquid-card {
+	background: var(--glass-surface-interactive);
+	backdrop-filter: blur(16px) saturate(160%);
+	-webkit-backdrop-filter: blur(16px) saturate(160%);
+	border: 1px solid var(--glass-border-subtle);
+	box-shadow:
+		var(--glass-shadow-card),
+		var(--glass-highlight-top),
+		var(--glass-highlight-bottom);
 	transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+	position: relative;
+	overflow: hidden;
 }
 
-.glass-card-featured:hover {
-	background: linear-gradient(135deg, #ffffff 0%, rgba(243, 232, 255, 0.95) 100%);
-	border-color: rgba(124, 58, 237, 0.75);
+.glass-liquid-card::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 50%, rgba(243, 232, 255, 0.2) 100%);
+	opacity: 0;
+	transition: opacity 0.25s ease-out;
+	pointer-events: none;
+}
+
+.glass-liquid-card:hover {
+	background: var(--glass-surface-hover);
+	border-color: var(--glass-border-hover);
 	box-shadow:
-		0 18px 36px -10px rgba(124, 58, 237, 0.2),
-		0 6px 12px -3px rgba(15, 23, 42, 0.04),
-		inset 0 1px 0 0 #ffffff;
-	transform: translateY(-2px);
+		var(--glass-shadow-hover),
+		var(--glass-highlight-top);
+	transform: translateY(-2px) scale(1.004);
 }
 
-.social-pill {
-	background: rgba(255, 255, 255, 0.75);
-	backdrop-filter: blur(10px);
-	-webkit-backdrop-filter: blur(10px);
-	border: 1px solid rgba(226, 232, 240, 0.85);
-	box-shadow: 0 2px 4px rgba(15, 23, 42, 0.02);
-	transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+.glass-liquid-card:hover::before {
+	opacity: 1;
 }
 
-.social-pill:hover {
-	background: #ffffff;
-	border-color: rgba(167, 139, 250, 0.7);
-	color: #7c3aed;
-	transform: translateY(-2px);
-	box-shadow: 0 8px 16px -4px rgba(124, 58, 237, 0.16);
+.glass-liquid-card:active {
+	transform: scale(0.985);
+	transition-duration: 0.08s;
 }
 
-/* Accessible focus visible outlines */
-a:focus-visible,
-button:focus-visible {
-	outline: 2px solid #7c3aed;
-	outline-offset: 2px;
+/* 4. Liquid Glass Floating Navigation Dock */
+.glass-liquid-nav {
+	background: var(--glass-surface-nav);
+	backdrop-filter: blur(28px) saturate(200%);
+	-webkit-backdrop-filter: blur(28px) saturate(200%);
+	border: 1px solid var(--glass-border-specular);
+	box-shadow:
+		0 16px 36px -6px rgba(15, 23, 42, 0.14),
+		0 6px 12px -2px rgba(15, 23, 42, 0.04),
+		var(--glass-highlight-top);
 }
 
-/* Reduced motion preference */
+/* Active Nav Pill highlight */
+.glass-nav-active {
+	background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 243, 255, 0.92) 100%);
+	color: var(--aurora-violet);
+	box-shadow: 0 4px 14px -2px rgba(124, 58, 237, 0.2), inset 0 1px 1px 0 #ffffff;
+}
+
+[data-theme="dark"] .glass-nav-active {
+	background: linear-gradient(135deg, rgba(51, 65, 85, 0.98) 0%, rgba(30, 41, 59, 0.95) 100%);
+	color: #c4b5fd;
+	box-shadow: 0 4px 14px -2px rgba(124, 58, 237, 0.35), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* 5. Liquid Cover Banner */
+.glass-liquid-cover {
+	border: 1.5px solid var(--glass-border-specular);
+	box-shadow:
+		var(--glass-shadow-primary),
+		var(--glass-highlight-top);
+}
+
+/* ==========================================================================
+   ANIMATED FROST AURORA BACKGROUND MESH
+   ========================================================================== */
+.frost-aurora-mesh {
+	background:
+		radial-gradient(circle at 15% 20%, rgba(224, 242, 254, 0.7) 0%, transparent 40%),
+		radial-gradient(circle at 85% 25%, rgba(252, 231, 243, 0.65) 0%, transparent 45%),
+		radial-gradient(circle at 50% 50%, rgba(237, 233, 254, 0.8) 0%, transparent 55%),
+		radial-gradient(circle at 20% 85%, rgba(245, 243, 255, 0.75) 0%, transparent 45%),
+		radial-gradient(circle at 80% 80%, rgba(224, 242, 254, 0.6) 0%, transparent 40%),
+		#f8fafc;
+	background-size: 150% 150%;
+	animation: auroraFlow 24s ease-in-out infinite alternate;
+}
+
+[data-theme="dark"] .frost-aurora-mesh {
+	background:
+		radial-gradient(circle at 15% 20%, rgba(30, 58, 138, 0.4) 0%, transparent 40%),
+		radial-gradient(circle at 85% 25%, rgba(88, 28, 135, 0.45) 0%, transparent 45%),
+		radial-gradient(circle at 50% 50%, rgba(67, 56, 202, 0.35) 0%, transparent 55%),
+		radial-gradient(circle at 20% 85%, rgba(49, 46, 129, 0.4) 0%, transparent 45%),
+		#0b0f19;
+	background-size: 150% 150%;
+	animation: auroraFlow 24s ease-in-out infinite alternate;
+}
+
+@keyframes auroraFlow {
+	0% {
+		background-position: 0% 0%;
+	}
+	50% {
+		background-position: 100% 50%;
+	}
+	100% {
+		background-position: 50% 100%;
+	}
+}
+
+/* ==========================================================================
+   ACCESSIBILITY & REDUCED MOTION
+   ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto !important;
+	}
 	*,
 	*::before,
 	*::after {
@@ -120,9 +245,41 @@ button:focus-visible {
 		transition-duration: 0.01ms !important;
 		scroll-behavior: auto !important;
 	}
-	.glass-card:hover,
-	.glass-card-featured:hover,
-	.social-pill:hover {
+	.frost-aurora-mesh {
+		animation: none !important;
+		background-position: 0% 0% !important;
+	}
+	.glass-liquid-card:hover {
 		transform: none !important;
 	}
+	.glass-liquid-card:active {
+		transform: none !important;
+	}
+}
+
+/* Accessible focus visible outlines */
+a:focus-visible,
+button:focus-visible {
+	outline: 2px solid var(--aurora-violet);
+	outline-offset: 2px;
+}
+
+
+/* ==========================================================================
+   APP-LIKE LIQUID GLASS TAB TRANSITIONS
+   ========================================================================== */
+@keyframes tabFadeIn {
+	0% {
+		opacity: 0;
+		transform: translateY(8px) scale(0.992);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+.tab-panel-enter {
+	animation: tabFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	will-change: opacity, transform;
 }

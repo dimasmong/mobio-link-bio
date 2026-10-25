@@ -1,18 +1,12 @@
 /**
- * PERSONAL LINK BIO — CONFIGURATION FILE
+ * MOBIO LINK BIO — CONFIGURATION FILE
  *
- * File konfigurasi terpusat untuk profil personal, tautan media sosial,
- * kartu tautan, dan pengaturan tampilan.
+ * File konfigurasi terpusat untuk profil personal, latar belakang kustom,
+ * banner cover, daftar tautan vertikal, bagian Explore modular, dan kontak.
  *
  * Seluruh teks mendukung dwibahasa:
  * - id: Bahasa Indonesia
  * - en: English
- *
- * CATATAN PENTING:
- * - Foto profil: Letakkan foto Anda di folder `public/images/` (contoh: `public/images/avatar.jpg`)
- *   lalu isi avatarUrl dengan "/images/avatar.jpg".
- *   Jika avatarUrl dikosongkan (""), inisial nama akan otomatis digunakan sebagai avatar.
- * - Akun sosial & link: Jika `url` dikosongkan (""), item terkait akan otomatis disembunyikan.
  */
 
 export type Language = "id" | "en";
@@ -22,82 +16,130 @@ export interface LocalizedString {
 	en: string;
 }
 
-export type SocialPlatform =
-	| "github"
-	| "linkedin"
-	| "twitter"
-	| "instagram"
-	| "youtube"
-	| "email"
-	| "telegram"
-	| "website";
+// 1. Custom Fixed Background System
+export type BackgroundType = "gradient" | "image" | "video";
 
-export interface SocialLink {
-	platform: SocialPlatform;
-	label: string;
-	/**
-	 * URL profil media sosial Anda.
-	 * Jika dikosongkan (""), ikon ini otomatis disembunyikan.
-	 */
-	url: string;
+export interface BackgroundConfig {
+	type: BackgroundType;
+	src?: string; // URL gambar atau video lokal/eksternal
+	poster?: string; // Poster fallback untuk video
+	position?: string; // e.g. "center center"
+	scale?: number | string; // e.g. 1
+	overlayColor?: string; // Warna overlay adaptif
+	overlayOpacity?: number; // Nilai transparansi overlay (0 - 1)
+	brightness?: number; // Nilai kecerahan (0.5 - 1.5)
+	blur?: string; // Efek blur tambahan (e.g. "0px", "8px")
+	animation?: boolean; // Aktifkan animasi aurora mesh
 }
 
-export type LinkIconType =
-	| "code"
-	| "briefcase"
-	| "sparkles"
-	| "book"
-	| "globe"
-	| "rocket"
-	| "palette"
-	| "message"
-	| "external";
+// 2. Custom Cover Banner
+export interface CoverConfig {
+	enabled: boolean;
+	coverUrl?: string; // Path gambar/video cover (opsional, jika kosong merender liquid glass fallback)
+	focalPoint?: string; // e.g. "center"
+	aspectRatio?: string; // e.g. "aspect-[21/9]" atau "aspect-[16/7]"
+	alt?: LocalizedString;
+}
 
-export interface BioLink {
+// 3. Vertical Link Cards (One column on all viewports, no featured link)
+export interface VerticalLink {
 	id: string;
 	title: LocalizedString;
 	description?: LocalizedString;
-	/**
-	 * URL tujuan tautan.
-	 * Jika kosong atau "#", tautan tidak akan ditampilkan sebagai link aktif.
-	 */
-	url?: string;
-	/**
-	 * Set true untuk kartu unggulan utama (Featured).
-	 */
-	featured?: boolean;
-	badge?: LocalizedString;
-	icon?: LinkIconType;
-	category?: LocalizedString;
+	url: string;
+	icon?: string; // Identifier: "code" | "book" | "sparkles" | "message" | "globe" | "github" | "linkedin" dll.
+	platform?: string; // e.g. "github", "linkedin", "twitter", "instagram", "youtube", "website"
+	enabled?: boolean;
 }
 
+// 4. Explore Section — Modular Content System
+export type ExploreContentType =
+	| "project"
+	| "gallery"
+	| "music"
+	| "game"
+	| "book"
+	| "video"
+	| "note";
+
+export interface ExploreItem {
+	id: string;
+	type: ExploreContentType;
+	title: LocalizedString;
+	subtitle?: LocalizedString;
+	description?: LocalizedString;
+	coverImage?: string;
+	url?: string;
+	badge?: LocalizedString;
+	metadata?: {
+		tags?: string[];
+		artist?: string;
+		rating?: string;
+		year?: string;
+		author?: string;
+	};
+}
+
+export interface ExploreConfig {
+	enabled: boolean;
+	title: LocalizedString;
+	description?: LocalizedString;
+	items: ExploreItem[];
+}
+
+// 5. Contact Section
+export interface ContactMethod {
+	id: string;
+	platform: "email" | "whatsapp" | "telegram" | "instagram" | "other";
+	label: LocalizedString;
+	value: string;
+	url: string;
+	icon?: string;
+}
+
+export interface ContactConfig {
+	enabled: boolean;
+	title: LocalizedString;
+	description?: LocalizedString;
+	methods: ContactMethod[];
+}
+
+// 6. Complete Profile Schema
 export interface ProfileData {
-	// Informasi Profil Pribadi
+	// Identitas Profil
 	name: string;
 	handle: string;
 	avatarUrl: string;
 	location?: LocalizedString;
 	bio: LocalizedString;
 
-	// Opsi Tampilan (Default OFF)
-	showVerifiedBadge?: boolean;
-	showStatusBadge?: boolean;
-	statusBadge?: LocalizedString;
+	// Background & Cover
+	background: BackgroundConfig;
+	cover: CoverConfig;
 
-	// Label Bagian (Bilingual)
-	labels: {
-		featuredSection: LocalizedString;
-		linksSection: LocalizedString;
-		socialNavLabel: LocalizedString;
+	// Pengaturan Tema Visual
+	theme: {
+		palette: "frost-aurora" | "dark" | "glass-crystal";
+		glassIntensity: "subtle" | "medium" | "deep";
 	};
 
-	// Akun Sosial Media
-	socials: SocialLink[];
+	// Daftar Tautan Vertikal (Satu kolom vertikal di semua layar)
+	links: VerticalLink[];
 
-	// Daftar Kartu Tautan
-	links: BioLink[];
+	// Bagian Explore Modular
+	explore: ExploreConfig;
 
-	// Pengaturan Footer Pribadi
+	// Bagian Kontak
+	contact: ContactConfig;
+
+	// Navigasi Terapung
+	navigation: {
+		homeLabel: LocalizedString;
+		exploreLabel: LocalizedString;
+		contactLabel: LocalizedString;
+	};
+
+	// Footer Pribadi
 	footer: {
 		showFooter: boolean;
 		customText?: LocalizedString;
@@ -105,85 +147,140 @@ export interface ProfileData {
 }
 
 export const profileData: ProfileData = {
-	// [MENUNGGU DATA PEMILIK] Ganti dengan nama lengkap atau display name Anda
+	// [DATA PROFIL PEMILIK] Ganti dengan nama dan username Anda
 	name: "[Nama Anda]",
-
-	// [MENUNGGU DATA PEMILIK] Ganti dengan handle / username Anda
 	handle: "@username",
-
-	// [OPSIONAL] Path gambar lokal di public/images/ (contoh: "/images/avatar.jpg").
-	// Kosongkan ("") untuk menggunakan inisial nama otomatis.
-	avatarUrl: "",
-
-	// [OPSIONAL] Lokasi (kosongkan jika tidak ingin ditampilkan)
+	avatarUrl: "", // Kosongkan untuk avatar monogram inisial otomatis, atau isi e.g. "/images/avatar.jpg"
 	location: {
 		id: "Indonesia",
 		en: "Indonesia",
 	},
-
-	// [MENUNGGU DATA PEMILIK] Deskripsi bio dwibahasa Anda
 	bio: {
-		id: "Selamat datang di Link in Bio saya. Bagian bio ini dapat disesuaikan dengan deskripsi diri dan fokus Anda.",
-		en: "Welcome to my Link in Bio. Customize this bio section with your personal description and focus.",
+		id: "Selamat datang di Link in Bio saya. Kustomisasi deskripsi ini untuk merepresentasikan profil dan karya Anda.",
+		en: "Welcome to my Link in Bio. Customize this description to represent your profile and works.",
 	},
 
-	// Opsi Lencana (Default OFF)
-	showVerifiedBadge: false,
-	showStatusBadge: false,
-	statusBadge: {
-		id: "Terbuka untuk Diskusi",
-		en: "Open for Discussions",
+	// Background Kustom (Fixed, Fullscreen, Responsive)
+	background: {
+		type: "gradient", // "gradient" | "image" | "video"
+		src: "", // Jika "image" atau "video", masukkan path e.g. "/images/background.jpg"
+		position: "center center",
+		scale: 1,
+		overlayColor: "rgba(248, 250, 252, 0.45)",
+		overlayOpacity: 0.45,
+		brightness: 1,
+		blur: "0px",
+		animation: true, // Animasi halus Frost Aurora mesh
 	},
 
-	// Label Bagian Antarmuka
-	labels: {
-		featuredSection: {
-			id: "Tautan Unggulan",
-			en: "Featured Links",
-		},
-		linksSection: {
-			id: "Tautan & Eksplorasi",
-			en: "Links & Exploration",
-		},
-		socialNavLabel: {
-			id: "Tautan media sosial",
-			en: "Social media links",
+	// Custom Cover Banner
+	cover: {
+		enabled: true,
+		coverUrl: "", // Jika kosong (""), merender liquid aurora cover fallback
+		focalPoint: "center",
+		aspectRatio: "aspect-[21/9]",
+		alt: {
+			id: "Banner profil",
+			en: "Profile banner",
 		},
 	},
 
-	// [MENUNGGU DATA PEMILIK] Akun Sosial Media
-	// Hanya item dengan URL terisi yang akan ditampilkan. Kosongkan ("") jika belum ada.
-	socials: [
+	// Pengaturan Tema
+	theme: {
+		palette: "frost-aurora",
+		glassIntensity: "medium",
+	},
+
+	// Daftar Tautan Vertikal (SATU KOLOM di semua ukuran layar)
+	// Tambahkan tautan pribadi Anda di sini. Jika kosong, sistem menampilkan empty state profesional.
+	links: [
+		/* Contoh menambahkan tautan:
 		{
+			id: "github-profile",
+			title: { id: "GitHub", en: "GitHub" },
+			description: { id: "Repositori kode dan proyek", en: "Code repositories and projects" },
+			url: "https://github.com/username",
 			platform: "github",
-			label: "GitHub",
-			url: "",
+			icon: "github",
+			enabled: true,
 		},
-		{
-			platform: "linkedin",
-			label: "LinkedIn",
-			url: "",
-		},
-		{
-			platform: "twitter",
-			label: "X (Twitter)",
-			url: "",
-		},
-		{
-			platform: "instagram",
-			label: "Instagram",
-			url: "",
-		},
-		{
-			platform: "email",
-			label: "Email",
-			url: "",
-		},
+		*/
 	],
 
-	// [MENUNGGU DATA PEMILIK] Daftar Kartu Tautan
-	// Item dengan URL kosong otomatis disembunyikan sampai data asli diisi.
-	links: [],
+	// Bagian Explore Modular (Mendukung berbagai jenis konten: project, gallery, music, note)
+	// Tambahkan konten personal Anda di sini. Jika kosong, sistem menampilkan empty state profesional.
+	explore: {
+		enabled: true,
+		title: {
+			id: "Eksplorasi & Karya",
+			en: "Explore & Highlights",
+		},
+		description: {
+			id: "Kumpulan proyek terpilih, galeri foto, playlist, dan catatan pribadi",
+			en: "Selected projects, photo gallery, music playlists, and notes",
+		},
+		items: [
+			/* Contoh menambahkan item explore:
+			{
+				id: "my-project-1",
+				type: "project",
+				title: { id: "Nama Proyek", en: "Project Name" },
+				description: { id: "Deskripsi singkat proyek", en: "Short project description" },
+				url: "https://tautan-proyek.com",
+				badge: { id: "Proyek", en: "Project" },
+				metadata: { tags: ["React", "TypeScript"], year: "2026" },
+			},
+			*/
+		],
+	},
+
+	// Bagian Kontak
+	// Tambahkan saluran komunikasi langsung Anda di sini. Jika kosong, sistem menampilkan empty state profesional.
+	contact: {
+		enabled: true,
+		title: {
+			id: "Hubungi Saya",
+			en: "Get in Touch",
+		},
+		description: {
+			id: "Silakan hubungi melalui saluran komunikasi pilihan di bawah ini",
+			en: "Reach out via any of the direct communication channels below",
+		},
+		methods: [
+			/* Contoh menambahkan kontak:
+			{
+				id: "contact-email",
+				platform: "email",
+				label: { id: "Surel Resmi", en: "Direct Email" },
+				value: "email@anda.com",
+				url: "mailto:email@anda.com",
+			},
+			{
+				id: "contact-whatsapp",
+				platform: "whatsapp",
+				label: { id: "WhatsApp", en: "WhatsApp" },
+				value: "+62 812-xxxx-xxxx",
+				url: "https://wa.me/62812xxxxxxxx",
+			},
+			*/
+		],
+	},
+
+	// Label Navigasi (Hanya Home, Explore, Contact — NO Links)
+	navigation: {
+		homeLabel: {
+			id: "Beranda",
+			en: "Home",
+		},
+		exploreLabel: {
+			id: "Eksplorasi",
+			en: "Explore",
+		},
+		contactLabel: {
+			id: "Kontak",
+			en: "Contact",
+		},
+	},
 
 	// Footer Pribadi
 	footer: {
