@@ -102,6 +102,9 @@ export async function loader({ context }: Route.LoaderArgs) {
 						platform: l.platform,
 						icon: l.icon || "globe",
 						enabled: Boolean(l.is_enabled),
+						icon_type: l.icon_type,
+						icon_url: l.icon_url,
+						icon_media_id: l.icon_media_id,
 					})),
 					contact: {
 						...profileData.contact,

@@ -50,6 +50,9 @@ export interface VerticalLink {
 	icon?: string; // Identifier: "code" | "book" | "sparkles" | "message" | "globe" | "github" | "linkedin" dll.
 	platform?: string; // e.g. "github", "linkedin", "twitter", "instagram", "youtube", "website"
 	enabled?: boolean;
+	icon_type?: "preset" | "upload" | "url";
+	icon_url?: string;
+	icon_media_id?: string;
 }
 
 // 4. Explore Section — Modular Content System

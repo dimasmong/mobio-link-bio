@@ -79,7 +79,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	const rawCategory = (formData.get("category") || "general").toString().toLowerCase();
-	const category: MediaCategory = ["avatar", "cover", "background", "general"].includes(rawCategory)
+	const category: MediaCategory = ["avatar", "cover", "background", "general", "icon"].includes(rawCategory)
 		? (rawCategory as MediaCategory)
 		: "general";
 

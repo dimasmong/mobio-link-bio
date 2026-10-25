@@ -21,6 +21,49 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	return Response.json({ status: "ok", links });
 }
 
+function validateIconFields(body: Record<string, unknown>): {
+	icon_type: "preset" | "upload" | "url";
+	icon_url: string;
+	icon_media_id: string;
+	icon: string;
+	error?: string;
+} {
+	const rawType = typeof body.icon_type === "string" ? body.icon_type.trim().toLowerCase() : "preset";
+	const icon_type: "preset" | "upload" | "url" = ["preset", "upload", "url"].includes(rawType)
+		? (rawType as "preset" | "upload" | "url")
+		: "preset";
+
+	let icon_url = typeof body.icon_url === "string" ? body.icon_url.trim() : "";
+	const icon_media_id = typeof body.icon_media_id === "string" ? body.icon_media_id.trim() : "";
+	const icon = typeof body.icon === "string" ? body.icon.trim() : "globe";
+
+	if (icon_type === "url" && icon_url) {
+		try {
+			const parsed = new URL(icon_url);
+			if (parsed.protocol !== "https:") {
+				return {
+					icon_type,
+					icon_url: "",
+					icon_media_id,
+					icon,
+					error: "URL ikon harus menggunakan protokol https:// yang aman.",
+				};
+			}
+			icon_url = parsed.toString();
+		} catch {
+			return {
+				icon_type,
+				icon_url: "",
+				icon_media_id,
+				icon,
+				error: "URL ikon yang dimasukkan tidak valid.",
+			};
+		}
+	}
+
+	return { icon_type, icon_url, icon_media_id, icon };
+}
+
 export async function action({ request, context }: Route.ActionArgs) {
 	const env = context.cloudflare?.env;
 	await requireAdmin(request, env);
@@ -70,6 +113,22 @@ export async function action({ request, context }: Route.ActionArgs) {
 			body.url = check.normalizedUrl;
 		}
 
+		if (
+			body.icon_type !== undefined ||
+			body.icon_url !== undefined ||
+			body.icon_media_id !== undefined ||
+			body.icon !== undefined
+		) {
+			const iconValidation = validateIconFields(body);
+			if (iconValidation.error) {
+				return Response.json({ error: iconValidation.error }, { status: 422 });
+			}
+			body.icon_type = iconValidation.icon_type;
+			body.icon_url = iconValidation.icon_url;
+			body.icon_media_id = iconValidation.icon_media_id;
+			body.icon = iconValidation.icon;
+		}
+
 		await updateDraftLink(env.DB, id, body);
 		return Response.json({ status: "ok", message: "Tautan berhasil diperbarui di draft." });
 	}
@@ -89,6 +148,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return Response.json({ error: check.error }, { status: 422 });
 		}
 
+		const iconValidation = validateIconFields(body);
+		if (iconValidation.error) {
+			return Response.json({ error: iconValidation.error }, { status: 422 });
+		}
+
 		const newLink = await createDraftLink(env.DB, {
 			title_id: titleId,
 			title_en: titleEn,
@@ -96,7 +160,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 			description_en: typeof body.description_en === "string" ? body.description_en.trim() : "",
 			url: check.normalizedUrl,
 			platform: typeof body.platform === "string" ? body.platform.trim() : "website",
-			icon: typeof body.icon === "string" ? body.icon.trim() : "globe",
+			icon: iconValidation.icon,
+			icon_type: iconValidation.icon_type,
+			icon_url: iconValidation.icon_url,
+			icon_media_id: iconValidation.icon_media_id,
 			is_enabled: body.is_enabled === 0 ? 0 : 1,
 		});
 

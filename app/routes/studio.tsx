@@ -20,6 +20,8 @@ import {
 } from "../lib/db.server";
 import type { MediaAssetRecord } from "../lib/media.server";
 import { getClickSummary, type ClickAnalyticsSummary } from "../lib/analytics.server";
+import { IconPicker } from "../components/IconPicker";
+import { LinkIconRenderer, getRecommendedIcon } from "../components/IconLibrary";
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -189,14 +191,29 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 	const [editingLink, setEditingLink] = useState<LinkRecord | null>(null);
 	const [isDeleteLinkOpen, setIsDeleteLinkOpen] = useState(false);
 	const [deletingLink, setDeletingLink] = useState<LinkRecord | null>(null);
-	const [linkForm, setLinkForm] = useState({
+	const [linkForm, setLinkForm] = useState<{
+		title_id: string;
+		title_en: string;
+		description_id: string;
+		description_en: string;
+		url: string;
+		platform: string;
+		icon: string;
+		icon_type: "preset" | "upload" | "url";
+		icon_url: string;
+		icon_media_id: string;
+		is_enabled: boolean;
+	}>({
 		title_id: "",
 		title_en: "",
 		description_id: "",
 		description_en: "",
-		url: "",
+		url: "https://",
 		platform: "website",
 		icon: "globe",
+		icon_type: "preset",
+		icon_url: "",
+		icon_media_id: "",
 		is_enabled: true,
 	});
 
@@ -452,6 +469,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			url: "https://",
 			platform: "website",
 			icon: "globe",
+			icon_type: "preset",
+			icon_url: "",
+			icon_media_id: "",
 			is_enabled: true,
 		});
 		setIsAddLinkOpen(true);
@@ -489,7 +509,10 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			description_en: l.description_en || "",
 			url: l.url,
 			platform: l.platform,
-			icon: l.icon || "globe",
+			icon: l.icon || getRecommendedIcon(l.platform),
+			icon_type: l.icon_type || "preset",
+			icon_url: l.icon_url || "",
+			icon_media_id: l.icon_media_id || "",
 			is_enabled: Boolean(l.is_enabled),
 		});
 		setIsEditLinkOpen(true);
@@ -1953,9 +1976,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														</button>
 													</div>
 
-													{/* Platform Icon Badge */}
-													<div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700/80 flex items-center justify-center text-slate-300 font-mono text-xs uppercase shrink-0">
-														{link.platform.substring(0, 3)}
+													{/* Link Icon Badge */}
+													<div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700/80 flex items-center justify-center shrink-0 overflow-hidden p-2">
+														<LinkIconRenderer link={link} isStudioPreview={true} className="w-5 h-5" />
 													</div>
 
 													{/* Title & URL */}
@@ -3658,15 +3681,22 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</div>
 							</div>
 
-							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+							<div className="grid grid-cols-1 gap-4">
 								<div>
 									<label htmlFor="lf-platform" className="block text-xs font-semibold text-slate-300 mb-1">
-										Platform
+										Platform / Tipe Layanan
 									</label>
 									<select
 										id="lf-platform"
 										value={linkForm.platform}
-										onChange={(e) => setLinkForm({ ...linkForm, platform: e.target.value })}
+										onChange={(e) => {
+											const newPlatform = e.target.value;
+											setLinkForm((prev) => ({
+												...prev,
+												platform: newPlatform,
+												icon: prev.icon_type === "preset" ? getRecommendedIcon(newPlatform) : prev.icon,
+											}));
+										}}
 										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
 									>
 										<option value="website">Website / Portfolio</option>
@@ -3677,28 +3707,40 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										<option value="youtube">YouTube</option>
 										<option value="discord">Discord</option>
 										<option value="tiktok">TikTok</option>
+										<option value="facebook">Facebook</option>
+										<option value="threads">Threads</option>
+										<option value="bluesky">Bluesky</option>
+										<option value="reddit">Reddit</option>
+										<option value="twitch">Twitch</option>
+										<option value="pinterest">Pinterest</option>
+										<option value="whatsapp">WhatsApp</option>
+										<option value="telegram">Telegram</option>
+										<option value="email">Email</option>
+										<option value="phone">Telepon</option>
+										<option value="spotify">Spotify / Audio</option>
 										<option value="custom">Lainnya / Custom</option>
 									</select>
 								</div>
+
+								{/* Custom Icon System */}
 								<div>
-									<label htmlFor="lf-icon" className="block text-xs font-semibold text-slate-300 mb-1">
-										Ikon
+									<label className="block text-xs font-semibold text-slate-300 mb-1.5">
+										Ikon Tautan (Preset Library, Upload R2, atau URL Eksternal)
 									</label>
-									<select
-										id="lf-icon"
-										value={linkForm.icon}
-										onChange={(e) => setLinkForm({ ...linkForm, icon: e.target.value })}
-										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
-									>
-										<option value="globe">Globe (Web)</option>
-										<option value="github">GitHub</option>
-										<option value="linkedin">LinkedIn</option>
-										<option value="twitter">Twitter</option>
-										<option value="instagram">Instagram</option>
-										<option value="youtube">YouTube</option>
-										<option value="message-square">Chat / Message</option>
-										<option value="external-link">External Link</option>
-									</select>
+									<IconPicker
+										platform={linkForm.platform}
+										iconType={linkForm.icon_type}
+										icon={linkForm.icon}
+										iconUrl={linkForm.icon_url}
+										iconMediaId={linkForm.icon_media_id}
+										onChange={(updates) =>
+											setLinkForm((prev) => ({
+												...prev,
+												...updates,
+											}))
+										}
+										onError={(msg) => showToast(msg, "error")}
+									/>
 								</div>
 							</div>
 
@@ -4742,12 +4784,17 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										.map((l) => (
 											<div
 												key={l.id}
-												className="w-full p-3 rounded-xl bg-slate-900 border border-slate-800 text-left flex items-center justify-between"
+												className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-left flex items-center justify-between gap-3"
 											>
-												<span className="text-xs font-semibold text-white">
-													{previewLang === "id" ? l.title_id || l.title_en : l.title_en || l.title_id}
-												</span>
-												<span className="text-xs text-slate-500">↗</span>
+												<div className="flex items-center gap-2.5 min-w-0">
+													<div className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700/60 flex items-center justify-center shrink-0 overflow-hidden p-1">
+														<LinkIconRenderer link={l} isStudioPreview={true} className="w-4 h-4" />
+													</div>
+													<span className="text-xs font-semibold text-white truncate">
+														{previewLang === "id" ? l.title_id || l.title_en : l.title_en || l.title_id}
+													</span>
+												</div>
+												<span className="text-xs text-slate-500 shrink-0">↗</span>
 											</div>
 										))
 								)}

@@ -9,7 +9,7 @@
  * - Deletion protection for referenced media assets
  */
 
-export type MediaCategory = "avatar" | "cover" | "background" | "general";
+export type MediaCategory = "avatar" | "cover" | "background" | "general" | "icon";
 export type MediaType = "image" | "video";
 export type MediaStatus = "uploaded" | "draft" | "published" | "archived";
 
@@ -34,6 +34,7 @@ export const MEDIA_SIZE_LIMITS: Record<MediaCategory, number> = {
 	cover: 15 * 1024 * 1024, // 15 MiB
 	background: 50 * 1024 * 1024, // 50 MiB (covers both 15 MiB images and 50 MiB videos)
 	general: 15 * 1024 * 1024,
+	icon: 2 * 1024 * 1024, // 2 MiB (icons)
 };
 
 export interface DetectedFormat {
@@ -159,7 +160,7 @@ export function validateUpload(
 	}
 
 	// 3. Category constraint check
-	if (category === "avatar" || category === "cover") {
+	if (category === "avatar" || category === "cover" || category === "icon") {
 		if (format.mediaType !== "image") {
 			return {
 				isValid: false,
@@ -391,6 +392,39 @@ export async function isMediaReferenced(
 			return {
 				referenced: true,
 				reason: `Media ini sedang digunakan di bagian Explore publik (${explorePubMatch.title_id || explorePubMatch.id}).`,
+			};
+		}
+
+		// 4. Check links (draft and published) for custom icons
+		const linkDraftMatch = await db
+			.prepare(
+				`SELECT id, title_id FROM links_draft
+				 WHERE icon_media_id = ?
+				 LIMIT 1;`
+			)
+			.bind(mediaId)
+			.first<{ id: string; title_id: string }>();
+
+		if (linkDraftMatch) {
+			return {
+				referenced: true,
+				reason: `Media ini sedang digunakan sebagai ikon tautan draft (${linkDraftMatch.title_id || linkDraftMatch.id}).`,
+			};
+		}
+
+		const linkPubMatch = await db
+			.prepare(
+				`SELECT id, title_id FROM links
+				 WHERE icon_media_id = ?
+				 LIMIT 1;`
+			)
+			.bind(mediaId)
+			.first<{ id: string; title_id: string }>();
+
+		if (linkPubMatch) {
+			return {
+				referenced: true,
+				reason: `Media ini sedang digunakan sebagai ikon tautan publik (${linkPubMatch.title_id || linkPubMatch.id}).`,
 			};
 		}
 

@@ -81,6 +81,7 @@ MOBIO Studio uses versioned SQLite migrations located in the `migrations/` direc
 - `0004_explore_editor.sql`: 10 flexible content models with draft isolation
 - `0005_click_monitor.sql`: First-party link redirect telemetry table and query indexes
 - `0006_minimal_privacy_clicks.sql`: Final security hardening — drops all user agent telemetry and country fields, enforcing strictly minimal, privacy-first click logging
+- `0007_custom_icons.sql`: Custom icon system (`icon_type`, `icon_url`, `icon_media_id`) and expanded `media_assets` category constraint to support custom icon uploads (2 MiB limit, PNG/WebP transparency)
 
 1. **Apply migrations to your local development database:**
    ```bash
@@ -94,13 +95,13 @@ MOBIO Studio uses versioned SQLite migrations located in the `migrations/` direc
 This creates the core database tables and registry:
 - `site_settings`: Global website preferences
 - `profile`: Localized name, handle, avatar, avatar media reference, location, and bio
-- `links` & `links_draft`: Ordered vertical links with first-party routing `/go/:linkId`
+- `links` & `links_draft`: Ordered vertical links with custom icons (`preset`, `upload`, `url`) and first-party routing `/go/:linkId`
 - `explore_items` & `explore_items_draft`: 10 flexible content models (projects, galleries, music, games, etc.)
 - `contact_methods` & `contact_methods_draft`: Direct action cards (WhatsApp, Telegram, Email, Instagram, custom)
 - `appearance_settings`: Liquid glass tokens, theme presets, cover banner, and fixed background
 - `publish_metadata`: Version history and publication logs
 - `click_events`: Minimal privacy telemetry (columns: `id`, `link_id`, `clicked_at`, `referrer`; indexes: `idx_click_events_time`, `idx_click_events_link_date`)
-- `media_assets`: Metadata registry for files stored in Cloudflare R2
+- `media_assets`: Metadata registry for files stored in Cloudflare R2 (categories: `avatar`, `cover`, `background`, `general`, `icon`)
 
 ---
 

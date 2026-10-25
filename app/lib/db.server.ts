@@ -41,6 +41,9 @@ export interface LinkRecord {
 	is_enabled: number;
 	created_at: string;
 	updated_at: string;
+	icon_type: "preset" | "upload" | "url";
+	icon_url: string;
+	icon_media_id: string;
 }
 
 export type ExploreBlockType =
@@ -554,6 +557,9 @@ export async function createDraftLink(
 		icon?: string;
 		sort_order?: number;
 		is_enabled?: number;
+		icon_type?: "preset" | "upload" | "url";
+		icon_url?: string;
+		icon_media_id?: string;
 	}
 ): Promise<LinkRecord> {
 	const id = crypto.randomUUID();
@@ -581,13 +587,16 @@ export async function createDraftLink(
 		is_enabled: link.is_enabled ?? 1,
 		created_at: now,
 		updated_at: now,
+		icon_type: link.icon_type || "preset",
+		icon_url: link.icon_url?.trim() || "",
+		icon_media_id: link.icon_media_id?.trim() || "",
 	};
 
 	await db.batch([
 		db
 			.prepare(
-				`INSERT INTO links_draft (id, title_id, title_en, description_id, description_en, url, platform, icon, sort_order, is_enabled, created_at, updated_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+				`INSERT INTO links_draft (id, title_id, title_en, description_id, description_en, url, platform, icon, sort_order, is_enabled, icon_type, icon_url, icon_media_id, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 			)
 			.bind(
 				newRecord.id,
@@ -600,6 +609,9 @@ export async function createDraftLink(
 				newRecord.icon,
 				newRecord.sort_order,
 				newRecord.is_enabled,
+				newRecord.icon_type,
+				newRecord.icon_url,
+				newRecord.icon_media_id,
 				newRecord.created_at,
 				newRecord.updated_at
 			),
@@ -645,6 +657,9 @@ export async function updateDraftLink(
 		icon: data.icon !== undefined ? data.icon.trim() : current.icon,
 		sort_order: data.sort_order !== undefined ? data.sort_order : current.sort_order,
 		is_enabled: data.is_enabled !== undefined ? data.is_enabled : current.is_enabled,
+		icon_type: data.icon_type !== undefined ? data.icon_type : (current.icon_type || "preset"),
+		icon_url: data.icon_url !== undefined ? data.icon_url.trim() : (current.icon_url || ""),
+		icon_media_id: data.icon_media_id !== undefined ? data.icon_media_id.trim() : (current.icon_media_id || ""),
 		updated_at: now,
 	};
 
@@ -652,7 +667,7 @@ export async function updateDraftLink(
 		db
 			.prepare(
 				`UPDATE links_draft
-				 SET title_id = ?, title_en = ?, description_id = ?, description_en = ?, url = ?, platform = ?, icon = ?, sort_order = ?, is_enabled = ?, updated_at = ?
+				 SET title_id = ?, title_en = ?, description_id = ?, description_en = ?, url = ?, platform = ?, icon = ?, sort_order = ?, is_enabled = ?, icon_type = ?, icon_url = ?, icon_media_id = ?, updated_at = ?
 				 WHERE id = ?;`
 			)
 			.bind(
@@ -665,6 +680,9 @@ export async function updateDraftLink(
 				updated.icon,
 				updated.sort_order,
 				updated.is_enabled,
+				updated.icon_type,
+				updated.icon_url,
+				updated.icon_media_id,
 				updated.updated_at,
 				id
 			),
@@ -1412,8 +1430,8 @@ export async function publishAllDrafts(
 		// 2. Promote links_draft to links
 		db.prepare("DELETE FROM links;"),
 		db.prepare(
-			`INSERT INTO links (id, title_id, title_en, description_id, description_en, url, platform, icon, sort_order, is_enabled, created_at, updated_at)
-			 SELECT id, title_id, title_en, description_id, description_en, url, platform, icon, sort_order, is_enabled, created_at, updated_at
+			`INSERT INTO links (id, title_id, title_en, description_id, description_en, url, platform, icon, sort_order, is_enabled, icon_type, icon_url, icon_media_id, created_at, updated_at)
+			 SELECT id, title_id, title_en, description_id, description_en, url, platform, icon, sort_order, is_enabled, icon_type, icon_url, icon_media_id, created_at, updated_at
 			 FROM links_draft;`
 		),
 
@@ -1493,6 +1511,8 @@ export async function publishAllDrafts(
 				SELECT background_poster_media_id FROM appearance_settings WHERE id = 'draft' AND background_poster_media_id != ''
 				UNION
 				SELECT cover_media_id FROM appearance_settings WHERE id = 'draft' AND cover_media_id != ''
+				UNION
+				SELECT icon_media_id FROM links_draft WHERE icon_media_id != ''
 			 );`
 		).bind(now),
 
@@ -1540,8 +1560,8 @@ export async function discardAllDrafts(db: D1Database): Promise<void> {
 		// 2. Reset links_draft from links
 		db.prepare("DELETE FROM links_draft;"),
 		db.prepare(
-			`INSERT INTO links_draft (id, title_id, title_en, description_id, description_en, url, platform, icon, sort_order, is_enabled, created_at, updated_at)
-			 SELECT id, title_id, title_en, description_id, description_en, url, platform, icon, sort_order, is_enabled, created_at, updated_at
+			`INSERT INTO links_draft (id, title_id, title_en, description_id, description_en, url, platform, icon, sort_order, is_enabled, icon_type, icon_url, icon_media_id, created_at, updated_at)
+			 SELECT id, title_id, title_en, description_id, description_en, url, platform, icon, sort_order, is_enabled, icon_type, icon_url, icon_media_id, created_at, updated_at
 			 FROM links;`
 		),
 

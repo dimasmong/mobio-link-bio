@@ -1,52 +1,11 @@
 import React from "react";
 import type { VerticalLink, Language } from "../data/profile";
-import {
-	GithubIcon,
-	LinkedinIcon,
-	TwitterIcon,
-	InstagramIcon,
-	EmailIcon,
-	ExternalLinkIcon,
-	CodeIcon,
-	BookIcon,
-	GlobeIcon,
-	SparklesIcon,
-	MessageIcon,
-	YoutubeIcon,
-} from "./Icons";
+import { ExternalLinkIcon, SparklesIcon } from "./Icons";
+import { LinkIconRenderer } from "./IconLibrary";
 
 interface VerticalLinkListProps {
 	links: VerticalLink[];
 	lang: Language;
-}
-
-function getPlatformIcon(platform?: string, iconName?: string) {
-	const key = (platform || iconName || "").toLowerCase();
-	switch (key) {
-		case "github":
-			return <GithubIcon className="w-5 h-5 text-slate-800" />;
-		case "linkedin":
-			return <LinkedinIcon className="w-5 h-5 text-[#0a66c2]" />;
-		case "twitter":
-		case "x":
-			return <TwitterIcon className="w-4 h-4 text-slate-900" />;
-		case "instagram":
-			return <InstagramIcon className="w-5 h-5 text-[#e4405f]" />;
-		case "youtube":
-			return <YoutubeIcon className="w-5 h-5 text-[#ff0000]" />;
-		case "email":
-			return <EmailIcon className="w-5 h-5 text-violet-600" />;
-		case "code":
-			return <CodeIcon className="w-5 h-5 text-violet-600" />;
-		case "book":
-			return <BookIcon className="w-5 h-5 text-violet-600" />;
-		case "message":
-			return <MessageIcon className="w-5 h-5 text-violet-600" />;
-		case "sparkles":
-			return <SparklesIcon className="w-5 h-5 text-violet-600" />;
-		default:
-			return <GlobeIcon className="w-5 h-5 text-slate-700" />;
-	}
 }
 
 function isValidUrl(url?: string): boolean {
@@ -106,8 +65,8 @@ export function VerticalLinkList({ links, lang }: VerticalLinkListProps) {
 							className="glass-liquid-card rounded-2xl sm:rounded-full px-5 py-4 sm:py-4.5 flex items-center justify-between gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
 						>
 							{/* Left: Platform / Category Icon */}
-							<div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/80 border border-white/90 shadow-2xs flex items-center justify-center shrink-0 group-hover:bg-white group-hover:scale-105 transition-all">
-								{getPlatformIcon(link.platform, link.icon)}
+							<div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/80 border border-white/90 shadow-2xs flex items-center justify-center shrink-0 group-hover:bg-white group-hover:scale-105 transition-all overflow-hidden p-2">
+								<LinkIconRenderer link={link} className="w-5 h-5" />
 							</div>
 
 							{/* Center: Title & Optional Description */}
