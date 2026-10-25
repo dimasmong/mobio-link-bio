@@ -11,16 +11,19 @@ Each installation is completely sovereign: it runs on your own Cloudflare accoun
 
 ```text
 [ Public Visitor ]  ───►  / (Public Homepage)   ───►  No Login (Always Public)
+[ Public Visitor ]  ───►  /api/public/media/:id ───►  Cloudflare R2 (Published Only)
 [ Admin / Owner  ]  ───►  /studio               ───►  Cloudflare Access (Email OTP)
                                                        │
-                                                       ▼
-                                              Cloudflare D1 Database
-                                           (SQLite Edge Storage: DB)
+                           ┌───────────────────────────┴───────────────────────────┐
+                           ▼                                                       ▼
+                 Cloudflare D1 Database                                  Cloudflare R2 Bucket
+               (SQLite Edge Storage: DB)                              (Media Storage: MEDIA_BUCKET)
 ```
 
 - **Public Website (`/`):** Accessible to anyone worldwide without login.
 - **Admin Dashboard (`/studio` & `/api/studio/*`):** Protected by Cloudflare Access with One-Time PIN sent directly to your authorized administrator email.
 - **Database:** Serverless SQLite at the edge via Cloudflare D1.
+- **Media Storage:** Edge object storage via Cloudflare R2 (`MEDIA_BUCKET`) with magic byte signature verification, strict format allowlists, and HTTP Range support (`206 Partial Content`) for video streaming.
 
 ---
 
@@ -82,19 +85,51 @@ MOBIO Studio uses versioned SQLite migrations located in the `migrations/` direc
    npx wrangler d1 migrations apply mobio-db --remote
    ```
 
-This creates the 8 core tables:
+This creates the core database tables and registry:
 - `site_settings`: Global website preferences
-- `profile`: Localized name, handle, avatar, location, and bio
+- `profile`: Localized name, handle, avatar, avatar media reference, location, and bio
 - `links`: Ordered vertical links
 - `explore_items`: Projects, photo galleries, playlists, and notes
 - `contact_methods`: Direct action cards (WhatsApp, Telegram, Email, Instagram)
-- `appearance_settings`: Liquid glass themes, cover banner, and fixed background
+- `appearance_settings`: Liquid glass tokens, theme presets, cover banner, and fixed background
 - `publish_metadata`: Version history and publication logs
 - `click_events`: Privacy-friendly link click telemetry
+- `media_assets`: Metadata registry for files stored in Cloudflare R2
 
 ---
 
-### Step 4: Configure Cloudflare Access with Email OTP
+### Step 4: Create Your Cloudflare R2 Media Bucket
+
+MOBIO Studio uses Cloudflare R2 object storage to host your profile photos, cover banners, and animated background media.
+
+1. **Create the production R2 bucket via Wrangler CLI:**
+   ```bash
+   npx wrangler r2 bucket create mobio-media-bucket
+   ```
+2. **Configure the R2 binding in `wrangler.json`:**
+   ```json
+   "r2_buckets": [
+     {
+       "binding": "MEDIA_BUCKET",
+       "bucket_name": "mobio-media-bucket"
+     }
+   ]
+   ```
+3. **Generate updated TypeScript environment types:**
+   ```bash
+   npm run typegen
+   ```
+
+#### Permitted Media Formats & Limits:
+- **Profile Avatar:** JPEG, PNG, WebP, AVIF up to **5 MiB**.
+- **Cover Banner:** JPEG, PNG, WebP, AVIF up to **15 MiB**.
+- **Background Image:** JPEG, PNG, WebP, AVIF up to **15 MiB**.
+- **Background Video:** MP4 (h.264/AAC), WebM (VP9/Opus) up to **50 MiB**.
+- *Strict Security:* Files are verified using byte-level magic signature detection. Executables, scripts, HTML, and SVG files are strictly rejected (HTTP 415). Draft media is kept private behind admin authentication; only published assets are served publicly with immutable caching.
+
+---
+
+### Step 5: Configure Cloudflare Access with Email OTP
 
 Cloudflare Zero Trust Access protects `/studio` without requiring third-party authentication services or passwords.
 
@@ -125,7 +160,7 @@ Cloudflare Zero Trust Access protects `/studio` without requiring third-party au
 
 ---
 
-### Step 5: Configure Environment Variables in `wrangler.json`
+### Step 6: Configure Environment Variables in `wrangler.json`
 
 In `wrangler.json`:
 ```json
@@ -142,7 +177,7 @@ In `wrangler.json`:
 
 ---
 
-### Step 6: Local Development & Testing
+### Step 7: Local Development & Testing
 
 1. For local development, copy `.dev.vars.example` to `.dev.vars`:
    ```bash
@@ -161,7 +196,7 @@ In `wrangler.json`:
 
 ---
 
-### Step 7: Deploying to Production
+### Step 8: Deploying to Production
 
 When you are ready to publish your changes:
 

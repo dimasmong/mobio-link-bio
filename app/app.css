@@ -96,8 +96,8 @@ div[id] {
 /* 1. Primary Glass Panel (Profile card, Explore spotlight) */
 .glass-liquid-primary {
 	background: var(--glass-surface-primary);
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	backdrop-filter: blur(var(--glass-blur, 24px)) saturate(180%);
+	-webkit-backdrop-filter: blur(var(--glass-blur, 24px)) saturate(180%);
 	border: 1px solid var(--glass-border-specular);
 	box-shadow:
 		var(--glass-shadow-primary),
@@ -108,8 +108,8 @@ div[id] {
 /* 2. Secondary Glass Panel (Modal/Lightbox, Content boxes) */
 .glass-liquid-secondary {
 	background: var(--glass-surface-secondary);
-	backdrop-filter: blur(16px) saturate(160%);
-	-webkit-backdrop-filter: blur(16px) saturate(160%);
+	backdrop-filter: blur(var(--glass-blur, 16px)) saturate(160%);
+	-webkit-backdrop-filter: blur(var(--glass-blur, 16px)) saturate(160%);
 	border: 1px solid var(--glass-border-subtle);
 	box-shadow:
 		var(--glass-shadow-card),
@@ -119,8 +119,8 @@ div[id] {
 /* 3. Interactive Liquid Glass Card (Pill links, Contact items) */
 .glass-liquid-card {
 	background: var(--glass-surface-interactive);
-	backdrop-filter: blur(16px) saturate(160%);
-	-webkit-backdrop-filter: blur(16px) saturate(160%);
+	backdrop-filter: blur(var(--glass-blur, 16px)) saturate(160%);
+	-webkit-backdrop-filter: blur(var(--glass-blur, 16px)) saturate(160%);
 	border: 1px solid var(--glass-border-subtle);
 	box-shadow:
 		var(--glass-shadow-card),

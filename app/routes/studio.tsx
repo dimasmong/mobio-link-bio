@@ -6,13 +6,16 @@ import {
 	getProfileRecord,
 	getLinks,
 	getContactMethods,
+	getAppearanceRecord,
 	getPublishMetadata,
 	type DatabaseStatus,
 	type ProfileRecord,
 	type LinkRecord,
 	type ContactMethodRecord,
+	type AppearanceRecord,
 	type PublishMetadataRecord,
 } from "../lib/db.server";
+import type { MediaAssetRecord } from "../lib/media.server";
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -38,16 +41,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			draftProfile: null as ProfileRecord | null,
 			draftLinks: [] as LinkRecord[],
 			draftContacts: [] as ContactMethodRecord[],
+			draftAppearance: null as AppearanceRecord | null,
 			publishMetadata: null as PublishMetadataRecord | null,
 			envMode: import.meta.env.MODE,
 		};
 	}
 
-	const [dbStatus, draftProfile, draftLinks, draftContacts, publishMetadata] = await Promise.all([
+	const [dbStatus, draftProfile, draftLinks, draftContacts, draftAppearance, publishMetadata] = await Promise.all([
 		getDatabaseStatus(env?.DB),
 		env?.DB ? getProfileRecord(env.DB, "draft") : null,
 		env?.DB ? getLinks(env.DB, "draft") : [],
 		env?.DB ? getContactMethods(env.DB, "draft") : [],
+		env?.DB ? getAppearanceRecord(env.DB, "draft") : null,
 		env?.DB ? getPublishMetadata(env.DB) : null,
 	]);
 
@@ -60,6 +65,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		draftProfile,
 		draftLinks,
 		draftContacts,
+		draftAppearance,
 		publishMetadata,
 		envMode: import.meta.env.MODE,
 	};
@@ -87,11 +93,43 @@ const navTabs: NavTab[] = [
 	{ id: "profile", label: "Profile", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
 	{ id: "links", label: "Links", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
 	{ id: "contact", label: "Contact", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
-	{ id: "clicks", label: "Click Monitor", badge: "Phase 3" },
-	{ id: "explore", label: "Explore", badge: "Phase 3" },
-	{ id: "appearance", label: "Appearance", badge: "Phase 3" },
-	{ id: "settings", label: "Settings", badge: "Phase 3" },
+	{ id: "appearance", label: "Appearance", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
+	{ id: "clicks", label: "Click Monitor", badge: "Phase 4" },
+	{ id: "explore", label: "Explore", badge: "Phase 4" },
+	{ id: "settings", label: "Settings", badge: "Phase 4" },
 ];
+
+const defaultAppearanceFallback: AppearanceRecord = {
+	id: "draft",
+	palette: "frost-aurora",
+	glass_intensity: "medium",
+	background_type: "gradient",
+	background_src: "",
+	background_poster: "",
+	background_animation: 1,
+	background_overlay_opacity: 0.45,
+	cover_enabled: 0,
+	cover_url: "",
+	cover_aspect_ratio: "16:9",
+	accent_color: "#8b5cf6",
+	background_position_x: 50.0,
+	background_position_y: 50.0,
+	background_scale: 1.0,
+	background_overlay_color: "rgba(248, 250, 252, 0.45)",
+	background_brightness: 1.0,
+	glass_blur: "16px",
+	glass_opacity: 0.70,
+	glass_tint: "rgba(255, 255, 255, 0.65)",
+	glass_border_opacity: 0.30,
+	glass_highlight_intensity: 0.40,
+	glass_shadow_intensity: 0.15,
+	glass_radius: "1.5rem",
+	background_media_id: "",
+	background_poster_media_id: "",
+	cover_media_id: "",
+	created_at: "",
+	updated_at: "",
+};
 
 export default function Studio({ loaderData }: Route.ComponentProps) {
 	const [activeSection, setActiveSection] = useState<StudioSection>("overview");
@@ -166,6 +204,24 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		url: "",
 		is_enabled: true,
 	});
+
+	// Appearance state (Phase 3)
+	const [appearance, setAppearance] = useState<AppearanceRecord>(() => {
+		if (loaderData.draftAppearance) return loaderData.draftAppearance;
+		return defaultAppearanceFallback;
+	});
+	const [isSavingAppearance, setIsSavingAppearance] = useState(false);
+	const [isResetAppearanceOpen, setIsResetAppearanceOpen] = useState(false);
+
+	// Media Library Modal state (Cloudflare R2 + D1 Registry)
+	const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+	const [mediaTarget, setMediaTarget] = useState<"avatar" | "cover" | "background" | "background_poster" | null>(null);
+	const [mediaCategoryFilter, setMediaCategoryFilter] = useState<string>("all");
+	const [mediaList, setMediaList] = useState<MediaAssetRecord[]>([]);
+	const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+	const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+	const [uploadError, setUploadError] = useState<string | null>(null);
+	const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
 
 	// Sync initial section from URL query parameter e.g. /studio?tab=profile
 	useEffect(() => {
@@ -724,18 +780,21 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 				showToast(data.error || "Gagal membatalkan perubahan draft.", "error");
 			} else {
 				// Re-fetch drafts
-				const [pRes, lRes, cRes] = await Promise.all([
+				const [pRes, lRes, cRes, aRes] = await Promise.all([
 					fetch("/api/studio/profile"),
 					fetch("/api/studio/links"),
 					fetch("/api/studio/contact"),
+					fetch("/api/studio/appearance"),
 				]);
 				const pData = (await pRes.json()) as { profile?: ProfileRecord };
 				const lData = (await lRes.json()) as { links?: LinkRecord[] };
 				const cData = (await cRes.json()) as { contactMethods?: ContactMethodRecord[] };
+				const aData = (await aRes.json()) as { appearance?: AppearanceRecord };
 
 				if (pData.profile) setProfile(pData.profile);
 				if (lData.links) setLinks(lData.links);
 				if (cData.contactMethods) setContacts(cData.contactMethods);
+				if (aData.appearance) setAppearance(aData.appearance);
 
 				setPubMeta((prev) => (prev ? { ...prev, has_unpublished_changes: 0 } : null));
 				setIsDiscardModalOpen(false);
@@ -746,6 +805,234 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			showToast(msg, "error");
 		} finally {
 			setIsDiscarding(false);
+		}
+	};
+
+	// =========================================================================
+	// HANDLERS: APPEARANCE & MEDIA (PHASE 3)
+	// =========================================================================
+	const fetchMediaList = useCallback(async (category?: string) => {
+		setIsLoadingMedia(true);
+		setUploadError(null);
+		try {
+			const query = category && category !== "all" ? `?category=${category}` : "";
+			const res = await fetch(`/api/studio/media${query}`);
+			if (res.ok) {
+				const data = (await res.json()) as { assets: MediaAssetRecord[] };
+				setMediaList(data.assets || []);
+			}
+		} catch (err) {
+			console.error("Gagal memuat daftar media:", err);
+		} finally {
+			setIsLoadingMedia(false);
+		}
+	}, []);
+
+	const handleOpenMediaLibrary = (target: "avatar" | "cover" | "background" | "background_poster") => {
+		setMediaTarget(target);
+		const initialCategory = target === "avatar" ? "avatar" : target === "cover" ? "cover" : "background";
+		setMediaCategoryFilter(initialCategory);
+		setIsMediaModalOpen(true);
+		fetchMediaList(initialCategory);
+	};
+
+	const saveDraftProfileDirectly = async (updated: ProfileRecord) => {
+		try {
+			await fetch("/api/studio/profile", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(updated),
+			});
+			markUnpublished();
+		} catch (err) {
+			console.error("Gagal menyimpan profil:", err);
+		}
+	};
+
+	const handleSelectMedia = (asset: MediaAssetRecord) => {
+		if (mediaTarget === "avatar") {
+			const previewUrl = `/api/studio/media/${asset.id}/preview`;
+			const updated = {
+				...profile,
+				avatar_media_id: asset.id,
+				avatar_url: previewUrl,
+			};
+			setProfile(updated);
+			saveDraftProfileDirectly(updated);
+		} else if (mediaTarget === "cover") {
+			setAppearance((prev) => ({
+				...prev,
+				cover_media_id: asset.id,
+				cover_url: `/api/studio/media/${asset.id}/preview`,
+			}));
+			markUnpublished();
+		} else if (mediaTarget === "background") {
+			setAppearance((prev) => ({
+				...prev,
+				background_media_id: asset.id,
+				background_src: `/api/studio/media/${asset.id}/preview`,
+				background_type: asset.media_type === "video" ? "video" : "image",
+			}));
+			markUnpublished();
+		} else if (mediaTarget === "background_poster") {
+			setAppearance((prev) => ({
+				...prev,
+				background_poster_media_id: asset.id,
+				background_poster: `/api/studio/media/${asset.id}/preview`,
+			}));
+			markUnpublished();
+		}
+		setIsMediaModalOpen(false);
+		showToast(`Media berhasil dipilih untuk ${mediaTarget}.`, "success");
+	};
+
+	const handleRemoveMedia = (target: "avatar" | "cover" | "background" | "background_poster") => {
+		if (target === "avatar") {
+			const updated = { ...profile, avatar_media_id: "", avatar_url: "" };
+			setProfile(updated);
+			saveDraftProfileDirectly(updated);
+			showToast("Avatar dikembalikan ke monogram inisial.", "info");
+		} else if (target === "cover") {
+			setAppearance((prev) => ({ ...prev, cover_media_id: "", cover_url: "" }));
+			markUnpublished();
+			showToast("Cover kustom dihapus, menggunakan aurora sheen.", "info");
+		} else if (target === "background") {
+			setAppearance((prev) => ({
+				...prev,
+				background_media_id: "",
+				background_src: "",
+				background_type: "gradient",
+			}));
+			markUnpublished();
+			showToast("Latar belakang dikembalikan ke gradient aurora mesh.", "info");
+		} else if (target === "background_poster") {
+			setAppearance((prev) => ({ ...prev, background_poster_media_id: "", background_poster: "" }));
+			markUnpublished();
+		}
+	};
+
+	const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const files = e.target.files;
+		if (!files || files.length === 0) return;
+		const file = files[0];
+
+		const targetCategory =
+			mediaTarget === "avatar"
+				? "avatar"
+				: mediaTarget === "cover"
+				? "cover"
+				: mediaTarget === "background"
+				? "background"
+				: "general";
+
+		setIsUploadingMedia(true);
+		setUploadError(null);
+
+		const formData = new FormData();
+		formData.append("file", file);
+		formData.append("category", targetCategory);
+
+		try {
+			const res = await fetch("/api/studio/media", {
+				method: "POST",
+				body: formData,
+			});
+
+			const data = (await res.json()) as { asset?: MediaAssetRecord; error?: string };
+
+			if (!res.ok) {
+				setUploadError(data.error || "Gagal mengunggah file media.");
+				showToast(data.error || "Gagal mengunggah media", "error");
+				return;
+			}
+
+			if (data.asset) {
+				showToast("Media berhasil diunggah!", "success");
+				fetchMediaList(mediaCategoryFilter);
+				handleSelectMedia(data.asset);
+			}
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : "Error upload";
+			setUploadError(msg);
+			showToast(msg, "error");
+		} finally {
+			setIsUploadingMedia(false);
+			e.target.value = "";
+		}
+	};
+
+	const handleDeleteMedia = async (asset: MediaAssetRecord) => {
+		setDeletingMediaId(asset.id);
+		setUploadError(null);
+		try {
+			const res = await fetch(`/api/studio/media?id=${asset.id}`, {
+				method: "DELETE",
+			});
+			const data = (await res.json()) as { error?: string };
+			if (!res.ok) {
+				setUploadError(data.error || "Gagal menghapus media.");
+				showToast(data.error || "Gagal menghapus media", "error");
+				return;
+			}
+			showToast("Media berhasil dihapus.", "success");
+			fetchMediaList(mediaCategoryFilter);
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : "Error deleting media";
+			setUploadError(msg);
+			showToast(msg, "error");
+		} finally {
+			setDeletingMediaId(null);
+		}
+	};
+
+	const handleSaveAppearance = async () => {
+		setIsSavingAppearance(true);
+		try {
+			const res = await fetch("/api/studio/appearance", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ action: "save", appearance }),
+			});
+			const data = (await res.json()) as { appearance?: AppearanceRecord; error?: string };
+			if (!res.ok) {
+				showToast(data.error || "Gagal menyimpan pengaturan tampilan.", "error");
+				return;
+			}
+			if (data.appearance) {
+				setAppearance(data.appearance);
+			}
+			markUnpublished();
+			showToast("Pengaturan tampilan berhasil disimpan ke draft!", "success");
+		} catch {
+			showToast("Koneksi gagal saat menyimpan tampilan.", "error");
+		} finally {
+			setIsSavingAppearance(false);
+		}
+	};
+
+	const handleResetAppearance = async () => {
+		setIsSavingAppearance(true);
+		try {
+			const res = await fetch("/api/studio/appearance", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ action: "reset" }),
+			});
+			const data = (await res.json()) as { appearance?: AppearanceRecord; error?: string };
+			if (!res.ok) {
+				showToast(data.error || "Gagal mereset tampilan.", "error");
+				return;
+			}
+			if (data.appearance) {
+				setAppearance(data.appearance);
+			}
+			markUnpublished();
+			setIsResetAppearanceOpen(false);
+			showToast("Tampilan berhasil dikembalikan ke default Frost Aurora!", "success");
+		} catch {
+			showToast("Koneksi gagal saat mereset tampilan.", "error");
+		} finally {
+			setIsSavingAppearance(false);
 		}
 	};
 
@@ -1108,21 +1395,39 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											/>
 										</div>
 
-										{/* Avatar URL */}
+										{/* Avatar */}
 										<div>
 											<label htmlFor="p-avatar" className="block text-xs font-semibold text-slate-300 mb-1">
-												URL Avatar
+												Foto Avatar
 											</label>
+											<div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-2">
+												<button
+													type="button"
+													onClick={() => handleOpenMediaLibrary("avatar")}
+													className="px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+												>
+													<span>🖼️ Pilih dari Media Library</span>
+												</button>
+												{profile.avatar_url && (
+													<button
+														type="button"
+														onClick={() => handleRemoveMedia("avatar")}
+														className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+													>
+														Gunakan Monogram Inisial
+													</button>
+												)}
+											</div>
 											<input
 												id="p-avatar"
 												type="text"
 												value={profile.avatar_url}
 												onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })}
-												placeholder="/images/avatar.jpg atau https://..."
+												placeholder="/api/studio/media/... atau https://..."
 												className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none transition-colors"
 											/>
 											<p className="text-[11px] text-slate-500 mt-1">
-												Gunakan path lokal (contoh: <code>/images/avatar.jpg</code>) atau URL https:// gambar publik.
+												Gunakan Media Library R2 (rekomendasi) atau tautkan URL gambar publik eksternal.
 											</p>
 										</div>
 
@@ -1520,9 +1825,684 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 					)}
 
 					{/* =========================================================================
-					    ROADMAP SECTIONS (HONEST PHASE 3 / FUTURE)
+					    SECTION 5: APPEARANCE STUDIO (PHASE 3)
 					    ========================================================================= */}
-					{["clicks", "explore", "appearance", "settings"].includes(activeSection) && (
+					{activeSection === "appearance" && (
+						<div className="flex flex-col gap-6">
+							{/* Top Banner & Actions */}
+							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+								<div>
+									<h2 className="text-lg font-bold text-white">Appearance Studio (Draft)</h2>
+									<p className="text-xs text-slate-400">
+										Sesuaikan tema visual, gambar/video latar belakang, cover banner, foto avatar, dan efek Liquid Glass.
+									</p>
+								</div>
+								<div className="flex items-center gap-2 self-start sm:self-auto">
+									<button
+										type="button"
+										onClick={() => setIsResetAppearanceOpen(true)}
+										className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
+									>
+										Reset Default
+									</button>
+									<button
+										type="button"
+										onClick={handleSaveAppearance}
+										disabled={isSavingAppearance}
+										className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-all shadow-md cursor-pointer"
+									>
+										{isSavingAppearance ? "Menyimpan..." : "Simpan Tampilan (Draft)"}
+									</button>
+								</div>
+							</div>
+
+							{/* 1. Theme Presets Panel */}
+							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+								<h3 className="text-sm font-bold text-white mb-1">Preset Tema Visual</h3>
+								<p className="text-xs text-slate-400 mb-4">
+									Pilih salah satu preset tema teruji untuk menerapkan palet warna dan karakteristik Liquid Glass secara instan.
+								</p>
+
+								<div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+									{/* Frost Aurora */}
+									<button
+										type="button"
+										onClick={() => {
+											setAppearance((prev) => ({
+												...prev,
+												palette: "frost-aurora",
+												glass_intensity: "medium",
+												accent_color: "#8b5cf6",
+												glass_blur: "16px",
+												glass_opacity: 0.70,
+												glass_tint: "rgba(255, 255, 255, 0.65)",
+												background_overlay_color: "rgba(248, 250, 252, 0.45)",
+												background_overlay_opacity: 0.45,
+											}));
+											markUnpublished();
+											showToast("Preset Frost Aurora diterapkan.", "info");
+										}}
+										className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+											appearance.palette === "frost-aurora"
+												? "bg-violet-950/40 border-violet-500 ring-2 ring-violet-500/30"
+												: "bg-slate-950/60 border-slate-800 hover:border-slate-700"
+										}`}
+									>
+										<div className="w-full h-12 rounded-lg bg-gradient-to-r from-violet-200 via-sky-100 to-pink-200 mb-2 border border-white/40 flex items-center justify-center text-xs text-slate-800 font-bold">
+											Frost Aurora
+										</div>
+										<div className="text-xs font-bold text-white">Frost Aurora (Default)</div>
+										<div className="text-[11px] text-slate-400 mt-0.5">Icy lavender & violet glow</div>
+									</button>
+
+									{/* Dark Liquid */}
+									<button
+										type="button"
+										onClick={() => {
+											setAppearance((prev) => ({
+												...prev,
+												palette: "dark-liquid",
+												glass_intensity: "deep",
+												accent_color: "#a78bfa",
+												glass_blur: "24px",
+												glass_opacity: 0.85,
+												glass_tint: "rgba(15, 23, 42, 0.75)",
+												background_overlay_color: "rgba(2, 6, 23, 0.65)",
+												background_overlay_opacity: 0.65,
+											}));
+											markUnpublished();
+											showToast("Preset Dark Liquid diterapkan.", "info");
+										}}
+										className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+											appearance.palette === "dark-liquid"
+												? "bg-violet-950/40 border-violet-500 ring-2 ring-violet-500/30"
+												: "bg-slate-950/60 border-slate-800 hover:border-slate-700"
+										}`}
+									>
+										<div className="w-full h-12 rounded-lg bg-gradient-to-r from-slate-950 via-slate-900 to-violet-950 mb-2 border border-slate-800 flex items-center justify-center text-xs text-violet-300 font-bold">
+											Dark Liquid
+										</div>
+										<div className="text-xs font-bold text-white">Dark Liquid</div>
+										<div className="text-[11px] text-slate-400 mt-0.5">Obsidian slate & deep glass</div>
+									</button>
+
+									{/* Sky Aurora */}
+									<button
+										type="button"
+										onClick={() => {
+											setAppearance((prev) => ({
+												...prev,
+												palette: "sky-aurora",
+												glass_intensity: "medium",
+												accent_color: "#0284c7",
+												glass_blur: "16px",
+												glass_opacity: 0.70,
+												glass_tint: "rgba(240, 249, 255, 0.70)",
+												background_overlay_color: "rgba(240, 249, 255, 0.45)",
+												background_overlay_opacity: 0.45,
+											}));
+											markUnpublished();
+											showToast("Preset Sky Aurora diterapkan.", "info");
+										}}
+										className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+											appearance.palette === "sky-aurora"
+												? "bg-sky-950/40 border-sky-500 ring-2 ring-sky-500/30"
+												: "bg-slate-950/60 border-slate-800 hover:border-slate-700"
+										}`}
+									>
+										<div className="w-full h-12 rounded-lg bg-gradient-to-r from-cyan-100 via-sky-200 to-indigo-100 mb-2 border border-white/40 flex items-center justify-center text-xs text-slate-800 font-bold">
+											Sky Aurora
+										</div>
+										<div className="text-xs font-bold text-white">Sky Aurora</div>
+										<div className="text-[11px] text-slate-400 mt-0.5">Fresh cyan mesh & sky blue</div>
+									</button>
+								</div>
+							</div>
+
+							{/* 2. Fullscreen Background Panel */}
+							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+								<h3 className="text-sm font-bold text-white mb-1">Latar Belakang Layar Penuh (Fixed Background)</h3>
+								<p className="text-xs text-slate-400 mb-4">
+									Pilih antara gradient mesh aurora beranimasi, gambar statis, atau video berulang (muted, loop, playsInline).
+								</p>
+
+								{/* Background Type Switcher */}
+								<div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 mb-4 max-w-md">
+									{(["gradient", "image", "video"] as const).map((type) => (
+										<button
+											key={type}
+											type="button"
+											onClick={() => {
+												setAppearance((prev) => ({ ...prev, background_type: type }));
+												markUnpublished();
+											}}
+											className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all capitalize cursor-pointer ${
+												appearance.background_type === type
+													? "bg-violet-600 text-white shadow-sm"
+													: "text-slate-400 hover:text-slate-200"
+											}`}
+										>
+											{type === "gradient" ? "Gradient Mesh" : type === "image" ? "Gambar Kustom" : "Video Kustom"}
+										</button>
+									))}
+								</div>
+
+								{/* Background: Gradient Mesh Details */}
+								{appearance.background_type === "gradient" && (
+									<div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between mb-4">
+										<div>
+											<div className="text-xs font-bold text-white">Animasi Aurora Mesh</div>
+											<div className="text-[11px] text-slate-400">
+												Menggerakkan lapisan gradien warna secara perlahan di latar belakang.
+											</div>
+										</div>
+										<button
+											type="button"
+											onClick={() => {
+												setAppearance((prev) => ({
+													...prev,
+													background_animation: prev.background_animation ? 0 : 1,
+												}));
+												markUnpublished();
+											}}
+											className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+												appearance.background_animation
+													? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+													: "bg-slate-800 text-slate-400 border border-slate-700"
+											}`}
+										>
+											{appearance.background_animation ? "Aktif" : "Nonaktif"}
+										</button>
+									</div>
+								)}
+
+								{/* Background: Custom Image Details */}
+								{appearance.background_type === "image" && (
+									<div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+										<div className="flex items-center gap-3">
+											{appearance.background_src ? (
+												<img
+													src={appearance.background_src}
+													alt="Latar belakang"
+													className="w-16 h-12 rounded-lg object-cover border border-slate-700"
+												/>
+											) : (
+												<div className="w-16 h-12 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-xs text-slate-500">
+													Kosong
+												</div>
+											)}
+											<div>
+												<div className="text-xs font-bold text-white">
+													{appearance.background_src ? "Gambar Latar Terpilih" : "Belum Ada Gambar Terpilih"}
+												</div>
+												<div className="text-[11px] text-slate-400">Mendukung JPEG, PNG, WebP, AVIF hingga 15 MiB.</div>
+											</div>
+										</div>
+										<div className="flex items-center gap-2">
+											<button
+												type="button"
+												onClick={() => handleOpenMediaLibrary("background")}
+												className="px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+											>
+												Pilih dari R2
+											</button>
+											{appearance.background_src && (
+												<button
+													type="button"
+													onClick={() => handleRemoveMedia("background")}
+													className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
+												>
+													Hapus
+												</button>
+											)}
+										</div>
+									</div>
+								)}
+
+								{/* Background: Custom Video Details */}
+								{appearance.background_type === "video" && (
+									<div className="flex flex-col gap-3 mb-4">
+										<div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+											<div className="flex items-center gap-3">
+												{appearance.background_src ? (
+													<video
+														src={appearance.background_src}
+														muted
+														className="w-16 h-12 rounded-lg object-cover border border-slate-700"
+													/>
+												) : (
+													<div className="w-16 h-12 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-xs text-slate-500">
+														Video
+													</div>
+												)}
+												<div>
+													<div className="text-xs font-bold text-white">
+														{appearance.background_src ? "Video Latar Terpilih" : "Belum Ada Video Terpilih"}
+													</div>
+													<div className="text-[11px] text-slate-400">Mendukung MP4 dan WebM hingga 50 MiB.</div>
+												</div>
+											</div>
+											<div className="flex items-center gap-2">
+												<button
+													type="button"
+													onClick={() => handleOpenMediaLibrary("background")}
+													className="px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+												>
+													Pilih Video R2
+												</button>
+												{appearance.background_src && (
+													<button
+														type="button"
+														onClick={() => handleRemoveMedia("background")}
+														className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
+													>
+														Hapus
+													</button>
+												)}
+											</div>
+										</div>
+
+										{/* Poster Fallback Image */}
+										<div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+											<div>
+												<div className="text-xs font-semibold text-slate-300">Poster Fallback Video (Opsional)</div>
+												<div className="text-[11px] text-slate-400">
+													Ditampilkan sebelum video dimuat atau di perangkat dengan mode hemat daya.
+												</div>
+											</div>
+											<div className="flex items-center gap-2">
+												<button
+													type="button"
+													onClick={() => handleOpenMediaLibrary("background_poster")}
+													className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
+												>
+													{appearance.background_poster ? "Ganti Poster" : "Pilih Poster"}
+												</button>
+												{appearance.background_poster && (
+													<button
+														type="button"
+														onClick={() => handleRemoveMedia("background_poster")}
+														className="text-xs text-rose-400 hover:text-rose-300 cursor-pointer"
+													>
+														✕
+													</button>
+												)}
+											</div>
+										</div>
+									</div>
+								)}
+
+								{/* Positioning & Overlay Controls */}
+								<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-slate-800">
+									<div>
+										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
+											<span>Posisi X</span>
+											<span className="font-mono text-slate-400">{Math.round(appearance.background_position_x ?? 50)}%</span>
+										</label>
+										<input
+											type="range"
+											min={0}
+											max={100}
+											value={appearance.background_position_x ?? 50}
+											onChange={(e) => {
+												setAppearance({ ...appearance, background_position_x: Number(e.target.value) });
+												markUnpublished();
+											}}
+											className="w-full accent-violet-500"
+										/>
+									</div>
+
+									<div>
+										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
+											<span>Posisi Y</span>
+											<span className="font-mono text-slate-400">{Math.round(appearance.background_position_y ?? 50)}%</span>
+										</label>
+										<input
+											type="range"
+											min={0}
+											max={100}
+											value={appearance.background_position_y ?? 50}
+											onChange={(e) => {
+												setAppearance({ ...appearance, background_position_y: Number(e.target.value) });
+												markUnpublished();
+											}}
+											className="w-full accent-violet-500"
+										/>
+									</div>
+
+									<div>
+										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
+											<span>Skala / Zoom</span>
+											<span className="font-mono text-slate-400">{(appearance.background_scale ?? 1.0).toFixed(1)}x</span>
+										</label>
+										<input
+											type="range"
+											min={0.5}
+											max={2.5}
+											step={0.1}
+											value={appearance.background_scale ?? 1.0}
+											onChange={(e) => {
+												setAppearance({ ...appearance, background_scale: Number(e.target.value) });
+												markUnpublished();
+											}}
+											className="w-full accent-violet-500"
+										/>
+									</div>
+
+									<div>
+										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
+											<span>Kecerahan Latar</span>
+											<span className="font-mono text-slate-400">{(appearance.background_brightness ?? 1.0).toFixed(1)}x</span>
+										</label>
+										<input
+											type="range"
+											min={0.5}
+											max={1.5}
+											step={0.05}
+											value={appearance.background_brightness ?? 1.0}
+											onChange={(e) => {
+												setAppearance({ ...appearance, background_brightness: Number(e.target.value) });
+												markUnpublished();
+											}}
+											className="w-full accent-violet-500"
+										/>
+									</div>
+
+									<div className="sm:col-span-2">
+										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
+											<span>Opasitas Overlay Pelindung Keterbacaan</span>
+											<span className="font-mono text-slate-400">{Math.round((appearance.background_overlay_opacity ?? 0.45) * 100)}%</span>
+										</label>
+										<input
+											type="range"
+											min={0}
+											max={1}
+											step={0.05}
+											value={appearance.background_overlay_opacity ?? 0.45}
+											onChange={(e) => {
+												setAppearance({ ...appearance, background_overlay_opacity: Number(e.target.value) });
+												markUnpublished();
+											}}
+											className="w-full accent-violet-500"
+										/>
+									</div>
+								</div>
+							</div>
+
+							{/* 3. Cover Banner Panel */}
+							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+								<div className="flex items-center justify-between mb-4">
+									<div>
+										<h3 className="text-sm font-bold text-white">Banner Cover</h3>
+										<p className="text-xs text-slate-400">
+											Banner panoramik yang melayang anggun di atas kartu profil Liquid Glass.
+										</p>
+									</div>
+									<button
+										type="button"
+										onClick={() => {
+											setAppearance((prev) => ({
+												...prev,
+												cover_enabled: prev.cover_enabled ? 0 : 1,
+											}));
+											markUnpublished();
+										}}
+										className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+											appearance.cover_enabled
+												? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+												: "bg-slate-800 text-slate-400 border border-slate-700"
+										}`}
+									>
+										{appearance.cover_enabled ? "Aktif" : "Nonaktif"}
+									</button>
+								</div>
+
+								{Boolean(appearance.cover_enabled) && (
+									<div className="flex flex-col gap-4 pt-3 border-t border-slate-800">
+										{/* Aspect Ratio */}
+										<div>
+											<label className="block text-xs font-semibold text-slate-300 mb-2">
+												Rasio Aspek Cover
+											</label>
+											<div className="flex flex-wrap gap-2">
+												{[
+													{ label: "Ultrawide (21:9)", val: "aspect-[21/9] sm:aspect-[24/9]" },
+													{ label: "Standar (16:9)", val: "aspect-[16/9]" },
+													{ label: "Panorama (3:1)", val: "aspect-[3/1]" },
+												].map((opt) => (
+													<button
+														key={opt.val}
+														type="button"
+														onClick={() => {
+															setAppearance({ ...appearance, cover_aspect_ratio: opt.val });
+															markUnpublished();
+														}}
+														className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+															appearance.cover_aspect_ratio === opt.val
+																? "bg-violet-600 text-white border-violet-500 shadow-sm"
+																: "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+														}`}
+													>
+														{opt.label}
+													</button>
+												))}
+											</div>
+										</div>
+
+										{/* Custom Media or Specular Fallback */}
+										<div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+											<div className="flex items-center gap-3">
+												{appearance.cover_url ? (
+													<img
+														src={appearance.cover_url}
+														alt="Banner cover"
+														className="w-20 h-10 rounded-lg object-cover border border-slate-700"
+													/>
+												) : (
+													<div className="w-20 h-10 rounded-lg bg-gradient-to-tr from-violet-200/60 via-sky-100/50 to-pink-200/50 border border-white/40 flex items-center justify-center text-[10px] text-slate-800 font-bold">
+														Fallback Sheen
+													</div>
+												)}
+												<div>
+													<div className="text-xs font-bold text-white">
+														{appearance.cover_url ? "Cover Gambar Kustom" : "Liquid Aurora Fallback (Bawaan)"}
+													</div>
+													<div className="text-[11px] text-slate-400">
+														{appearance.cover_url
+															? "Gambar cover kustom dari Cloudflare R2"
+															: "Efek kilau aurora specular tanpa perlu upload file"}
+													</div>
+												</div>
+											</div>
+											<div className="flex items-center gap-2">
+												<button
+													type="button"
+													onClick={() => handleOpenMediaLibrary("cover")}
+													className="px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+												>
+													Pilih dari R2
+												</button>
+												{appearance.cover_url && (
+													<button
+														type="button"
+														onClick={() => handleRemoveMedia("cover")}
+														className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
+													>
+														Gunakan Fallback
+													</button>
+												)}
+											</div>
+										</div>
+									</div>
+								)}
+							</div>
+
+							{/* 4. Avatar Media Panel */}
+							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+								<h3 className="text-sm font-bold text-white mb-1">Foto Avatar</h3>
+								<p className="text-xs text-slate-400 mb-4">
+									Gunakan foto profil kustom berbingkai kaca cair atau biarkan monogram inisial nama Anda tampil secara minimalis.
+								</p>
+
+								<div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+									<div className="flex items-center gap-4">
+										{profile.avatar_url ? (
+											<img
+												src={profile.avatar_url}
+												alt={profile.name}
+												className="w-16 h-16 rounded-full object-cover ring-2 ring-violet-500 shadow-lg"
+											/>
+										) : (
+											<div className="w-16 h-16 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-500 text-white font-bold text-xl flex items-center justify-center ring-2 ring-violet-400">
+												{profile.name[0] || "U"}
+											</div>
+										)}
+										<div>
+											<div className="text-xs font-bold text-white">
+												{profile.avatar_url ? "Foto Profil Kustom" : "Monogram Inisial Otomatis"}
+											</div>
+											<div className="text-[11px] text-slate-400">
+												Mendukung format JPEG, PNG, WebP, AVIF hingga batas 5 MiB.
+											</div>
+										</div>
+									</div>
+									<div className="flex items-center gap-2">
+										<button
+											type="button"
+											onClick={() => handleOpenMediaLibrary("avatar")}
+											className="px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+										>
+											Pilih dari R2
+										</button>
+										{profile.avatar_url && (
+											<button
+												type="button"
+												onClick={() => handleRemoveMedia("avatar")}
+												className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
+											>
+												Gunakan Monogram
+											</button>
+										)}
+									</div>
+								</div>
+							</div>
+
+							{/* 5. Liquid Glass Material Controls */}
+							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+								<h3 className="text-sm font-bold text-white mb-1">Kontrol Material Liquid Glass</h3>
+								<p className="text-xs text-slate-400 mb-4">
+									Kendalikan intensitas blur optik, tingkat transparansi, garis tepi specular, dan warna aksen tombol.
+								</p>
+
+								{/* Accent Color Picker */}
+								<div className="mb-6 pb-4 border-b border-slate-800">
+									<label className="block text-xs font-semibold text-slate-300 mb-2">
+										Warna Aksen Antarmuka
+									</label>
+									<div className="flex items-center gap-3">
+										<input
+											type="color"
+											value={appearance.accent_color || "#8b5cf6"}
+											onChange={(e) => {
+												setAppearance({ ...appearance, accent_color: e.target.value });
+												markUnpublished();
+											}}
+											className="w-10 h-10 rounded-xl bg-transparent border border-slate-700 cursor-pointer"
+										/>
+										<input
+											type="text"
+											value={appearance.accent_color || "#8b5cf6"}
+											onChange={(e) => {
+												setAppearance({ ...appearance, accent_color: e.target.value });
+												markUnpublished();
+											}}
+											className="w-28 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono uppercase focus:outline-none focus:border-violet-500"
+										/>
+										{/* Quick chips */}
+										<div className="flex flex-wrap gap-1.5">
+											{["#8b5cf6", "#3b82f6", "#06b6d4", "#10b981", "#ec4899", "#f59e0b"].map((c) => (
+												<button
+													key={c}
+													type="button"
+													onClick={() => {
+														setAppearance({ ...appearance, accent_color: c });
+														markUnpublished();
+													}}
+													className="w-6 h-6 rounded-full border border-white/20 transition-transform hover:scale-110 cursor-pointer"
+													style={{ backgroundColor: c }}
+													title={c}
+												/>
+											))}
+										</div>
+									</div>
+								</div>
+
+								{/* Sliders Grid */}
+								<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+									<div>
+										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
+											<span>Blur Optik Kaca</span>
+											<span className="font-mono text-slate-400">{appearance.glass_blur || "16px"}</span>
+										</label>
+										<input
+											type="range"
+											min={8}
+											max={32}
+											value={parseInt(appearance.glass_blur || "16", 10)}
+											onChange={(e) => {
+												setAppearance({ ...appearance, glass_blur: `${e.target.value}px` });
+												markUnpublished();
+											}}
+											className="w-full accent-violet-500"
+										/>
+									</div>
+
+									<div>
+										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
+											<span>Opasitas Kaca Cair</span>
+											<span className="font-mono text-slate-400">{Math.round((appearance.glass_opacity ?? 0.70) * 100)}%</span>
+										</label>
+										<input
+											type="range"
+											min={0.4}
+											max={0.95}
+											step={0.05}
+											value={appearance.glass_opacity ?? 0.70}
+											onChange={(e) => {
+												setAppearance({ ...appearance, glass_opacity: Number(e.target.value) });
+												markUnpublished();
+											}}
+											className="w-full accent-violet-500"
+										/>
+									</div>
+
+									<div>
+										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
+											<span>Opasitas Border Specular</span>
+											<span className="font-mono text-slate-400">{Math.round((appearance.glass_border_opacity ?? 0.30) * 100)}%</span>
+										</label>
+										<input
+											type="range"
+											min={0.1}
+											max={0.6}
+											step={0.05}
+											value={appearance.glass_border_opacity ?? 0.30}
+											onChange={(e) => {
+												setAppearance({ ...appearance, glass_border_opacity: Number(e.target.value) });
+												markUnpublished();
+											}}
+											className="w-full accent-violet-500"
+										/>
+									</div>
+								</div>
+							</div>
+						</div>
+					)}
+
+					{/* =========================================================================
+					    ROADMAP SECTIONS (HONEST PHASE 4 / FUTURE)
+					    ========================================================================= */}
+					{["clicks", "explore", "settings"].includes(activeSection) && (
 						<div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 sm:p-12 text-center flex flex-col items-center">
 							<div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 flex items-center justify-center mb-4">
 								<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1539,8 +2519,8 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								Modul {navTabs.find((t) => t.id === activeSection)?.label}
 							</h3>
 							<p className="text-xs sm:text-sm text-slate-400 max-w-md leading-relaxed mb-6">
-								Fitur ini dijadwalkan pada <strong>Phase 3 (Click Monitor, Explore & Custom Appearance)</strong>.
-								Sesuai batasan implementasi Phase 2, modul ini belum aktif dan tidak menyediakan form atau tombol palsu.
+								Fitur ini dijadwalkan pada <strong>Phase 4 & 5 (Click Monitor, Explore Showcase & Advanced Settings)</strong>.
+								Sesuai batasan implementasi, modul ini belum aktif dan tidak menyediakan form atau tombol palsu.
 							</p>
 
 							<button
@@ -2021,6 +3001,209 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			)}
 
 			{/* =========================================================================
+			    MODALS: RESET APPEARANCE CONFIRMATION
+			    ========================================================================= */}
+			{isResetAppearanceOpen && (
+				<div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+					<div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+						<div className="w-12 h-12 rounded-2xl bg-amber-950/80 border border-amber-800/60 text-amber-400 flex items-center justify-center mb-4">
+							<span className="text-xl">🎨</span>
+						</div>
+						<h3 className="text-lg font-bold text-white mb-2">Reset Pengaturan Tampilan?</h3>
+						<p className="text-xs sm:text-sm text-slate-300 mb-4 leading-relaxed">
+							Tampilan akan dikembalikan ke pengaturan default netral (Frost Aurora, background gradient mesh, Liquid Glass medium). Perubahan ini akan disimpan ke draft.
+						</p>
+						<div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+							<button
+								type="button"
+								onClick={() => setIsResetAppearanceOpen(false)}
+								className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+							>
+								Batal
+							</button>
+							<button
+								type="button"
+								onClick={handleResetAppearance}
+								className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-colors cursor-pointer"
+							>
+								Ya, Reset ke Default
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* =========================================================================
+			    MODALS: CLOUDFLARE R2 MEDIA LIBRARY
+			    ========================================================================= */}
+			{isMediaModalOpen && (
+				<div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+					<div className="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl my-6 flex flex-col max-h-[85vh]">
+						{/* Header */}
+						<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-slate-800">
+							<div>
+								<div className="flex items-center gap-2">
+									<h3 className="text-base font-bold text-white">Media Library (Cloudflare R2)</h3>
+									{mediaTarget && (
+										<span className="px-2 py-0.5 rounded-md bg-violet-950 border border-violet-800 text-violet-300 text-[10px] uppercase font-bold">
+											Target: {mediaTarget}
+										</span>
+									)}
+								</div>
+								<p className="text-xs text-slate-400 mt-0.5">
+									Pilih file yang sudah ada atau unggah media baru ke penyimpanan R2.
+								</p>
+							</div>
+
+							<div className="flex items-center gap-2">
+								{/* Upload Button */}
+								<label
+									className={`px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-md ${
+										isUploadingMedia ? "opacity-50 pointer-events-none" : ""
+									}`}
+								>
+									<span>{isUploadingMedia ? "Mengunggah..." : "+ Upload Media"}</span>
+									<input
+										type="file"
+										accept={
+											mediaTarget === "avatar" || mediaTarget === "cover" || mediaTarget === "background_poster"
+												? "image/jpeg,image/png,image/webp,image/avif"
+												: "image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm"
+										}
+										onChange={handleUploadFile}
+										className="hidden"
+									/>
+								</label>
+
+								<button
+									type="button"
+									onClick={() => setIsMediaModalOpen(false)}
+									className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-xs cursor-pointer"
+								>
+									✕
+								</button>
+							</div>
+						</div>
+
+						{/* Category Filter Tabs */}
+						<div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1 text-xs">
+							{[
+								{ id: "all", label: "Semua Kategori" },
+								{ id: "avatar", label: "Avatar" },
+								{ id: "cover", label: "Cover" },
+								{ id: "background", label: "Background" },
+							].map((cat) => (
+								<button
+									key={cat.id}
+									type="button"
+									onClick={() => {
+										setMediaCategoryFilter(cat.id);
+										fetchMediaList(cat.id);
+									}}
+									className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+										mediaCategoryFilter === cat.id
+											? "bg-slate-800 text-white border border-slate-700"
+											: "text-slate-400 hover:text-slate-200"
+									}`}
+								>
+									{cat.label}
+								</button>
+							))}
+						</div>
+
+						{/* Upload Error Banner */}
+						{uploadError && (
+							<div className="mb-4 p-3 rounded-xl bg-rose-950/80 border border-rose-800/80 text-rose-300 text-xs flex items-center justify-between">
+								<span>{uploadError}</span>
+								<button
+									type="button"
+									onClick={() => setUploadError(null)}
+									className="text-rose-400 hover:text-white ml-2 text-sm cursor-pointer"
+								>
+									✕
+								</button>
+							</div>
+						)}
+
+						{/* Media Asset Grid */}
+						<div className="flex-1 overflow-y-auto pr-1">
+							{isLoadingMedia ? (
+								<div className="py-16 text-center text-xs text-slate-400">
+									Memuat koleksi media dari Cloudflare R2...
+								</div>
+							) : mediaList.length === 0 ? (
+								<div className="py-16 text-center border-2 border-dashed border-slate-800 rounded-2xl">
+									<p className="text-sm text-slate-400 mb-2">Belum ada file media di kategori ini.</p>
+									<p className="text-xs text-slate-500">
+										Klik tombol <strong>+ Upload Media</strong> di kanan atas untuk mengunggah.
+									</p>
+								</div>
+							) : (
+								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
+									{mediaList.map((asset) => (
+										<div
+											key={asset.id}
+											className="bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-2xl overflow-hidden flex flex-col group transition-all"
+										>
+											{/* Preview Area */}
+											<div className="h-28 bg-slate-900 relative flex items-center justify-center overflow-hidden">
+												{asset.media_type === "image" ? (
+													<img
+														src={`/api/studio/media/${asset.id}/preview`}
+														alt={asset.original_filename}
+														className="w-full h-full object-cover"
+														loading="lazy"
+													/>
+												) : (
+													<video
+														src={`/api/studio/media/${asset.id}/preview`}
+														muted
+														className="w-full h-full object-cover"
+													/>
+												)}
+												<span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider bg-black/70 text-white backdrop-blur-sm">
+													{asset.media_category}
+												</span>
+												<span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-mono bg-black/70 text-slate-300 backdrop-blur-sm">
+													{(asset.size_bytes / 1024 / 1024).toFixed(1)} MB
+												</span>
+											</div>
+
+											{/* Info & Actions */}
+											<div className="p-2.5 flex flex-col gap-1.5 flex-1 justify-between">
+												<div className="truncate text-xs font-medium text-slate-200" title={asset.original_filename}>
+													{asset.original_filename}
+												</div>
+
+												<div className="flex items-center gap-1.5 pt-1 border-t border-slate-800/80">
+													<button
+														type="button"
+														onClick={() => handleSelectMedia(asset)}
+														className="flex-1 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer text-center"
+													>
+														Pilih
+													</button>
+													<button
+														type="button"
+														disabled={deletingMediaId === asset.id}
+														onClick={() => handleDeleteMedia(asset)}
+														className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-400 text-xs transition-colors cursor-pointer"
+														title="Hapus media dari R2 & D1"
+													>
+														{deletingMediaId === asset.id ? "..." : "🗑️"}
+													</button>
+												</div>
+											</div>
+										</div>
+									))}
+								</div>
+							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* =========================================================================
 			    MODALS: PREVIEW DRAFT (PHONE SIMULATOR)
 			    ========================================================================= */}
 			{isPreviewOpen && (
@@ -2057,9 +3240,31 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						</div>
 
 						{/* Phone Simulator Body */}
-						<div className="bg-slate-950 border border-slate-800 rounded-[2rem] p-4 sm:p-5 flex flex-col items-center max-h-[75vh] overflow-y-auto">
+						<div
+							className="bg-slate-950 border border-slate-800 rounded-[2rem] p-4 sm:p-5 flex flex-col items-center max-h-[75vh] overflow-y-auto relative overflow-hidden"
+							style={{
+								...(appearance?.accent_color ? { borderColor: `${appearance.accent_color}40` } : {}),
+							}}
+						>
+							{/* Cover Banner Preview if Enabled */}
+							{Boolean(appearance.cover_enabled) && (
+								<div className="w-full rounded-2xl overflow-hidden mb-[-2rem] z-0 h-24 relative shadow-md">
+									{appearance.cover_url ? (
+										<img
+											src={appearance.cover_url}
+											alt="Cover"
+											className="w-full h-full object-cover"
+										/>
+									) : (
+										<div className="w-full h-full bg-gradient-to-tr from-violet-200/60 via-sky-100/50 to-pink-200/50 flex items-center justify-center text-[10px] text-slate-800 font-bold">
+											Liquid Aurora Sheen
+										</div>
+									)}
+								</div>
+							)}
+
 							{/* Profile Card Preview */}
-							<div className="w-full flex flex-col items-center text-center mb-6">
+							<div className="w-full flex flex-col items-center text-center mb-6 z-10">
 								<div className="w-20 h-20 rounded-full border-2 border-white/20 overflow-hidden bg-slate-800 mb-2 shadow-lg">
 									{profile.avatar_url ? (
 										<img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover" />
@@ -2070,7 +3275,12 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									)}
 								</div>
 								<h4 className="text-base font-bold text-white">{profile.name || "Nama Pengguna"}</h4>
-								<p className="text-xs text-violet-400 font-medium">{profile.handle || "@handle"}</p>
+								<p
+									className="text-xs font-medium"
+									style={{ color: appearance.accent_color || "#a78bfa" }}
+								>
+									{profile.handle || "@handle"}
+								</p>
 								{(previewLang === "id" ? profile.location_id : profile.location_en) && (
 									<span className="text-[11px] text-slate-400 mt-1">
 										📍 {previewLang === "id" ? profile.location_id : profile.location_en}

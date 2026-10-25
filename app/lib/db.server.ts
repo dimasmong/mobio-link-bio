@@ -19,6 +19,7 @@ export interface ProfileRecord {
 	name: string;
 	handle: string;
 	avatar_url?: string;
+	avatar_media_id?: string;
 	location_id?: string;
 	location_en?: string;
 	bio_id?: string;
@@ -87,6 +88,22 @@ export interface AppearanceRecord {
 	cover_enabled: number;
 	cover_url?: string;
 	cover_aspect_ratio: string;
+	accent_color?: string;
+	background_position_x?: number;
+	background_position_y?: number;
+	background_scale?: number;
+	background_overlay_color?: string;
+	background_brightness?: number;
+	glass_blur?: string;
+	glass_opacity?: number;
+	glass_tint?: string;
+	glass_border_opacity?: number;
+	glass_highlight_intensity?: number;
+	glass_shadow_intensity?: number;
+	glass_radius?: string;
+	background_media_id?: string;
+	background_poster_media_id?: string;
+	cover_media_id?: string;
 	created_at: string;
 	updated_at: string;
 }
@@ -114,6 +131,7 @@ export interface DatabaseStatus {
 		explore: number;
 		contact: number;
 		clicks: number;
+		media?: number;
 	};
 	publishStatus: {
 		hasUnpublishedChanges: boolean;
@@ -311,6 +329,7 @@ export async function getDatabaseStatus(db?: D1Database): Promise<DatabaseStatus
 			"appearance_settings",
 			"publish_metadata",
 			"click_events",
+			"media_assets",
 		];
 
 		const hasAllTables = requiredTables.every((t) => tableNames.includes(t));
@@ -350,6 +369,7 @@ export async function getDatabaseStatus(db?: D1Database): Promise<DatabaseStatus
 		const exploreCount = tableBreakdown.find((t) => t.name === "explore_items")?.rows ?? 0;
 		const contactCount = tableBreakdown.find((t) => t.name === "contact_methods_draft")?.rows ?? 0;
 		const clicksCount = tableBreakdown.find((t) => t.name === "click_events")?.rows ?? 0;
+		const mediaCount = tableBreakdown.find((t) => t.name === "media_assets")?.rows ?? 0;
 
 		// 4. Publish status
 		const pubMeta = await getPublishMetadata(db);
@@ -364,6 +384,7 @@ export async function getDatabaseStatus(db?: D1Database): Promise<DatabaseStatus
 				explore: exploreCount,
 				contact: contactCount,
 				clicks: clicksCount,
+				media: mediaCount,
 			},
 			publishStatus: {
 				hasUnpublishedChanges: Boolean(pubMeta?.has_unpublished_changes),
@@ -439,6 +460,7 @@ export async function saveDraftProfile(
 		name: string;
 		handle: string;
 		avatar_url?: string;
+	avatar_media_id?: string;
 		location_id?: string;
 		location_en?: string;
 		bio_id?: string;
@@ -449,12 +471,13 @@ export async function saveDraftProfile(
 	await db.batch([
 		db
 			.prepare(
-				`INSERT INTO profile (id, name, handle, avatar_url, location_id, location_en, bio_id, bio_en, updated_at)
-				 VALUES ('draft', ?, ?, ?, ?, ?, ?, ?, ?)
+				`INSERT INTO profile (id, name, handle, avatar_url, avatar_media_id, location_id, location_en, bio_id, bio_en, updated_at)
+				 VALUES ('draft', ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				 ON CONFLICT(id) DO UPDATE SET
 				   name = excluded.name,
 				   handle = excluded.handle,
 				   avatar_url = excluded.avatar_url,
+				   avatar_media_id = excluded.avatar_media_id,
 				   location_id = excluded.location_id,
 				   location_en = excluded.location_en,
 				   bio_id = excluded.bio_id,
@@ -465,6 +488,7 @@ export async function saveDraftProfile(
 				data.name.trim(),
 				data.handle.trim(),
 				data.avatar_url?.trim() || "",
+				data.avatar_media_id?.trim() || "",
 				data.location_id?.trim() || "",
 				data.location_en?.trim() || "",
 				data.bio_id?.trim() || "",
@@ -884,6 +908,178 @@ export async function getPublishMetadata(db: D1Database): Promise<PublishMetadat
 }
 
 /**
+ * Default visual appearance settings (Frost Aurora + Medium Liquid Glass).
+ */
+export const DEFAULT_APPEARANCE: AppearanceRecord = {
+	id: "draft",
+	palette: "frost-aurora",
+	glass_intensity: "medium",
+	background_type: "gradient",
+	background_src: "",
+	background_poster: "",
+	background_animation: 1,
+	background_overlay_opacity: 0.45,
+	cover_enabled: 0,
+	cover_url: "",
+	cover_aspect_ratio: "16:9",
+	accent_color: "#8b5cf6",
+	background_position_x: 50.0,
+	background_position_y: 50.0,
+	background_scale: 1.0,
+	background_overlay_color: "rgba(248, 250, 252, 0.45)",
+	background_brightness: 1.0,
+	glass_blur: "16px",
+	glass_opacity: 0.70,
+	glass_tint: "rgba(255, 255, 255, 0.65)",
+	glass_border_opacity: 0.30,
+	glass_highlight_intensity: 0.40,
+	glass_shadow_intensity: 0.15,
+	glass_radius: "1.5rem",
+	background_media_id: "",
+	background_poster_media_id: "",
+	cover_media_id: "",
+	created_at: "",
+	updated_at: "",
+};
+
+/**
+ * Reads appearance settings from D1 (draft or published).
+ */
+export async function getAppearanceRecord(
+	db: D1Database,
+	mode: "draft" | "published" = "published"
+): Promise<AppearanceRecord> {
+	try {
+		let res = await db
+			.prepare("SELECT * FROM appearance_settings WHERE id = ? LIMIT 1;")
+			.bind(mode)
+			.first<AppearanceRecord>();
+
+		if (!res && mode === "draft") {
+			res = await db
+				.prepare("SELECT * FROM appearance_settings WHERE id = 'published' LIMIT 1;")
+				.first<AppearanceRecord>();
+		}
+		if (!res) {
+			res = await db
+				.prepare("SELECT * FROM appearance_settings WHERE id = 'default' LIMIT 1;")
+				.first<AppearanceRecord>();
+		}
+		if (res) {
+			return {
+				...DEFAULT_APPEARANCE,
+				...res,
+			};
+		}
+		return { ...DEFAULT_APPEARANCE, id: mode };
+	} catch {
+		return { ...DEFAULT_APPEARANCE, id: mode };
+	}
+}
+
+/**
+ * Saves draft appearance settings in D1 and flags unpublished changes.
+ */
+export async function saveDraftAppearance(
+	db: D1Database,
+	data: Partial<AppearanceRecord>
+): Promise<AppearanceRecord> {
+	const current = await getAppearanceRecord(db, "draft");
+	const now = new Date().toISOString();
+
+	const merged: AppearanceRecord = {
+		...current,
+		...data,
+		id: "draft",
+		updated_at: now,
+	};
+
+	await db.batch([
+		db.prepare(
+			`INSERT INTO appearance_settings (
+				id, palette, glass_intensity, background_type, background_src, background_poster,
+				background_animation, background_overlay_opacity, cover_enabled, cover_url, cover_aspect_ratio,
+				accent_color, background_position_x, background_position_y, background_scale,
+				background_overlay_color, background_brightness, glass_blur, glass_opacity, glass_tint,
+				glass_border_opacity, glass_highlight_intensity, glass_shadow_intensity, glass_radius,
+				background_media_id, background_poster_media_id, cover_media_id, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				palette = excluded.palette,
+				glass_intensity = excluded.glass_intensity,
+				background_type = excluded.background_type,
+				background_src = excluded.background_src,
+				background_poster = excluded.background_poster,
+				background_animation = excluded.background_animation,
+				background_overlay_opacity = excluded.background_overlay_opacity,
+				cover_enabled = excluded.cover_enabled,
+				cover_url = excluded.cover_url,
+				cover_aspect_ratio = excluded.cover_aspect_ratio,
+				accent_color = excluded.accent_color,
+				background_position_x = excluded.background_position_x,
+				background_position_y = excluded.background_position_y,
+				background_scale = excluded.background_scale,
+				background_overlay_color = excluded.background_overlay_color,
+				background_brightness = excluded.background_brightness,
+				glass_blur = excluded.glass_blur,
+				glass_opacity = excluded.glass_opacity,
+				glass_tint = excluded.glass_tint,
+				glass_border_opacity = excluded.glass_border_opacity,
+				glass_highlight_intensity = excluded.glass_highlight_intensity,
+				glass_shadow_intensity = excluded.glass_shadow_intensity,
+				glass_radius = excluded.glass_radius,
+				background_media_id = excluded.background_media_id,
+				background_poster_media_id = excluded.background_poster_media_id,
+				cover_media_id = excluded.cover_media_id,
+				updated_at = excluded.updated_at;`
+		).bind(
+			"draft",
+			merged.palette,
+			merged.glass_intensity,
+			merged.background_type,
+			merged.background_src || "",
+			merged.background_poster || "",
+			merged.background_animation ?? 1,
+			merged.background_overlay_opacity ?? 0.45,
+			merged.cover_enabled ?? 0,
+			merged.cover_url || "",
+			merged.cover_aspect_ratio || "16:9",
+			merged.accent_color || "#8b5cf6",
+			merged.background_position_x ?? 50.0,
+			merged.background_position_y ?? 50.0,
+			merged.background_scale ?? 1.0,
+			merged.background_overlay_color || "rgba(248, 250, 252, 0.45)",
+			merged.background_brightness ?? 1.0,
+			merged.glass_blur || "16px",
+			merged.glass_opacity ?? 0.70,
+			merged.glass_tint || "rgba(255, 255, 255, 0.65)",
+			merged.glass_border_opacity ?? 0.30,
+			merged.glass_highlight_intensity ?? 0.40,
+			merged.glass_shadow_intensity ?? 0.15,
+			merged.glass_radius || "1.5rem",
+			merged.background_media_id || "",
+			merged.background_poster_media_id || "",
+			merged.cover_media_id || "",
+			now
+		),
+		db.prepare(
+			`UPDATE publish_metadata
+			 SET has_unpublished_changes = 1, draft_updated_at = ?
+			 WHERE id = 'current';`
+		).bind(now),
+	]);
+
+	return merged;
+}
+
+/**
+ * Resets draft appearance settings back to clean default visual tokens.
+ */
+export async function resetDraftAppearance(db: D1Database): Promise<AppearanceRecord> {
+	return await saveDraftAppearance(db, DEFAULT_APPEARANCE);
+}
+
+/**
  * Atomically publishes all draft changes to the published state.
  */
 export async function publishAllDrafts(
@@ -898,13 +1094,14 @@ export async function publishAllDrafts(
 	await db.batch([
 		// 1. Promote profile draft to published
 		db.prepare(
-			`INSERT INTO profile (id, name, handle, avatar_url, location_id, location_en, bio_id, bio_en, updated_at)
-			 SELECT 'published', name, handle, avatar_url, location_id, location_en, bio_id, bio_en, ?
+			`INSERT INTO profile (id, name, handle, avatar_url, avatar_media_id, location_id, location_en, bio_id, bio_en, updated_at)
+			 SELECT 'published', name, handle, avatar_url, avatar_media_id, location_id, location_en, bio_id, bio_en, ?
 			 FROM profile WHERE id = 'draft'
 			 ON CONFLICT(id) DO UPDATE SET
 			   name = excluded.name,
 			   handle = excluded.handle,
 			   avatar_url = excluded.avatar_url,
+			   avatar_media_id = excluded.avatar_media_id,
 			   location_id = excluded.location_id,
 			   location_en = excluded.location_en,
 			   bio_id = excluded.bio_id,
@@ -928,7 +1125,70 @@ export async function publishAllDrafts(
 			 FROM contact_methods_draft;`
 		),
 
-		// 4. Update publish metadata
+		// 4. Promote appearance_settings draft to published
+		db.prepare(
+			`INSERT INTO appearance_settings (
+				id, palette, glass_intensity, background_type, background_src, background_poster,
+				background_animation, background_overlay_opacity, cover_enabled, cover_url, cover_aspect_ratio,
+				accent_color, background_position_x, background_position_y, background_scale,
+				background_overlay_color, background_brightness, glass_blur, glass_opacity, glass_tint,
+				glass_border_opacity, glass_highlight_intensity, glass_shadow_intensity, glass_radius,
+				background_media_id, background_poster_media_id, cover_media_id, updated_at
+			)
+			SELECT
+				'published', palette, glass_intensity, background_type, background_src, background_poster,
+				background_animation, background_overlay_opacity, cover_enabled, cover_url, cover_aspect_ratio,
+				accent_color, background_position_x, background_position_y, background_scale,
+				background_overlay_color, background_brightness, glass_blur, glass_opacity, glass_tint,
+				glass_border_opacity, glass_highlight_intensity, glass_shadow_intensity, glass_radius,
+				background_media_id, background_poster_media_id, cover_media_id, ?
+			FROM appearance_settings WHERE id = 'draft'
+			ON CONFLICT(id) DO UPDATE SET
+				palette = excluded.palette,
+				glass_intensity = excluded.glass_intensity,
+				background_type = excluded.background_type,
+				background_src = excluded.background_src,
+				background_poster = excluded.background_poster,
+				background_animation = excluded.background_animation,
+				background_overlay_opacity = excluded.background_overlay_opacity,
+				cover_enabled = excluded.cover_enabled,
+				cover_url = excluded.cover_url,
+				cover_aspect_ratio = excluded.cover_aspect_ratio,
+				accent_color = excluded.accent_color,
+				background_position_x = excluded.background_position_x,
+				background_position_y = excluded.background_position_y,
+				background_scale = excluded.background_scale,
+				background_overlay_color = excluded.background_overlay_color,
+				background_brightness = excluded.background_brightness,
+				glass_blur = excluded.glass_blur,
+				glass_opacity = excluded.glass_opacity,
+				glass_tint = excluded.glass_tint,
+				glass_border_opacity = excluded.glass_border_opacity,
+				glass_highlight_intensity = excluded.glass_highlight_intensity,
+				glass_shadow_intensity = excluded.glass_shadow_intensity,
+				glass_radius = excluded.glass_radius,
+				background_media_id = excluded.background_media_id,
+				background_poster_media_id = excluded.background_poster_media_id,
+				cover_media_id = excluded.cover_media_id,
+				updated_at = excluded.updated_at;`
+		).bind(now),
+
+		// 5. Update status of referenced media assets to 'published'
+		db.prepare(
+			`UPDATE media_assets
+			 SET status = 'published', updated_at = ?
+			 WHERE id IN (
+				SELECT avatar_media_id FROM profile WHERE id = 'draft' AND avatar_media_id != ''
+				UNION
+				SELECT background_media_id FROM appearance_settings WHERE id = 'draft' AND background_media_id != ''
+				UNION
+				SELECT background_poster_media_id FROM appearance_settings WHERE id = 'draft' AND background_poster_media_id != ''
+				UNION
+				SELECT cover_media_id FROM appearance_settings WHERE id = 'draft' AND cover_media_id != ''
+			 );`
+		).bind(now),
+
+		// 6. Update publish metadata
 		db.prepare(
 			`INSERT INTO publish_metadata (id, version, published_at, published_by, notes, has_unpublished_changes, draft_updated_at)
 			 VALUES ('current', ?, ?, ?, 'Published from MOBIO Studio', 0, ?)
@@ -954,13 +1214,14 @@ export async function discardAllDrafts(db: D1Database): Promise<void> {
 	await db.batch([
 		// 1. Reset profile draft from published
 		db.prepare(
-			`INSERT INTO profile (id, name, handle, avatar_url, location_id, location_en, bio_id, bio_en, updated_at)
-			 SELECT 'draft', name, handle, avatar_url, location_id, location_en, bio_id, bio_en, ?
+			`INSERT INTO profile (id, name, handle, avatar_url, avatar_media_id, location_id, location_en, bio_id, bio_en, updated_at)
+			 SELECT 'draft', name, handle, avatar_url, avatar_media_id, location_id, location_en, bio_id, bio_en, ?
 			 FROM profile WHERE id = 'published'
 			 ON CONFLICT(id) DO UPDATE SET
 			   name = excluded.name,
 			   handle = excluded.handle,
 			   avatar_url = excluded.avatar_url,
+			   avatar_media_id = excluded.avatar_media_id,
 			   location_id = excluded.location_id,
 			   location_en = excluded.location_en,
 			   bio_id = excluded.bio_id,
@@ -984,7 +1245,55 @@ export async function discardAllDrafts(db: D1Database): Promise<void> {
 			 FROM contact_methods;`
 		),
 
-		// 4. Mark draft changes cleared
+		// 4. Reset appearance_settings draft from published
+		db.prepare(
+			`INSERT INTO appearance_settings (
+				id, palette, glass_intensity, background_type, background_src, background_poster,
+				background_animation, background_overlay_opacity, cover_enabled, cover_url, cover_aspect_ratio,
+				accent_color, background_position_x, background_position_y, background_scale,
+				background_overlay_color, background_brightness, glass_blur, glass_opacity, glass_tint,
+				glass_border_opacity, glass_highlight_intensity, glass_shadow_intensity, glass_radius,
+				background_media_id, background_poster_media_id, cover_media_id, updated_at
+			)
+			SELECT
+				'draft', palette, glass_intensity, background_type, background_src, background_poster,
+				background_animation, background_overlay_opacity, cover_enabled, cover_url, cover_aspect_ratio,
+				accent_color, background_position_x, background_position_y, background_scale,
+				background_overlay_color, background_brightness, glass_blur, glass_opacity, glass_tint,
+				glass_border_opacity, glass_highlight_intensity, glass_shadow_intensity, glass_radius,
+				background_media_id, background_poster_media_id, cover_media_id, ?
+			FROM appearance_settings WHERE id = 'published'
+			ON CONFLICT(id) DO UPDATE SET
+				palette = excluded.palette,
+				glass_intensity = excluded.glass_intensity,
+				background_type = excluded.background_type,
+				background_src = excluded.background_src,
+				background_poster = excluded.background_poster,
+				background_animation = excluded.background_animation,
+				background_overlay_opacity = excluded.background_overlay_opacity,
+				cover_enabled = excluded.cover_enabled,
+				cover_url = excluded.cover_url,
+				cover_aspect_ratio = excluded.cover_aspect_ratio,
+				accent_color = excluded.accent_color,
+				background_position_x = excluded.background_position_x,
+				background_position_y = excluded.background_position_y,
+				background_scale = excluded.background_scale,
+				background_overlay_color = excluded.background_overlay_color,
+				background_brightness = excluded.background_brightness,
+				glass_blur = excluded.glass_blur,
+				glass_opacity = excluded.glass_opacity,
+				glass_tint = excluded.glass_tint,
+				glass_border_opacity = excluded.glass_border_opacity,
+				glass_highlight_intensity = excluded.glass_highlight_intensity,
+				glass_shadow_intensity = excluded.glass_shadow_intensity,
+				glass_radius = excluded.glass_radius,
+				background_media_id = excluded.background_media_id,
+				background_poster_media_id = excluded.background_poster_media_id,
+				cover_media_id = excluded.cover_media_id,
+				updated_at = excluded.updated_at;`
+		).bind(now),
+
+		// 5. Mark draft changes cleared
 		db.prepare(
 			`UPDATE publish_metadata
 			 SET has_unpublished_changes = 0, draft_updated_at = ?

@@ -26,6 +26,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		name?: string;
 		handle?: string;
 		avatar_url?: string;
+		avatar_media_id?: string;
 		location_id?: string;
 		location_en?: string;
 		bio_id?: string;
@@ -69,6 +70,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		name,
 		handle,
 		avatar_url: avatarUrl,
+		avatar_media_id: (body.avatar_media_id || "").trim(),
 		location_id: (body.location_id || "").trim(),
 		location_en: (body.location_en || "").trim(),
 		bio_id: (body.bio_id || "").trim(),

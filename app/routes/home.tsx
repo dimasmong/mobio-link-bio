@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { Route } from "./+types/home";
 import { profileData, type Language } from "../data/profile";
-import { getProfileRecord, getLinks, getContactMethods, getPublishMetadata } from "../lib/db.server";
+import {
+	getProfileRecord,
+	getLinks,
+	getContactMethods,
+	getAppearanceRecord,
+	getPublishMetadata,
+	type AppearanceRecord,
+} from "../lib/db.server";
 import { FixedBackground } from "../components/FixedBackground";
 import { FloatingNav, type TabId } from "../components/FloatingNav";
 import { LanguageToggle } from "../components/LanguageToggle";
@@ -43,15 +50,19 @@ export function meta({ data }: Route.MetaArgs) {
 export async function loader({ context }: Route.LoaderArgs) {
 	const env = context.cloudflare?.env;
 	let profile = { ...profileData };
+	let appearance: AppearanceRecord | null = null;
 
 	if (env?.DB) {
 		try {
-			const [dbProfile, dbLinks, dbContacts, pubMeta] = await Promise.all([
+			const [dbProfile, dbLinks, dbContacts, dbAppearance, pubMeta] = await Promise.all([
 				getProfileRecord(env.DB, "published"),
 				getLinks(env.DB, "published", true),
 				getContactMethods(env.DB, "published", true),
+				getAppearanceRecord(env.DB, "published"),
 				getPublishMetadata(env.DB),
 			]);
+
+			appearance = dbAppearance;
 
 			const isPublishedActive = Boolean(
 				(pubMeta && pubMeta.version > 1) ||
@@ -60,11 +71,16 @@ export async function loader({ context }: Route.LoaderArgs) {
 			);
 
 			if (isPublishedActive && dbProfile) {
+				let avatarUrl = dbProfile.avatar_url || profileData.avatarUrl;
+				if (dbProfile.avatar_media_id && dbProfile.avatar_media_id.trim() !== "") {
+					avatarUrl = `/api/public/media/${dbProfile.avatar_media_id.trim()}`;
+				}
+
 				profile = {
 					...profileData,
 					name: dbProfile.name || profileData.name,
 					handle: dbProfile.handle || profileData.handle,
-					avatarUrl: dbProfile.avatar_url || profileData.avatarUrl,
+					avatarUrl,
 					location: {
 						id: dbProfile.location_id || "",
 						en: dbProfile.location_en || "",
@@ -97,6 +113,45 @@ export async function loader({ context }: Route.LoaderArgs) {
 					},
 				};
 			}
+
+			// Apply appearance customizations to background and cover
+			if (dbAppearance) {
+				let bgSrc = dbAppearance.background_src || profile.background.src;
+				if (dbAppearance.background_media_id && dbAppearance.background_media_id.trim() !== "") {
+					bgSrc = `/api/public/media/${dbAppearance.background_media_id.trim()}`;
+				}
+
+				let bgPoster = dbAppearance.background_poster || profile.background.poster;
+				if (dbAppearance.background_poster_media_id && dbAppearance.background_poster_media_id.trim() !== "") {
+					bgPoster = `/api/public/media/${dbAppearance.background_poster_media_id.trim()}`;
+				}
+
+				let coverUrl = dbAppearance.cover_url || profile.cover.coverUrl;
+				if (dbAppearance.cover_media_id && dbAppearance.cover_media_id.trim() !== "") {
+					coverUrl = `/api/public/media/${dbAppearance.cover_media_id.trim()}`;
+				}
+
+				profile.background = {
+					...profile.background,
+					type: dbAppearance.background_type,
+					src: bgSrc,
+					poster: bgPoster,
+					position: `${dbAppearance.background_position_x ?? 50}% ${dbAppearance.background_position_y ?? 50}%`,
+					scale: dbAppearance.background_scale ?? 1.0,
+					overlayColor: dbAppearance.background_overlay_color || "rgba(248, 250, 252, 0.45)",
+					overlayOpacity: dbAppearance.background_overlay_opacity ?? 0.45,
+					brightness: dbAppearance.background_brightness ?? 1.0,
+					blur: dbAppearance.glass_blur || "0px",
+					animation: Boolean(dbAppearance.background_animation),
+				};
+
+				profile.cover = {
+					...profile.cover,
+					enabled: Boolean(dbAppearance.cover_enabled),
+					coverUrl,
+					aspectRatio: dbAppearance.cover_aspect_ratio || "aspect-[21/9]",
+				};
+			}
 		} catch (err) {
 			// Fail-safe: if D1 fails, gracefully fallback to static profileData
 			console.warn("Could not load published profile from D1, using static profileData:", err);
@@ -105,6 +160,7 @@ export async function loader({ context }: Route.LoaderArgs) {
 
 	return {
 		profile,
+		appearance,
 		initialLang: "id" as Language,
 	};
 }
@@ -120,6 +176,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	const [lang, setLang] = useState<Language>(loaderData.initialLang || "id");
 	const [activeTab, setActiveTab] = useState<TabId>("home");
 	const profile = loaderData.profile || profileData;
+	const appearance = loaderData.appearance;
+
+	const dynamicStyles: React.CSSProperties = {
+		...(appearance?.accent_color ? ({ "--aurora-violet": appearance.accent_color } as React.CSSProperties) : {}),
+		...(appearance?.glass_blur ? ({ "--glass-blur": appearance.glass_blur } as React.CSSProperties) : {}),
+		...(appearance?.glass_tint ? ({ "--glass-surface-primary": appearance.glass_tint } as React.CSSProperties) : {}),
+	};
 
 	// Synchronize tab state with URL hash and browser history (Back / Forward buttons)
 	useEffect(() => {
@@ -161,7 +224,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	);
 
 	return (
-		<div className="relative min-h-screen text-slate-900 selection:bg-violet-200 selection:text-violet-900">
+		<div
+			className="relative min-h-screen text-slate-900 selection:bg-violet-200 selection:text-violet-900"
+			data-theme={appearance?.palette === "dark-liquid" ? "dark" : undefined}
+			style={dynamicStyles}
+		>
 			{/* Fixed Fullscreen Background (Gradient Mesh, Image, or Video with safe playback & readability overlay) */}
 			<FixedBackground config={profile.background} />
 
