@@ -148,16 +148,16 @@ export interface ProfileData {
 
 export const profileData: ProfileData = {
 	// [DATA PROFIL PEMILIK] Ganti dengan nama dan username Anda
-	name: "[Nama Anda]",
+	name: "Your Name",
 	handle: "@username",
 	avatarUrl: "", // Kosongkan untuk avatar monogram inisial otomatis, atau isi e.g. "/images/avatar.jpg"
 	location: {
-		id: "Indonesia",
-		en: "Indonesia",
+		id: "",
+		en: "",
 	},
 	bio: {
-		id: "Selamat datang di Link in Bio saya. Kustomisasi deskripsi ini untuk merepresentasikan profil dan karya Anda.",
-		en: "Welcome to my Link in Bio. Customize this description to represent your profile and works.",
+		id: "",
+		en: "",
 	},
 
 	// Background Kustom (Fixed, Fullscreen, Responsive)

@@ -55,7 +55,7 @@ Each installation is completely sovereign: it runs on your own Cloudflare accoun
    database_name = "mobio-db"
    database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
    ```
-4. Open [wrangler.json](file:///c:/Users/Dimas%20Mong/Downloads/Project/Link%20in%20Bio/wrangler.json) and replace `database_id` with your actual UUID from step 3:
+4. Open `wrangler.json` and replace `database_id` with your actual UUID from step 3:
    ```json
    "d1_databases": [
      {
@@ -127,7 +127,7 @@ Cloudflare Zero Trust Access protects `/studio` without requiring third-party au
 
 ### Step 5: Configure Environment Variables in `wrangler.json`
 
-In [wrangler.json](file:///c:/Users/Dimas%20Mong/Downloads/Project/Link%20in%20Bio/wrangler.json):
+In `wrangler.json`:
 ```json
 "vars": {
   "VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare",
@@ -144,7 +144,7 @@ In [wrangler.json](file:///c:/Users/Dimas%20Mong/Downloads/Project/Link%20in%20B
 
 ### Step 6: Local Development & Testing
 
-1. For local development, copy [.dev.vars.example](file:///c:/Users/Dimas%20Mong/Downloads/Project/Link%20in%20Bio/.dev.vars.example) to `.dev.vars`:
+1. For local development, copy `.dev.vars.example` to `.dev.vars`:
    ```bash
    cp .dev.vars.example .dev.vars
    ```

@@ -78,7 +78,7 @@ async function runTests() {
 		const res = await page.goto(BASE_URL, { waitUntil: "networkidle" });
 		const h1Text = await page.textContent("header h1");
 		const hasTabs = (await page.$("#tabpanel-home")) !== null;
-		report.publicHomepageIntact = res.status() === 200 && (h1Text.includes("Your Name") || h1Text.includes("Dimas Mong")) && hasTabs;
+		report.publicHomepageIntact = res.status() === 200 && h1Text.includes("Your Name") && hasTabs;
 		console.log(`  ✓ Public homepage status: ${res.status()}, Profile: "${h1Text.trim()}"`);
 	} catch (err) {
 		console.error("  ✗ Public homepage check failed:", err.message);

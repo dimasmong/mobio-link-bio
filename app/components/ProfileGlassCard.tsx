@@ -21,6 +21,7 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 	const initials = getInitials(profile.name);
 	const hasAvatar = Boolean(profile.avatarUrl && profile.avatarUrl.trim() !== "");
 	const hasLocation = Boolean(profile.location && profile.location[lang]?.trim());
+	const hasBio = Boolean(profile.bio && profile.bio[lang]?.trim());
 
 	return (
 		<header className="w-full relative z-10">
@@ -66,7 +67,11 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 					</h1>
 
 					{/* Username / Handle and Optional Location */}
-					<div className="flex items-center justify-center flex-wrap gap-2 text-xs sm:text-sm text-slate-500 mb-4">
+					<div
+						className={`flex items-center justify-center flex-wrap gap-2 text-xs sm:text-sm text-slate-500 ${
+							hasBio ? "mb-4" : "mb-0"
+						}`}
+					>
 						<span className="font-semibold text-violet-700 bg-violet-100/70 px-2.5 py-0.5 rounded-full border border-violet-200/50">
 							{profile.handle}
 						</span>
@@ -81,10 +86,12 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 						)}
 					</div>
 
-					{/* Biography (No external links, no badges, pure bio) */}
-					<p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md sm:max-w-lg md:max-w-xl mx-auto font-normal">
-						{profile.bio[lang]}
-					</p>
+					{/* Biography (Rendered only if bio is non-empty) */}
+					{hasBio && (
+						<p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md sm:max-w-lg md:max-w-xl mx-auto font-normal">
+							{profile.bio[lang]}
+						</p>
+					)}
 				</div>
 			</div>
 		</header>

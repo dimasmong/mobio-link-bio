@@ -202,8 +202,9 @@ dist
 .react-router/
 /build/
 
-### Test Artifacts ###
+### Test Artifacts & Backups ###
 test-artifacts/
+backups/
 
 ### Generated Types & Agent Metadata ###
 worker-configuration.d.ts

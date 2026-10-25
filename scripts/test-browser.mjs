@@ -51,7 +51,7 @@ async function runBrowserTests() {
 		if (response && response.status() === 200) {
 			const title = await page.title();
 			console.log(`✓ Page loaded successfully. Title: "${title}"`);
-			results.ssrCheck = title.includes("Dimas Mong");
+			results.ssrCheck = title.includes("Link in Bio");
 		}
 
 		// 2. Viewport & Responsiveness Tests (Checking for horizontal overflow)
