@@ -93,11 +93,14 @@ export function VerticalLinkList({ links, lang }: VerticalLinkListProps) {
 			<div className="w-full flex flex-col gap-3 sm:gap-3.5">
 				{activeLinks.map((link) => {
 					const isEmail = link.url.startsWith("mailto:");
+					const href = (!isEmail && link.id && !link.id.startsWith("profile-") && !link.url.startsWith("#"))
+						? `/go/${link.id}`
+						: link.url;
 
 					return (
 						<a
 							key={link.id}
-							href={link.url}
+							href={href}
 							target={isEmail ? undefined : "_blank"}
 							rel={isEmail ? undefined : "noopener noreferrer"}
 							className="glass-liquid-card rounded-2xl sm:rounded-full px-5 py-4 sm:py-4.5 flex items-center justify-between gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"

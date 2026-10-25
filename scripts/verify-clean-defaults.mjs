@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
 
-const BASE_URL = process.env.TEST_URL || "http://localhost:5174";
+const BASE_URL = (process.env.TEST_URL || "http://localhost:5173").trim();
 const SCREENSHOT_DIR = path.resolve(process.cwd(), "test-artifacts/screenshots/clean-defaults");
 
 if (!fs.existsSync(SCREENSHOT_DIR)) {

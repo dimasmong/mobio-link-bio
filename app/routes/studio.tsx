@@ -19,6 +19,7 @@ import {
 	type PublishMetadataRecord,
 } from "../lib/db.server";
 import type { MediaAssetRecord } from "../lib/media.server";
+import { getClickSummary, type ClickAnalyticsSummary } from "../lib/analytics.server";
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -47,11 +48,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			draftAppearance: null as AppearanceRecord | null,
 			draftExplore: [] as ExploreItemRecord[],
 			publishMetadata: null as PublishMetadataRecord | null,
+			initialAnalytics: null as ClickAnalyticsSummary | null,
 			envMode: import.meta.env.MODE,
 		};
 	}
 
-	const [dbStatus, draftProfile, draftLinks, draftContacts, draftExplore, draftAppearance, publishMetadata] = await Promise.all([
+	const [dbStatus, draftProfile, draftLinks, draftContacts, draftExplore, draftAppearance, publishMetadata, initialAnalytics] = await Promise.all([
 		getDatabaseStatus(env?.DB),
 		env?.DB ? getProfileRecord(env.DB, "draft") : null,
 		env?.DB ? getLinks(env.DB, "draft") : [],
@@ -59,6 +61,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		env?.DB ? getExploreItems(env.DB, "draft") : [],
 		env?.DB ? getAppearanceRecord(env.DB, "draft") : null,
 		env?.DB ? getPublishMetadata(env.DB) : null,
+		env?.DB ? getClickSummary(env.DB, "7d") : null,
 	]);
 
 	return {
@@ -73,6 +76,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		draftExplore,
 		draftAppearance,
 		publishMetadata,
+		initialAnalytics,
 		envMode: import.meta.env.MODE,
 	};
 }
@@ -101,8 +105,8 @@ const navTabs: NavTab[] = [
 	{ id: "contact", label: "Contact", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
 	{ id: "appearance", label: "Appearance", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
 	{ id: "explore", label: "Explore", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
-	{ id: "clicks", label: "Click Monitor", badge: "Phase 5" },
-	{ id: "settings", label: "Settings", badge: "Phase 6" },
+	{ id: "clicks", label: "Click Monitor", badge: "Monitor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
+	{ id: "settings", label: "Settings", badge: "System", badgeColor: "bg-slate-800 text-slate-300 border-slate-700" },
 ];
 
 const defaultAppearanceFallback: AppearanceRecord = {
@@ -257,6 +261,58 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		artist: "",
 		is_enabled: true,
 	});
+
+	// Analytics state (Phase 5)
+	const [analyticsRange, setAnalyticsRange] = useState<"today" | "7d" | "30d" | "all">("7d");
+	const [analyticsData, setAnalyticsData] = useState<ClickAnalyticsSummary | null>(loaderData.initialAnalytics || null);
+	const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+	const [isResetAnalyticsOpen, setIsResetAnalyticsOpen] = useState(false);
+	const [isResettingAnalytics, setIsResettingAnalytics] = useState(false);
+
+	const fetchAnalytics = async (range: "today" | "7d" | "30d" | "all") => {
+		setAnalyticsRange(range);
+		setIsLoadingAnalytics(true);
+		try {
+			const res = await fetch(`/api/studio/analytics?range=${range}`);
+			if (!res.ok) throw new Error("Gagal memuat analitik");
+			const data = (await res.json()) as { status: string; analytics: ClickAnalyticsSummary };
+			setAnalyticsData(data.analytics);
+		} catch (err) {
+			console.error("fetchAnalytics error:", err);
+			showToast("Gagal memuat data analitik klik.", "error");
+		} finally {
+			setIsLoadingAnalytics(false);
+		}
+	};
+
+	const handleResetAnalytics = async () => {
+		setIsResettingAnalytics(true);
+		try {
+			const res = await fetch("/api/studio/analytics", { method: "DELETE" });
+			if (!res.ok) throw new Error("Gagal mereset analitik");
+			await fetchAnalytics(analyticsRange);
+			setIsResetAnalyticsOpen(false);
+			showToast("Data analitik klik berhasil direset.", "success");
+		} catch (err) {
+			console.error("handleResetAnalytics error:", err);
+			showToast("Gagal mereset data analitik klik.", "error");
+		} finally {
+			setIsResettingAnalytics(false);
+		}
+	};
+
+	const copyToClipboard = async (text: string, label: string = "URL") => {
+		try {
+			if (typeof navigator !== "undefined" && navigator.clipboard) {
+				await navigator.clipboard.writeText(text);
+				showToast(`${label} berhasil disalin ke clipboard!`, "success");
+			} else {
+				showToast("Clipboard tidak didukung pada browser ini.", "error");
+			}
+		} catch {
+			showToast("Gagal menyalin ke clipboard.", "error");
+		}
+	};
 
 	// Sync initial section from URL query parameter e.g. /studio?tab=profile
 	useEffect(() => {
@@ -3030,36 +3086,472 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 					)}
 
 					{/* =========================================================================
-					    ROADMAP SECTIONS (HONEST PHASE 5 & 6)
+					    SECTION: CLICK MONITOR & LINK ANALYTICS (PHASE 5)
 					    ========================================================================= */}
-					{["clicks", "settings"].includes(activeSection) && (
-						<div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 sm:p-12 text-center flex flex-col items-center">
-							<div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 flex items-center justify-center mb-4">
-								<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-									/>
-								</svg>
+					{activeSection === "clicks" && (
+						<div className="space-y-6">
+							{/* Header Bar */}
+							<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
+								<div>
+									<div className="flex items-center gap-2 mb-1">
+										<span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+										<h2 className="text-lg sm:text-xl font-bold text-white">
+											Click Monitor & Analitik Tautan
+										</h2>
+									</div>
+									<p className="text-xs sm:text-sm text-slate-400">
+										Telemetri terdistribusi Cloudflare D1. Bebas pelacakan cookie & PII (Personally Identifiable Information).
+									</p>
+								</div>
+
+								<div className="flex flex-wrap items-center gap-2">
+									{/* Range Filter Pills */}
+									<div className="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800 text-xs font-semibold">
+										{(
+											[
+												{ id: "today", label: "Hari Ini" },
+												{ id: "7d", label: "7 Hari" },
+												{ id: "30d", label: "30 Hari" },
+												{ id: "all", label: "Semua" },
+											] as const
+										).map((r) => (
+											<button
+												key={r.id}
+												type="button"
+												onClick={() => fetchAnalytics(r.id)}
+												disabled={isLoadingAnalytics}
+												className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+													analyticsRange === r.id
+														? "bg-violet-600 text-white shadow-sm"
+														: "text-slate-400 hover:text-white"
+												}`}
+											>
+												{r.label}
+											</button>
+										))}
+									</div>
+
+									{/* Refresh Button */}
+									<button
+										type="button"
+										onClick={() => fetchAnalytics(analyticsRange)}
+										disabled={isLoadingAnalytics}
+										title="Muat Ulang Analitik"
+										className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer disabled:opacity-50"
+									>
+										<svg
+											className={`w-4 h-4 ${isLoadingAnalytics ? "animate-spin text-violet-400" : ""}`}
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+											/>
+										</svg>
+									</button>
+
+									{/* Reset Clicks Button */}
+									<button
+										type="button"
+										onClick={() => setIsResetAnalyticsOpen(true)}
+										className="px-3 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800 text-rose-300 hover:text-rose-100 text-xs font-semibold transition-colors cursor-pointer"
+									>
+										Reset Klik
+									</button>
+								</div>
 							</div>
 
-							<h3 className="text-lg font-bold text-white mb-1">
-								Modul {navTabs.find((t) => t.id === activeSection)?.label}
-							</h3>
-							<p className="text-xs sm:text-sm text-slate-400 max-w-md leading-relaxed mb-6">
-								Fitur ini dijadwalkan pada <strong>Phase 4 & 5 (Click Monitor, Explore Showcase & Advanced Settings)</strong>.
-								Sesuai batasan implementasi, modul ini belum aktif dan tidak menyediakan form atau tombol palsu.
-							</p>
+							{/* 4 Metric Cards */}
+							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+									<div className="flex items-center justify-between text-slate-400 mb-2">
+										<span className="text-xs font-semibold uppercase tracking-wider">Total Klik ({analyticsRange})</span>
+										<span className="p-1.5 rounded-lg bg-violet-950/60 text-violet-400">
+											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+											</svg>
+										</span>
+									</div>
+									<div className="text-2xl sm:text-3xl font-extrabold text-white">
+										{analyticsData?.totalClicksPeriod ?? 0}
+									</div>
+									<div className="text-[11px] text-slate-500 mt-2">
+										Akumulasi klik dalam periode terpilih
+									</div>
+								</div>
 
-							<button
-								type="button"
-								onClick={() => handleSelectSection("overview")}
-								className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
-							>
-								Kembali ke Overview
-							</button>
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+									<div className="flex items-center justify-between text-slate-400 mb-2">
+										<span className="text-xs font-semibold uppercase tracking-wider">Klik Hari Ini</span>
+										<span className="p-1.5 rounded-lg bg-emerald-950/60 text-emerald-400">
+											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+											</svg>
+										</span>
+									</div>
+									<div className="text-2xl sm:text-3xl font-extrabold text-white">
+										{analyticsData?.todayClicks ?? 0}
+									</div>
+									<div className="text-[11px] text-slate-500 mt-2">
+										Sejak pukul 00:00 UTC hari ini
+									</div>
+								</div>
+
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+									<div className="flex items-center justify-between text-slate-400 mb-2">
+										<span className="text-xs font-semibold uppercase tracking-wider">Tautan Terpantau</span>
+										<span className="p-1.5 rounded-lg bg-cyan-950/60 text-cyan-400">
+											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+											</svg>
+										</span>
+									</div>
+									<div className="text-2xl sm:text-3xl font-extrabold text-white">
+										{analyticsData?.activeLinksCount ?? 0}
+									</div>
+									<div className="text-[11px] text-slate-500 mt-2">
+										Tautan aktif di database D1
+									</div>
+								</div>
+
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+									<div className="flex items-center justify-between text-slate-400 mb-2">
+										<span className="text-xs font-semibold uppercase tracking-wider">Tautan Terpopuler</span>
+										<span className="p-1.5 rounded-lg bg-amber-950/60 text-amber-400">
+											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+											</svg>
+										</span>
+									</div>
+									<div className="text-sm font-bold text-white truncate" title={analyticsData?.topLink?.titleId || analyticsData?.topLink?.titleEn || "Belum ada klik"}>
+										{analyticsData?.topLink ? (analyticsData.topLink.titleId || analyticsData.topLink.titleEn) : "Belum ada interaksi"}
+									</div>
+									<div className="text-[11px] text-slate-500 mt-2">
+										{analyticsData?.topLink ? `${analyticsData.topLink.clicks} klik (${analyticsData.topLink.percentage}% dari total)` : "Menunggu klik pertama"}
+									</div>
+								</div>
+							</div>
+
+							{/* Daily Activity Chart */}
+							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
+								<div className="flex items-center justify-between mb-4">
+									<div>
+										<h3 className="text-sm font-bold text-white">Aktivitas Tren Klik Harian</h3>
+										<p className="text-xs text-slate-400">Frekuensi interaksi pengunjung per hari</p>
+									</div>
+									<div className="text-xs text-slate-400 font-mono">
+										Total {analyticsData?.timeSeries?.reduce((acc, curr) => acc + curr.clicks, 0) ?? 0} klik
+									</div>
+								</div>
+
+								{(() => {
+									const series = analyticsData?.timeSeries || [];
+									const maxClicks = Math.max(...series.map((s) => s.clicks), 1);
+
+									if (series.length === 0) {
+										return (
+											<div className="h-40 flex items-center justify-center text-xs text-slate-500 italic">
+												Belum ada data tren harian untuk ditampilkan.
+											</div>
+										);
+									}
+
+									return (
+										<div className="pt-6 pb-2">
+											<div className="h-44 flex items-end gap-2 sm:gap-4 overflow-x-auto pb-4 border-b border-slate-800">
+												{series.map((item, idx) => {
+													const heightPercent = Math.max(item.clicks > 0 ? 12 : 3, Math.round((item.clicks / maxClicks) * 100));
+													return (
+														<div
+															key={idx}
+															className="flex-1 min-w-[2.2rem] flex flex-col items-center gap-2 group h-full justify-end"
+														>
+															<span className="text-[10px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+																{item.clicks}
+															</span>
+															<div
+																className="w-full rounded-t-lg transition-all duration-300 relative group-hover:brightness-125"
+																style={{
+																	height: `${heightPercent}%`,
+																	background: item.clicks > 0
+																		? "linear-gradient(to top, #7c3aed, #a78bfa)"
+																		: "#1e293b",
+																}}
+															>
+																<div className="absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg">
+																	{item.clicks} klik
+																</div>
+															</div>
+															<span className="text-[10px] text-slate-500 whitespace-nowrap">
+																{item.label}
+															</span>
+														</div>
+													);
+												})}
+											</div>
+										</div>
+									);
+								})()}
+							</div>
+
+							{/* Link Performance Breakdown & First-Party URLs */}
+							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
+								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+									<div>
+										<h3 className="text-sm font-bold text-white">Peringkat & Performa Tautan</h3>
+										<p className="text-xs text-slate-400">
+											Rincian klik dan tautan first-party redirect (<code className="text-violet-400">/go/:linkId</code>)
+										</p>
+									</div>
+									<span className="text-xs text-slate-500">
+										{analyticsData?.linkBreakdown?.length ?? 0} tautan terdaftar
+									</span>
+								</div>
+
+								{(!analyticsData?.linkBreakdown || analyticsData.linkBreakdown.length === 0) ? (
+									<div className="p-8 text-center text-xs text-slate-500 italic border border-slate-800 rounded-2xl">
+										Belum ada data tautan aktif di database.
+									</div>
+								) : (
+									<div className="space-y-3">
+										{analyticsData.linkBreakdown.map((item, idx) => {
+											const redirectUrl = typeof window !== "undefined"
+												? `${window.location.origin}/go/${item.linkId}`
+												: `/go/${item.linkId}`;
+
+											return (
+												<div
+													key={item.linkId}
+													className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 hover:border-slate-700 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
+												>
+													<div className="flex items-start gap-3 min-w-0 flex-1">
+														<div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs shrink-0">
+															#{idx + 1}
+														</div>
+														<div className="min-w-0 flex-1">
+															<div className="flex items-center gap-2 mb-0.5">
+																<h4 className="text-xs sm:text-sm font-bold text-white truncate">
+																	{item.titleId || item.titleEn}
+																</h4>
+																{item.platform && (
+																	<span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-violet-950/60 text-violet-300 border border-violet-800/50">
+																		{item.platform}
+																	</span>
+																)}
+															</div>
+															<div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 truncate">
+																<a
+																	href={item.url}
+																	target="_blank"
+																	rel="noopener noreferrer"
+																	className="hover:text-violet-400 truncate max-w-xs"
+																>
+																	{item.url}
+																</a>
+																<span>•</span>
+																<span className="font-mono text-[11px] text-violet-400">
+																	/go/{item.linkId}
+																</span>
+															</div>
+														</div>
+													</div>
+
+													<div className="flex items-center gap-4 shrink-0">
+														<button
+															type="button"
+															onClick={() => copyToClipboard(redirectUrl, "URL Pengalihan")}
+															className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium border border-slate-700 transition-colors cursor-pointer flex items-center gap-1.5"
+														>
+															<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+															</svg>
+															<span>Salin /go</span>
+														</button>
+
+														<div className="text-right min-w-[5rem]">
+															<div className="text-sm font-extrabold text-white">
+																{item.clicks} <span className="text-xs font-normal text-slate-400">klik</span>
+															</div>
+															<div className="text-[11px] text-slate-500 font-mono">
+																{item.percentage}%
+															</div>
+														</div>
+													</div>
+												</div>
+											);
+										})}
+									</div>
+								)}
+							</div>
+
+							{/* Top Referrers */}
+							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
+								<h3 className="text-sm font-bold text-white mb-1">Sumber Lalu Lintas (Top Referrers)</h3>
+								<p className="text-xs text-slate-400 mb-4">
+									Domain asal klik teratas yang telah disanitasi demi privasi pengunjung.
+								</p>
+
+								{(!analyticsData?.topReferrers || analyticsData.topReferrers.length === 0) ? (
+									<div className="p-6 text-center text-xs text-slate-500 italic border border-slate-800 rounded-2xl">
+										Belum ada sumber lalu lintas rujukan tercatat.
+									</div>
+								) : (
+									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+										{analyticsData.topReferrers.map((ref, idx) => (
+											<div
+												key={idx}
+												className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between"
+											>
+												<div className="flex items-center gap-2 min-w-0">
+													<span className="w-2 h-2 rounded-full bg-violet-400" />
+													<span className="text-xs font-semibold text-white truncate font-mono">
+														{ref.referrer}
+													</span>
+												</div>
+												<div className="text-right shrink-0">
+													<span className="text-xs font-bold text-violet-300">
+														{ref.clicks} klik
+													</span>
+													<span className="text-[10px] text-slate-500 ml-1">
+														({ref.percentage}%)
+													</span>
+												</div>
+											</div>
+										))}
+									</div>
+								)}
+							</div>
+						</div>
+					)}
+
+					{/* =========================================================================
+					    SECTION: SETTINGS & SYSTEM STATUS (PHASE 6)
+					    ========================================================================= */}
+					{activeSection === "settings" && (
+						<div className="space-y-6">
+							{/* Header Bar */}
+							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
+								<div className="flex items-center gap-2 mb-1">
+									<span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
+									<h2 className="text-lg sm:text-xl font-bold text-white">
+										Pengaturan & Status Sistem
+									</h2>
+								</div>
+								<p className="text-xs sm:text-sm text-slate-400">
+									Informasi runtime server, konektivitas database Cloudflare D1, penyimpanan aset R2, dan versi publikasi.
+								</p>
+							</div>
+
+							{/* System Overview Cards */}
+							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+									<div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+										Database D1
+									</div>
+									<div className="text-lg font-bold text-white flex items-center gap-2">
+										<span className={`w-2.5 h-2.5 rounded-full ${isDbReady ? "bg-emerald-500" : "bg-rose-500"}`} />
+										<span>{isDbReady ? "Siap / Terhubung" : "Tidak Terhubung"}</span>
+									</div>
+									<div className="text-xs text-slate-500 mt-2">
+										{database?.tablesCount ?? 0} tabel terdaftar
+									</div>
+								</div>
+
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+									<div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+										Lingkungan Runtime
+									</div>
+									<div className="text-lg font-bold text-white uppercase font-mono">
+										{loaderData.envMode || "production"}
+									</div>
+									<div className="text-xs text-slate-500 mt-2">
+										React Router v7 / Workers SSR
+									</div>
+								</div>
+
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+									<div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+										Versi Publikasi
+									</div>
+									<div className="text-lg font-bold text-violet-400 font-mono">
+										v{pubMeta?.version ?? 1}
+									</div>
+									<div className="text-xs text-slate-500 mt-2">
+										{hasUnpublished ? "Draft belum diterbitkan" : "Sinkron dengan publik"}
+									</div>
+								</div>
+
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+									<div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+										Admin Terautentikasi
+									</div>
+									<div className="text-sm font-bold text-white truncate" title={user.email}>
+										{user.email}
+									</div>
+									<div className="text-xs text-slate-500 mt-2">
+										Metode: {user.identityType}
+									</div>
+								</div>
+							</div>
+
+							{/* D1 Tables & Row Counts */}
+							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
+								<h3 className="text-sm font-bold text-white mb-1">Tabel Database Cloudflare D1</h3>
+								<p className="text-xs text-slate-400 mb-4">
+									Daftar tabel relasional schema D1 beserta jumlah record yang tersimpan.
+								</p>
+
+								<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+									{(database?.tables || []).map((tbl) => (
+										<div
+											key={tbl.name}
+											className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between"
+										>
+											<div className="flex items-center gap-2">
+												<span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+												<span className="text-xs font-mono font-semibold text-slate-200">
+													{tbl.name}
+												</span>
+											</div>
+											<span className="text-xs font-bold font-mono text-violet-300">
+												{tbl.rows} baris
+											</span>
+										</div>
+									))}
+								</div>
+							</div>
+
+							{/* Self-Hosted Architecture & Security Audit Info */}
+							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4">
+								<h3 className="text-sm font-bold text-white">Panduan Arsitektur & Keamanan Self-Hosted</h3>
+
+								<div className="space-y-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
+									<div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
+										<div className="font-semibold text-white mb-1">🔐 Cloudflare Access Email OTP Guard</div>
+										<p className="text-xs text-slate-400">
+											Rute administrasi <code className="text-violet-400">/studio</code> dan seluruh API mutasi (<code className="text-violet-400">/api/studio/*</code>) dilindungi secara server-side oleh header <code className="text-slate-300">Cf-Access-Jwt-Assertion</code> dengan fail-closed gate.
+										</p>
+									</div>
+
+									<div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
+										<div className="font-semibold text-white mb-1">🛡️ Anti-Open-Redirect & CSRF Protection</div>
+										<p className="text-xs text-slate-400">
+											Sistem first-party redirect <code className="text-violet-400">/go/:linkId</code> memvalidasi skema protokol secara ketat (hanya http/https/mailto/tel) dan menolak skema berbahaya (javascript:, data:).
+										</p>
+									</div>
+
+									<div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
+										<div className="font-semibold text-white mb-1">✨ Static Fallback Zero-Downtime</div>
+										<p className="text-xs text-slate-400">
+											Website publik secara otomatis menggunakan fallback data TypeScript netral (<code className="text-slate-300">app/data/profile.ts</code>) apabila koneksi D1 mengalami gangguan jaringan atau saat pertama kali di-fork.
+										</p>
+									</div>
+								</div>
+							</div>
 						</div>
 					)}
 				</main>
@@ -3927,6 +4419,50 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-colors cursor-pointer"
 							>
 								Ya, Reset ke Default
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* =========================================================================
+			    MODALS: RESET ANALYTICS CONFIRMATION (PHASE 5)
+			    ========================================================================= */}
+			{isResetAnalyticsOpen && (
+				<div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+					<div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+						<div className="w-12 h-12 rounded-2xl bg-rose-950/80 border border-rose-800/50 text-rose-400 flex items-center justify-center mb-4">
+							<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+								/>
+							</svg>
+						</div>
+
+						<h3 className="text-base font-bold text-white mb-2">Reset Data Klik Analitik?</h3>
+						<p className="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
+							Tindakan ini akan menghapus seluruh catatan klik yang tersimpan di tabel Cloudflare D1 (<code className="text-slate-300">click_events</code>). Data yang telah dihapus tidak dapat dipulihkan kembali.
+						</p>
+
+						<div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+							<button
+								type="button"
+								onClick={() => setIsResetAnalyticsOpen(false)}
+								disabled={isResettingAnalytics}
+								className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+							>
+								Batal
+							</button>
+							<button
+								type="button"
+								onClick={handleResetAnalytics}
+								disabled={isResettingAnalytics}
+								className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+							>
+								{isResettingAnalytics ? "Mereset..." : "Ya, Hapus Semua Klik"}
 							</button>
 						</div>
 					</div>
