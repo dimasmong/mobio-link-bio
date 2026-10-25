@@ -35,6 +35,14 @@ A modern, high-performance personal Link in Bio web application featuring a **Fu
   - One-click contact cards for Email, WhatsApp, Telegram, and Instagram (no fake backend forms).
 - **Dwibahasa / Bilingual Switcher:**
   - Seamless toggle between Bahasa Indonesia (`ID`) and English (`EN`) across all components.
+- **Self-Hosted MOBIO Studio (`/studio`):**
+  - **Zero Trust Security:** Protected by Cloudflare Access with Email OTP and native Web Crypto RS256 JWKS verification.
+  - **Content Management:** Fully visual editors for Profile, Links, and Direct Action Contacts.
+  - **Appearance Studio:** Customize theme presets, Liquid Glass intensities, custom background positioning/scale, and upload media to Cloudflare R2.
+  - **Explore Editor (10 Content Models):** Manage Projects, Galleries, Videos, Audio playlists, Games, Reviews, Notes, Links, and Custom blocks.
+  - **Privacy-First Click Monitor:** Built-in link telemetry via first-party redirect (`/go/:linkId`), SHA-256 user-agent hashing, sanitized referrers, and zero PII collection.
+  - **Atomic Publishing:** Save edits to isolated draft tables in Cloudflare D1; promote atomically to public production in a single transaction with instant rollback (Discard).
+  - **Zero-Downtime Fallback:** Seamlessly falls back to neutral TypeScript defaults if database connectivity is unavailable.
 - **Single Source of Truth Configuration:**
   - All profile details, background options, cover banner, links, explore items, and contact methods are centralized in [app/data/profile.ts](file:///c:/Users/Dimas%20Mong/Downloads/Project/Link%20in%20Bio/app/data/profile.ts).
 
@@ -130,6 +138,14 @@ npm run typecheck
 # Build for Cloudflare Workers
 npm run build
 ```
+
+---
+
+## 🛠️ Self-Hosted MOBIO Studio Setup
+
+To set up your own sovereign self-hosted admin dashboard with Cloudflare D1, Cloudflare R2, and Cloudflare Access (Email OTP):
+
+👉 Read the complete guide: [docs/STUDIO-SETUP.md](file:///c:/Users/Dimas%20Mong/Downloads/Project/Link%20in%20Bio/docs/STUDIO-SETUP.md)
 
 ---
 

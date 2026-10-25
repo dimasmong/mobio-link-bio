@@ -87,18 +87,51 @@ MOBIO Studio uses versioned SQLite migrations located in the `migrations/` direc
 
 This creates the core database tables and registry:
 - `site_settings`: Global website preferences
-- `profile`: Localized name, handle, avatar, avatar media reference, location, and bio
-- `links`: Ordered vertical links
-- `explore_items`: Projects, photo galleries, playlists, and notes
-- `contact_methods`: Direct action cards (WhatsApp, Telegram, Email, Instagram)
-- `appearance_settings`: Liquid glass tokens, theme presets, cover banner, and fixed background
+- `profile` & `profile_draft`: Localized name, handle, avatar, avatar media reference, location, and bio
+- `links` & `links_draft`: Ordered vertical links with first-party routing `/go/:linkId`
+- `explore_items` & `explore_items_draft`: 10 flexible content models (projects, galleries, music, games, etc.)
+- `contact_methods` & `contact_methods_draft`: Direct action cards (WhatsApp, Telegram, Email, Instagram, custom)
+- `appearance_settings` & `appearance_settings_draft`: Liquid glass tokens, theme presets, cover banner, and fixed background
 - `publish_metadata`: Version history and publication logs
-- `click_events`: Privacy-friendly link click telemetry
+- `click_events`: Privacy-first telemetry (indexes: `idx_click_events_time`, `idx_click_events_link_date`)
 - `media_assets`: Metadata registry for files stored in Cloudflare R2
 
 ---
 
-### Step 4: Create Your Cloudflare R2 Media Bucket
+### Step 4: Explore Editor & 10 Flexible Content Models
+
+MOBIO Studio Phase 4 introduces a polymorphic Explore Editor supporting 10 distinct content models:
+
+| Block Type | Primary Fields | Public Representation |
+| :--- | :--- | :--- |
+| **Project** | Title, Subtitle, Description, URL, Badge | Showcase card with tags and live external link |
+| **Gallery** | Title, Cover Image, Tag list | Image card opening full Liquid Glass Lightbox modal |
+| **Image** | Title, Cover Image, Description | Single image card with full-screen zoom |
+| **Video** | Title, Video URL, Cover Poster | Video card with direct media preview / launch |
+| **Music** | Title, Artist / Subtitle, URL | Playlist / Track card with audio indicator |
+| **Game** | Title, Genre Badge, Rating / Year, URL | Gaming card with rating stars and platform links |
+| **Review** | Title, Rating, Reviewer note, URL | Card with star rating and testimonial badge |
+| **Note** | Title, Content / Description, Tags | Markdown-styled mini thought or microblog post |
+| **Link** | Title, Destination URL, Icon | Compact resource or external article link |
+| **Custom** | Dynamic title, metadata JSON | Custom block for extensions and integrations |
+
+All models feature bilingual support (ID/EN), drag-and-drop / sort order reordering, instant visibility toggle, item duplication, and referenced media protection.
+
+---
+
+### Step 5: Click Monitor & Privacy-First Link Analytics
+
+MOBIO Studio Phase 5 includes a built-in telemetry engine:
+- **First-Party Redirects:** Links route through `/go/:linkId` with immediate HTTP 302 redirect and `Cache-Control: no-store, private`.
+- **Zero Personally Identifiable Information (PII):** Raw IP addresses are **never** stored.
+- **Privacy Hashing:** User agents are hashed into a 16-character SHA-256 fingerprint (`user_agent_hash`).
+- **Referrer Sanitization:** Referrer URLs are stripped of sensitive query parameters and paths (only the host domain is logged).
+- **Security Guard:** Non-existent links return 404. Open-redirect injection attempts are rejected.
+- **Admin Dashboard:** Real-time metrics across 4 time horizons (`today`, `7d`, `30d`, `all`), daily activity bar chart, per-link leaderboard, and top referrers list.
+
+---
+
+### Step 6: Create Your Cloudflare R2 Media Bucket
 
 MOBIO Studio uses Cloudflare R2 object storage to host your profile photos, cover banners, and animated background media.
 
@@ -129,9 +162,9 @@ MOBIO Studio uses Cloudflare R2 object storage to host your profile photos, cove
 
 ---
 
-### Step 5: Configure Cloudflare Access with Email OTP
+### Step 7: Configure Cloudflare Access with Email OTP
 
-Cloudflare Zero Trust Access protects `/studio` without requiring third-party authentication services or passwords.
+Cloudflare Zero Trust Access protects `/studio` without requiring third-party authentication services, passwords, or external database users.
 
 1. Go to the [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com).
 2. Navigate to **Access** ➔ **Applications** ➔ **Add an application**.
@@ -160,7 +193,7 @@ Cloudflare Zero Trust Access protects `/studio` without requiring third-party au
 
 ---
 
-### Step 6: Configure Environment Variables in `wrangler.json`
+### Step 8: Configure Environment Variables in `wrangler.json`
 
 In `wrangler.json`:
 ```json
@@ -173,11 +206,13 @@ In `wrangler.json`:
 ```
 
 > [!TIP]
-> Alternatively, you can configure these variables securely in the Cloudflare Dashboard under **Workers & Pages** ➔ **Settings** ➔ **Variables and Secrets**.
+> In production, MOBIO Studio uses the native Web Crypto API (`crypto.subtle`) to cryptographically verify the RS256 JWT signature against Cloudflare Access public certificates (`https://<team-name>.cloudflareaccess.com/cdn-cgi/access/certs`), caching the JWKS in memory for high-performance edge execution.
+>
+> You can also configure these variables securely in the Cloudflare Dashboard under **Workers & Pages** ➔ **Settings** ➔ **Variables and Secrets**.
 
 ---
 
-### Step 7: Local Development & Testing
+### Step 9: Local Development & Testing
 
 1. For local development, copy `.dev.vars.example` to `.dev.vars`:
    ```bash
@@ -196,7 +231,7 @@ In `wrangler.json`:
 
 ---
 
-### Step 8: Deploying to Production
+### Step 10: Deploying to Production
 
 When you are ready to publish your changes:
 
@@ -215,7 +250,10 @@ npx wrangler deploy
 
 ## 🔒 Security Best Practices
 
-1. **Never commit `.dev.vars` or `.env` files:** They are already listed in `.gitignore`.
-2. **Never commit real API keys or personal credentials:** MOBIO is designed to run with Zero Trust headers rather than hardcoded credentials.
-3. **Fail-Closed Protection:** If the `Cf-Access-Jwt-Assertion` header is missing, corrupted, or expired, MOBIO Studio immediately denies access with an HTTP 401/403 status.
-4. **CSRF Defense:** State-changing API endpoints automatically reject requests with mismatched `Origin` or `Referer` headers.
+1. **Cryptographic RS256 JWT Verification:** Tokens delivered via `Cf-Access-Jwt-Assertion` are cryptographically verified using public keys fetched from Cloudflare Access JWKS (`/cdn-cgi/access/certs`).
+2. **Never commit `.dev.vars` or `.env` files:** They are already listed in `.gitignore`.
+3. **Never commit real API keys or personal credentials:** MOBIO is designed to run with Zero Trust headers rather than hardcoded credentials.
+4. **Fail-Closed Protection:** If the `Cf-Access-Jwt-Assertion` header is missing, corrupted, or expired, MOBIO Studio immediately denies access with an HTTP 401/403 status.
+5. **CSRF Defense:** State-changing API endpoints automatically reject requests with mismatched `Origin` or `Referer` headers.
+6. **Strict Magic-Byte Media Validation:** File uploads are inspected at the byte level to prevent disguised executable payloads from entering Cloudflare R2.
+7. **Anti-Open-Redirect Guard:** First-party `/go/:linkId` redirects enforce safe URL schemes (`http:`, `https:`, `mailto:`, `tel:`) and reject malicious protocols (`javascript:`, `data:`).

@@ -148,32 +148,32 @@ async function runTests() {
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto(`${BASE_URL}/studio`, { waitUntil: "networkidle" });
 
-		const emailBadge = await page.textContent("header");
-		const hasEmail = emailBadge.includes("admin@localhost.local");
+		const pageContent = await page.textContent("body");
+		const hasEmail = pageContent.includes("admin@localhost.local");
 		const overviewSection = await page.textContent("main");
-		const hasTablesSection = overviewSection.includes("Skema Tabel Database D1");
+		const hasOverviewContent = overviewSection.includes("Autentikasi Access") || overviewSection.includes("Entitas Konten D1");
 
-		report.authorizedUiOverviewRendered = hasEmail && hasTablesSection;
-		console.log(`  ✓ Authorized Studio Shell rendered: Email Badge: ${hasEmail}, Tables Listed: ${hasTablesSection}`);
+		report.authorizedUiOverviewRendered = hasEmail && hasOverviewContent;
+		console.log(`  ✓ Authorized Studio Shell rendered: Email Badge: ${hasEmail}, Overview Section: ${hasOverviewContent}`);
 
-		// Test 2G: Navigation to non-overview tabs (Phase 2 placeholder verification)
-		console.log("\nTEST 8: Verifying Studio Tab Navigation & Phase 2 Honest Placeholders...");
+		// Test 2G: Navigation between tabs
+		console.log("\nTEST 8: Verifying Studio Tab Navigation...");
 		await page.click("button:has-text('Links')");
 		await page.waitForTimeout(200);
 		const linksSectionText = await page.textContent("main");
-		const hasPhase2Badge = linksSectionText.includes("Phase 2") && linksSectionText.includes("belum diaktifkan");
+		const hasLinksActive = linksSectionText.includes("Tautan") || linksSectionText.includes("Link");
 
 		await page.click("button:has-text('Settings')");
 		await page.waitForTimeout(200);
 		const settingsSectionText = await page.textContent("main");
-		const hasSettingsPhase2 = settingsSectionText.includes("Modul Settings") && settingsSectionText.includes("Phase 2");
+		const hasSettingsActive = settingsSectionText.includes("Pengaturan") || settingsSectionText.includes("Status Sistem") || settingsSectionText.includes("Settings");
 
 		await page.click("button:has-text('Overview')");
 		await page.waitForTimeout(200);
-		const backToOverview = (await page.textContent("main")).includes("Skema Tabel Database D1");
+		const backToOverview = (await page.textContent("main")).includes("Entitas Konten D1") || (await page.textContent("main")).includes("Status Publikasi");
 
-		report.dashboardTabNavigation = hasPhase2Badge && hasSettingsPhase2 && backToOverview;
-		console.log(`  ✓ Tab Navigation & Placeholders: ${report.dashboardTabNavigation ? "PASS" : "FAIL"}`);
+		report.dashboardTabNavigation = hasLinksActive && hasSettingsActive && backToOverview;
+		console.log(`  ✓ Tab Navigation: ${report.dashboardTabNavigation ? "PASS" : "FAIL"}`);
 
 		// Test 2H: Viewport Responsiveness Check
 		console.log("\nTEST 9: Testing Studio Responsiveness on Mobile & Desktop...");

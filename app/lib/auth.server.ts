@@ -59,6 +59,108 @@ function base64UrlDecode(str: string): string {
 	}
 }
 
+function base64UrlToUint8Array(base64Url: string): Uint8Array {
+	const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+	const padLength = (4 - (base64.length % 4)) % 4;
+	const padded = base64 + "=".repeat(padLength);
+	const binary = atob(padded);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return bytes;
+}
+
+interface JwksKey {
+	kid: string;
+	kty: string;
+	alg: string;
+	use?: string;
+	n: string;
+	e: string;
+}
+
+interface JwksResponse {
+	keys: JwksKey[];
+}
+
+// In-memory JWKS cache: teamName -> { keys: JwksKey[]; fetchedAt: number }
+const jwksCache = new Map<string, { keys: JwksKey[]; fetchedAt: number }>();
+const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function fetchTeamJwks(teamName: string): Promise<JwksKey[]> {
+	const cached = jwksCache.get(teamName);
+	const now = Date.now();
+	if (cached && now - cached.fetchedAt < JWKS_CACHE_TTL_MS) {
+		return cached.keys;
+	}
+
+	const certsUrl = `https://${teamName}.cloudflareaccess.com/cdn-cgi/access/certs`;
+	const res = await fetch(certsUrl, {
+		headers: { Accept: "application/json" },
+	});
+
+	if (!res.ok) {
+		throw new Error(`Gagal mengambil kunci JWKS Cloudflare Access (${res.status})`);
+	}
+
+	const data = (await res.json()) as JwksResponse;
+	if (!data || !Array.isArray(data.keys)) {
+		throw new Error("Payload JWKS dari Cloudflare Access tidak valid.");
+	}
+
+	jwksCache.set(teamName, { keys: data.keys, fetchedAt: now });
+	return data.keys;
+}
+
+/**
+ * Cryptographically verifies the RS256 signature of a Cloudflare Access JWT against JWKS public keys.
+ */
+export async function verifyCloudflareAccessSignature(
+	jwt: string,
+	teamName: string
+): Promise<boolean> {
+	try {
+		const parts = jwt.split(".");
+		if (parts.length !== 3) return false;
+
+		const headerJson = base64UrlDecode(parts[0]);
+		const header = JSON.parse(headerJson) as { alg?: string; kid?: string };
+
+		if (header.alg !== "RS256" || !header.kid) {
+			return false;
+		}
+
+		const keys = await fetchTeamJwks(teamName);
+		const jwk = keys.find((k) => k.kid === header.kid);
+		if (!jwk) {
+			return false;
+		}
+
+		const cryptoKey = await crypto.subtle.importKey(
+			"jwk",
+			jwk,
+			{ name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+			false,
+			["verify"]
+		);
+
+		const enc = new TextEncoder();
+		const data = enc.encode(`${parts[0]}.${parts[1]}`);
+		const signature = base64UrlToUint8Array(parts[2]);
+
+		return await crypto.subtle.verify(
+			"RSASSA-PKCS1-v1_5",
+			cryptoKey,
+			signature as unknown as BufferSource,
+			data as unknown as BufferSource
+		);
+	} catch (err) {
+		console.error("verifyCloudflareAccessSignature error:", err);
+		return false;
+	}
+}
+
 /**
  * Strictly verifies whether the current execution is in a local development environment.
  * Rejects any remote host or production mode.
@@ -252,6 +354,18 @@ export async function authenticateAdmin(
 					error: "Issuer Cloudflare Access tidak sesuai dengan nama team yang dikonfigurasi.",
 					statusCode: 403,
 					reason: "team_mismatch",
+				};
+			}
+
+			// Cryptographic verification of RS256 signature against Cloudflare Access JWKS
+			const isSignatureValid = await verifyCloudflareAccessSignature(jwt, expectedTeam);
+			if (!isSignatureValid) {
+				return {
+					isAuthenticated: false,
+					user: null,
+					error: "Tanda tangan kriptografis Cloudflare Access JWT (RS256) tidak valid atau kunci JWKS tidak cocok.",
+					statusCode: 401,
+					reason: "invalid_jwt",
 				};
 			}
 		}
