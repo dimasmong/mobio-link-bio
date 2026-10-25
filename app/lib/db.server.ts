@@ -360,7 +360,7 @@ export async function getDatabaseStatus(db?: D1Database): Promise<DatabaseStatus
 					lastPublishedAt: "",
 					draftUpdatedAt: "",
 				},
-				error: "Skema database belum lengkap. Jalankan migrasi: npx wrangler d1 migrations apply mobio-db",
+				error: "Skema database belum lengkap. Jalankan migrasi: npx wrangler d1 migrations apply mobio-studio-db",
 			};
 		}
 

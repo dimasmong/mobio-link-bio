@@ -4,21 +4,26 @@
 	"main": "./workers/app.ts",
 	"compatibility_date": "2025-10-08",
 	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"preview_urls": false,
+	"routes": [
+		{
+			"pattern": "me.dimasmong.web.id",
+			"custom_domain": true
+		}
+	],
 	"observability": {
 		"enabled": true
 	},
 	"upload_source_maps": true,
 	"vars": {
-		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare",
-		"CF_ACCESS_TEAM_NAME": "",
-		"CF_ACCESS_AUD": "",
-		"ADMIN_EMAIL": ""
+		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
 	},
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "mobio-db",
-			"database_id": "local-mobio-db",
+			"database_name": "mobio-studio-db",
+			"database_id": "local-mobio-studio-db",
 			"migrations_dir": "migrations"
 		}
 	],

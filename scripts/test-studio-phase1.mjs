@@ -27,7 +27,7 @@ async function runTests() {
 	console.log("TEST 1: Verifying Local Cloudflare D1 Migration & Schema...");
 	try {
 		const stdout = execSync(
-			'npx.cmd wrangler d1 execute mobio-db --local --command "SELECT name FROM sqlite_master WHERE type=\'table\' AND name NOT LIKE \'sqlite_%\' AND name NOT LIKE \'_cf_%\' ORDER BY name ASC;"',
+			'npx.cmd wrangler d1 execute mobio-studio-db --local --command "SELECT name FROM sqlite_master WHERE type=\'table\' AND name NOT LIKE \'sqlite_%\' AND name NOT LIKE \'_cf_%\' ORDER BY name ASC;"',
 			{ encoding: "utf8" }
 		);
 

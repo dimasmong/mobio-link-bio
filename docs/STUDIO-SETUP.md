@@ -49,22 +49,22 @@ Each installation is completely sovereign: it runs on your own Cloudflare accoun
    ```
 2. Create your dedicated D1 database:
    ```bash
-   npx wrangler d1 create mobio-db
+   npx wrangler d1 create mobio-studio-db
    ```
 3. Wrangler will output your database configuration, for example:
    ```json
    [[d1_databases]]
    binding = "DB"
-   database_name = "mobio-db"
+   database_name = "mobio-studio-db"
    database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
    ```
-4. Open `wrangler.json` and replace `database_id` with your actual UUID from step 3:
+4. In `wrangler.json`, the D1 binding is configured as:
    ```json
    "d1_databases": [
      {
        "binding": "DB",
-       "database_name": "mobio-db",
-       "database_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+       "database_name": "mobio-studio-db",
+       "database_id": "local-mobio-studio-db",
        "migrations_dir": "migrations"
      }
    ]
@@ -76,19 +76,19 @@ Each installation is completely sovereign: it runs on your own Cloudflare accoun
 
 MOBIO Studio uses versioned SQLite migrations located in the `migrations/` directory:
 - `0001_initial_schema.sql`: Core tables, profile, links, contact methods, appearance tokens, publish metadata
-- `0002_draft_isolation.sql`: Isolated draft staging for links and contact methods
-- `0003_media_r2_registry.sql`: Cloudflare R2 media metadata registry and reference counters
-- `0004_explore_items.sql`: 10 flexible content models with draft isolation
+- `0002_draft_publishing.sql`: Isolated draft staging for profile, links, and contact methods
+- `0003_appearance_media.sql`: Cloudflare R2 media metadata registry, appearance draft/published tokens
+- `0004_explore_editor.sql`: 10 flexible content models with draft isolation
 - `0005_click_monitor.sql`: First-party link redirect telemetry table and query indexes
 - `0006_minimal_privacy_clicks.sql`: Final security hardening — drops all user agent telemetry and country fields, enforcing strictly minimal, privacy-first click logging
 
 1. **Apply migrations to your local development database:**
    ```bash
-   npx wrangler d1 migrations apply mobio-db --local
+   npx wrangler d1 migrations apply mobio-studio-db --local
    ```
 2. **Apply migrations to your remote Cloudflare production database:**
    ```bash
-   npx wrangler d1 migrations apply mobio-db --remote
+   npx wrangler d1 migrations apply mobio-studio-db --remote
    ```
 
 This creates the core database tables and registry:
@@ -200,22 +200,28 @@ Cloudflare Zero Trust Access protects `/studio` without requiring third-party au
 
 ---
 
-### Step 8: Configure Environment Variables in `wrangler.json`
+### Step 8: Configure Production Runtime Secrets
 
-In `wrangler.json`:
-```json
-"vars": {
-  "VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare",
-  "CF_ACCESS_TEAM_NAME": "your-team-name",
-  "CF_ACCESS_AUD": "your-application-audience-aud-tag",
-  "ADMIN_EMAIL": "your-email@domain.com"
-}
+To ensure credentials are never exposed in Git or source code, MOBIO Studio uses encrypted Cloudflare Worker Secrets for all Zero Trust parameters:
+
+```bash
+# 1. Set your Cloudflare Access Team Name
+npx wrangler secret put CF_ACCESS_TEAM_NAME
+# Prompt: Enter a secret value: winter-leaf-1dc9
+
+# 2. Set your Cloudflare Access Application AUD tag
+npx wrangler secret put CF_ACCESS_AUD
+# Prompt: Enter a secret value: <paste your application AUD tag>
+
+# 3. Set your authorized administrator email
+npx wrangler secret put ADMIN_EMAIL
+# Prompt: Enter a secret value: <paste your admin email>
 ```
 
 > [!TIP]
 > In production, MOBIO Studio uses the native Web Crypto API (`crypto.subtle`) to cryptographically verify the RS256 JWT signature against Cloudflare Access public certificates (`https://<team-name>.cloudflareaccess.com/cdn-cgi/access/certs`), caching the JWKS in memory for high-performance edge execution.
 >
-> You can also configure these variables securely in the Cloudflare Dashboard under **Workers & Pages** ➔ **Settings** ➔ **Variables and Secrets**.
+> You can also manage these variables securely in the Cloudflare Dashboard under **Workers & Pages** ➔ **mobio-link-bio** ➔ **Settings** ➔ **Variables and Secrets**. Do NOT commit secrets directly into `wrangler.json` or source control.
 
 ---
 

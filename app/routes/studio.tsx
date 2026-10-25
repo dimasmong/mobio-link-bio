@@ -1561,7 +1561,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{database?.error || "Tabel database belum ditemukan. Jalankan migrasi schema."}
 									</p>
 									<div className="bg-slate-950/80 border border-amber-900/50 rounded-xl p-3 font-mono text-[11px] text-amber-300 select-all">
-										npx wrangler d1 migrations apply mobio-db --local
+										npx wrangler d1 migrations apply mobio-studio-db --local
 									</div>
 								</div>
 							)}

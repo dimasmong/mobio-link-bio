@@ -48,7 +48,7 @@ async function runPhase4Tests() {
 	console.log("TEST 1: Verifying D1 Schema (explore_items & explore_items_draft)...");
 	try {
 		const stdout = execSync(
-			'npx.cmd wrangler d1 execute mobio-db --local --command "SELECT name FROM sqlite_master WHERE type=\'table\' AND name IN (\'explore_items\', \'explore_items_draft\');"',
+			'npx.cmd wrangler d1 execute mobio-studio-db --local --command "SELECT name FROM sqlite_master WHERE type=\'table\' AND name IN (\'explore_items\', \'explore_items_draft\');"',
 			{ encoding: "utf8" }
 		);
 		if (stdout.includes("explore_items") && stdout.includes("explore_items_draft")) {

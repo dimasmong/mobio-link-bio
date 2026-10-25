@@ -35,7 +35,7 @@ async function runPhase5Tests() {
 	console.log("TEST 1: Verifying D1 Schema (click_events table & indexes)...");
 	try {
 		const stdout = execSync(
-			'npx.cmd wrangler d1 execute mobio-db --local --command "SELECT name FROM sqlite_master WHERE type=\'table\' AND name=\'click_events\'; SELECT name FROM sqlite_master WHERE type=\'index\' AND tbl_name=\'click_events\';"',
+			'npx.cmd wrangler d1 execute mobio-studio-db --local --command "SELECT name FROM sqlite_master WHERE type=\'table\' AND name=\'click_events\'; SELECT name FROM sqlite_master WHERE type=\'index\' AND tbl_name=\'click_events\';"',
 			{ encoding: "utf8" }
 		);
 		if (stdout.includes("click_events") && stdout.includes("idx_click_events_time")) {
@@ -58,7 +58,7 @@ async function runPhase5Tests() {
 	try {
 		// Insert link directly into links (published) for immediate routing test
 		execSync(
-			`npx.cmd wrangler d1 execute mobio-db --local --command "INSERT OR REPLACE INTO links (id, title_id, title_en, url, platform, icon, sort_order, is_enabled, created_at, updated_at) VALUES ('${testLinkId}', 'Tes Monitor Klik', 'Click Monitor Test', '${testDestinationUrl}', 'website', 'globe', 999, 1, datetime('now'), datetime('now'));"`,
+			`npx.cmd wrangler d1 execute mobio-studio-db --local --command "INSERT OR REPLACE INTO links (id, title_id, title_en, url, platform, icon, sort_order, is_enabled, created_at, updated_at) VALUES ('${testLinkId}', 'Tes Monitor Klik', 'Click Monitor Test', '${testDestinationUrl}', 'website', 'globe', 999, 1, datetime('now'), datetime('now'));"`,
 			{ encoding: "utf8" }
 		);
 
@@ -95,14 +95,14 @@ async function runPhase5Tests() {
 	console.log("\nTEST 3: Verifying Privacy Telemetry in D1 (Zero UA, Sanitized Referrer, No PII)...");
 	try {
 		const stdout = execSync(
-			`npx.cmd wrangler d1 execute mobio-db --local --command "SELECT id, link_id, referrer FROM click_events WHERE link_id='${testLinkId}' ORDER BY clicked_at DESC LIMIT 1;"`,
+			`npx.cmd wrangler d1 execute mobio-studio-db --local --command "SELECT id, link_id, referrer FROM click_events WHERE link_id='${testLinkId}' ORDER BY clicked_at DESC LIMIT 1;"`,
 			{ encoding: "utf8" }
 		);
 
 		console.log("  D1 Click Record Query Output:\n", stdout);
 
 		const pragmaOutput = execSync(
-			'npx.cmd wrangler d1 execute mobio-db --local --command "PRAGMA table_info(click_events);"',
+			'npx.cmd wrangler d1 execute mobio-studio-db --local --command "PRAGMA table_info(click_events);"',
 			{ encoding: "utf8" }
 		);
 
@@ -313,7 +313,7 @@ async function runPhase5Tests() {
 	console.log("\nCleaning up temporary test records...");
 	try {
 		execSync(
-			`npx.cmd wrangler d1 execute mobio-db --local --command "DELETE FROM links WHERE id='${testLinkId}'; DELETE FROM links_draft WHERE id='${testLinkId}'; DELETE FROM click_events WHERE link_id='${testLinkId}';"`,
+			`npx.cmd wrangler d1 execute mobio-studio-db --local --command "DELETE FROM links WHERE id='${testLinkId}'; DELETE FROM links_draft WHERE id='${testLinkId}'; DELETE FROM click_events WHERE link_id='${testLinkId}';"`,
 			{ encoding: "utf8" }
 		);
 		console.log("  ✅ Temporary test data cleaned up.");

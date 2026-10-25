@@ -150,7 +150,7 @@ async function runSecurityHardeningTests() {
 	try {
 		// Insert a test link directly into D1
 		execSync(
-			`npx.cmd wrangler d1 execute mobio-db --local --command "INSERT INTO links (id, title_id, title_en, url, platform, icon, sort_order, is_enabled, created_at, updated_at) VALUES ('${testLinkId}', 'Sec Test', 'Sec Test', '${legitimateDest}', 'website', 'globe', 999, 1, datetime('now'), datetime('now'));"`,
+			`npx.cmd wrangler d1 execute mobio-studio-db --local --command "INSERT INTO links (id, title_id, title_en, url, platform, icon, sort_order, is_enabled, created_at, updated_at) VALUES ('${testLinkId}', 'Sec Test', 'Sec Test', '${legitimateDest}', 'website', 'globe', 999, 1, datetime('now'), datetime('now'));"`,
 			{ encoding: "utf8" }
 		);
 
@@ -183,7 +183,7 @@ async function runSecurityHardeningTests() {
 		// Clean up test link
 		try {
 			execSync(
-				`npx.cmd wrangler d1 execute mobio-db --local --command "DELETE FROM links WHERE id='${testLinkId}'; DELETE FROM click_events WHERE link_id='${testLinkId}';"`,
+				`npx.cmd wrangler d1 execute mobio-studio-db --local --command "DELETE FROM links WHERE id='${testLinkId}'; DELETE FROM click_events WHERE link_id='${testLinkId}';"`,
 				{ encoding: "utf8" }
 			);
 		} catch {}
@@ -195,7 +195,7 @@ async function runSecurityHardeningTests() {
 	console.log("\nTEST 5: Auditing D1 click_events Table for Zero PII & Zero UA Hashes...");
 	try {
 		const pragmaOutput = execSync(
-			'npx.cmd wrangler d1 execute mobio-db --local --command "PRAGMA table_info(click_events);"',
+			'npx.cmd wrangler d1 execute mobio-studio-db --local --command "PRAGMA table_info(click_events);"',
 			{ encoding: "utf8" }
 		);
 

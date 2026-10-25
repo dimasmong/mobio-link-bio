@@ -78,14 +78,14 @@ async function runPhase3Tests() {
 	console.log("TEST 1: Verifying D1 Schema (media_assets, appearance_settings, profile)...");
 	try {
 		const stdout = execSync(
-			'npx.cmd wrangler d1 execute mobio-db --local --command "SELECT name FROM sqlite_master WHERE type=\'table\' AND name NOT LIKE \'sqlite_%\' AND name NOT LIKE \'_cf_%\' ORDER BY name ASC;"',
+			'npx.cmd wrangler d1 execute mobio-studio-db --local --command "SELECT name FROM sqlite_master WHERE type=\'table\' AND name NOT LIKE \'sqlite_%\' AND name NOT LIKE \'_cf_%\' ORDER BY name ASC;"',
 			{ encoding: "utf8" }
 		);
 
 		if (stdout.includes("media_assets") && stdout.includes("appearance_settings")) {
 			// Verify columns in appearance_settings
 			const columns = execSync(
-				'npx.cmd wrangler d1 execute mobio-db --local --command "PRAGMA table_info(appearance_settings);"',
+				'npx.cmd wrangler d1 execute mobio-studio-db --local --command "PRAGMA table_info(appearance_settings);"',
 				{ encoding: "utf8" }
 			);
 
