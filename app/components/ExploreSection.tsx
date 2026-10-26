@@ -104,45 +104,52 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 	const [activeLightboxItem, setActiveLightboxItem] = useState<ExploreItem | null>(null);
 	const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
 	const [activeCategory, setActiveCategory] = useState<string>("all");
-	const [activeSubcategory, setActiveSubcategory] = useState<string>("all");
 	const touchStartX = useRef<number | null>(null);
 
-	// Extract unique categories
-	const categories = useMemo(() => {
-		const set = new Set<string>();
-		(config.items || []).forEach((item) => {
-			if (item.category && item.category !== "all") {
-				set.add(item.category);
-			}
-		});
-		(config.subcategories || []).forEach((sub) => {
-			if (sub.category && sub.category !== "all") {
-				set.add(sub.category);
-			}
-		});
-		return ["all", ...Array.from(set)];
-	}, [config.items, config.subcategories]);
+	// Extract or assemble single-tier categories: "Semua" + configured custom categories + fallback from items
+	const displayCategories = useMemo(() => {
+		const result: { id: string; name: { id: string; en: string }; icon?: string; color?: string }[] = [
+			{ id: "all", name: { id: "Semua", en: "All" } },
+		];
 
-	// Filter subcategories for current category
-	const availableSubcategories = useMemo(() => {
-		if (!config.subcategories || config.subcategories.length === 0) return [];
-		if (activeCategory === "all") return config.subcategories;
-		return config.subcategories.filter((sub) => sub.category === activeCategory);
-	}, [config.subcategories, activeCategory]);
+		if (config.categories && config.categories.length > 0) {
+			config.categories
+				.filter((c) => c.isEnabled !== false)
+				.forEach((c) => {
+					result.push({
+						id: c.id,
+						name: c.name,
+						icon: c.icon,
+						color: c.color,
+					});
+				});
+		} else {
+			// Fallback: extract unique categories from items
+			const seen = new Set<string>();
+			(config.items || []).forEach((item) => {
+				if (item.category && item.category !== "all" && !seen.has(item.category)) {
+					seen.add(item.category);
+					result.push({
+						id: item.category,
+						name: {
+							id: getCategoryLabel(item.category, "id"),
+							en: getCategoryLabel(item.category, "en"),
+						},
+					});
+				}
+			});
+		}
 
-	// Filter items by category and subcategory
+		return result;
+	}, [config.categories, config.items]);
+
+	// Filter items strictly by activeCategory
 	const filteredItems = useMemo(() => {
 		return (config.items || []).filter((item) => {
-			const itemCat = item.category || "all";
-			if (activeCategory !== "all" && itemCat !== activeCategory) {
-				return false;
-			}
-			if (activeSubcategory !== "all" && item.subcategory_id !== activeSubcategory) {
-				return false;
-			}
-			return true;
+			if (activeCategory === "all") return true;
+			return (item.category || "all") === activeCategory;
 		});
-	}, [config.items, activeCategory, activeSubcategory]);
+	}, [config.items, activeCategory]);
 
 	// Slides for active lightbox item
 	const slides: ExplorePhoto[] = useMemo(() => {
@@ -207,72 +214,34 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 				)}
 			</div>
 
-			{/* Category & Subcategory Filter Tabs (Phase 6) */}
-			{hasItems && categories.length > 1 && (
-				<div className="mb-6 flex flex-col gap-2.5 items-center w-full">
-					{/* Primary Categories Scrollable Row */}
-					<div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 px-1 no-scrollbar scroll-smooth">
-						{categories.map((cat) => {
-							const isCatActive = activeCategory === cat;
+			{/* Single-Tier Category Filter Pills (Phase 2) */}
+			{hasItems && displayCategories.length > 1 && (
+				<div className="mb-6 flex justify-center w-full">
+					<div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 px-1 no-scrollbar scroll-smooth">
+						{displayCategories.map((cat) => {
+							const isCatActive = activeCategory === cat.id;
 							return (
 								<button
-									key={cat}
+									key={cat.id}
 									type="button"
-									onClick={() => {
-										setActiveCategory(cat);
-										setActiveSubcategory("all");
-									}}
-									className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
+									onClick={() => setActiveCategory(cat.id)}
+									className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
 										isCatActive
 											? "bg-[var(--accent-color)] text-[var(--accent-foreground)] shadow-sm font-bold scale-102"
 											: "glass-liquid-secondary text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
 									}`}
 								>
-									{getCategoryLabel(cat, lang)}
+									{cat.color && (
+										<span
+											className="w-2 h-2 rounded-full shrink-0"
+											style={{ backgroundColor: isCatActive ? "currentColor" : cat.color }}
+										/>
+									)}
+									<span>{cat.name[lang]}</span>
 								</button>
 							);
 						})}
 					</div>
-
-					{/* Secondary Subcategories Row (if present) */}
-					{availableSubcategories.length > 0 && (
-						<div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 px-1 no-scrollbar text-xs">
-							<button
-								type="button"
-								onClick={() => setActiveSubcategory("all")}
-								className={`px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all cursor-pointer ${
-									activeSubcategory === "all"
-										? "bg-[var(--glass-surface-primary)] text-theme-primary font-bold shadow-xs border border-[var(--glass-border-specular)]"
-										: "text-theme-muted hover:text-theme-secondary"
-								}`}
-							>
-								{lang === "id" ? "Semua Sub" : "All Sub"}
-							</button>
-							{availableSubcategories.map((sub) => {
-								const isSubActive = activeSubcategory === sub.id;
-								return (
-									<button
-										key={sub.id}
-										type="button"
-										onClick={() => setActiveSubcategory(sub.id)}
-										className={`px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
-											isSubActive
-												? "bg-[var(--glass-surface-primary)] text-theme-primary font-bold shadow-xs border border-[var(--glass-border-specular)]"
-												: "text-theme-muted hover:text-theme-secondary"
-										}`}
-									>
-										{sub.color && (
-											<span
-												className="w-2 h-2 rounded-full shrink-0"
-												style={{ backgroundColor: sub.color }}
-											/>
-										)}
-										<span>{sub.label[lang]}</span>
-									</button>
-								);
-							})}
-						</div>
-					)}
 				</div>
 			)}
 
@@ -683,10 +652,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 						</p>
 						<button
 							type="button"
-							onClick={() => {
-								setActiveCategory("all");
-								setActiveSubcategory("all");
-							}}
+							onClick={() => setActiveCategory("all")}
 							className="text-xs font-bold text-[var(--accent-color)] hover:underline mt-2 cursor-pointer"
 						>
 							{lang === "id" ? "Tampilkan Semua Konten" : "Show All Content"}

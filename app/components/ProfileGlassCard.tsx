@@ -16,13 +16,15 @@ function getInitials(name: string): string {
 	return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function normalizeAspectRatio(ratio?: string): string {
-	if (!ratio) return "aspect-[21/9] sm:aspect-[24/9]";
-	if (ratio === "16:9") return "aspect-[16/9]";
-	if (ratio === "21:9") return "aspect-[21/9] sm:aspect-[24/9]";
-	if (ratio === "3:1") return "aspect-[3/1]";
-	if (ratio.startsWith("aspect-")) return ratio;
-	return `aspect-[${ratio}]`;
+export function getCoverAspectRatioCSS(ratio?: string): string {
+	if (!ratio) return "21 / 9";
+	const clean = ratio.replace(/^aspect-/, "").replace(/\[|\]/g, "").trim();
+	if (clean === "16:9" || clean === "16/9") return "16 / 9";
+	if (clean === "21:9" || clean === "21/9" || clean.includes("21/9")) return "21 / 9";
+	if (clean === "3:1" || clean === "3/1") return "3 / 1";
+	if (clean.includes(":")) return clean.replace(":", " / ");
+	if (clean.includes("/")) return clean;
+	return "21 / 9";
 }
 
 export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
@@ -33,14 +35,23 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 	const hasBio = Boolean(profile.bio && profile.bio[lang]?.trim());
 	const hasCover = Boolean(profile.cover?.enabled);
 	const hasCustomCover = Boolean(profile.cover?.coverUrl && profile.cover.coverUrl.trim() !== "");
-	const coverAspectRatio = normalizeAspectRatio(profile.cover?.aspectRatio);
+	const coverAspectRatioCSS = getCoverAspectRatioCSS(profile.cover?.aspectRatio);
 
 	return (
 		<header className="w-full relative z-10">
 			<div className="glass-liquid-primary rounded-3xl sm:rounded-4xl relative overflow-hidden transition-all duration-300">
 				{/* 1. Full Uninterrupted Cover Banner with Bottom Gradient Vignette */}
 				{hasCover && (
-					<div className={`w-full ${coverAspectRatio} relative overflow-hidden z-0`}>
+					<div
+						className={`w-full relative overflow-hidden z-0 transition-all duration-300 ${
+							profile.cover?.aspectRatio === "16:9"
+								? "aspect-[16/9]"
+								: profile.cover?.aspectRatio === "3:1"
+								? "aspect-[3/1]"
+								: "aspect-[21/9] sm:aspect-[24/9]"
+						}`}
+						style={{ aspectRatio: coverAspectRatioCSS }}
+					>
 						{hasCustomCover ? (
 							<img
 								src={profile.cover.coverUrl}

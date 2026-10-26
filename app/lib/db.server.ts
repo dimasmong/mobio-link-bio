@@ -92,6 +92,18 @@ export interface ExploreSubcategoryRecord {
 	updated_at?: string;
 }
 
+export interface ExploreCategoryRecord {
+	id: string;
+	name_id: string;
+	name_en: string;
+	icon?: string;
+	color?: string;
+	sort_order: number;
+	is_enabled: number;
+	created_at?: string;
+	updated_at?: string;
+}
+
 export interface ContactMethodRecord {
 	id: string;
 	platform: "whatsapp" | "telegram" | "email" | "instagram" | "custom";
@@ -1414,6 +1426,179 @@ export async function reorderDraftExploreSubcategories(
 }
 
 /**
+ * Reads explore categories from D1.
+ */
+export async function getExploreCategories(
+	db: D1Database,
+	mode: "published" | "draft" = "published"
+): Promise<ExploreCategoryRecord[]> {
+	const table = mode === "draft" ? "explore_categories_draft" : "explore_categories";
+	try {
+		const res = await db
+			.prepare(`SELECT * FROM ${table} ORDER BY sort_order ASC, created_at ASC;`)
+			.all<ExploreCategoryRecord>();
+		return res.results ?? [];
+	} catch (err: unknown) {
+		console.warn(`Failed to fetch explore categories from ${table}:`, err);
+		return [];
+	}
+}
+
+/**
+ * Creates a draft explore category.
+ */
+export async function createDraftExploreCategory(
+	db: D1Database,
+	category: {
+		id?: string;
+		name_id: string;
+		name_en: string;
+		icon?: string;
+		color?: string;
+		sort_order?: number;
+		is_enabled?: number;
+	}
+): Promise<ExploreCategoryRecord> {
+	const rawId = category.id?.trim() || "";
+	const slug = rawId ? rawId.toLowerCase().replace(/[^a-z0-9_-]/g, "-") : crypto.randomUUID().slice(0, 8);
+	const now = new Date().toISOString();
+
+	let sortOrder = category.sort_order;
+	if (typeof sortOrder !== "number") {
+		const maxOrder = await db
+			.prepare("SELECT MAX(sort_order) as maxOrder FROM explore_categories_draft;")
+			.first<{ maxOrder: number | null }>();
+		sortOrder = (maxOrder?.maxOrder ?? -1) + 1;
+	}
+
+	const newRecord: ExploreCategoryRecord = {
+		id: slug,
+		name_id: category.name_id.trim(),
+		name_en: category.name_en.trim() || category.name_id.trim(),
+		icon: category.icon?.trim() || "folder",
+		color: category.color?.trim() || "#8b5cf6",
+		sort_order: sortOrder,
+		is_enabled: category.is_enabled !== undefined ? category.is_enabled : 1,
+		created_at: now,
+		updated_at: now,
+	};
+
+	await db.batch([
+		db.prepare(
+			`INSERT INTO explore_categories_draft (id, name_id, name_en, icon, color, sort_order, is_enabled, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`
+		).bind(
+			newRecord.id,
+			newRecord.name_id,
+			newRecord.name_en,
+			newRecord.icon,
+			newRecord.color,
+			newRecord.sort_order,
+			newRecord.is_enabled,
+			newRecord.created_at,
+			newRecord.updated_at
+		),
+		db.prepare(
+			`UPDATE publish_metadata SET has_unpublished_changes = 1, draft_updated_at = ? WHERE id = 'current';`
+		).bind(now),
+	]);
+
+	return newRecord;
+}
+
+/**
+ * Updates a draft explore category.
+ */
+export async function updateDraftExploreCategory(
+	db: D1Database,
+	id: string,
+	data: Partial<ExploreCategoryRecord>
+): Promise<void> {
+	const now = new Date().toISOString();
+	const current = await db
+		.prepare("SELECT * FROM explore_categories_draft WHERE id = ? LIMIT 1;")
+		.bind(id)
+		.first<ExploreCategoryRecord>();
+
+	if (!current) {
+		throw new Error(`Kategori dengan ID '${id}' tidak ditemukan.`);
+	}
+
+	const updated: ExploreCategoryRecord = {
+		...current,
+		...data,
+		name_id: data.name_id !== undefined ? data.name_id.trim() : current.name_id,
+		name_en: data.name_en !== undefined ? data.name_en.trim() : current.name_en,
+		icon: data.icon !== undefined ? data.icon.trim() : current.icon,
+		color: data.color !== undefined ? data.color.trim() : current.color,
+		sort_order: data.sort_order !== undefined ? data.sort_order : current.sort_order,
+		is_enabled: data.is_enabled !== undefined ? data.is_enabled : current.is_enabled,
+		updated_at: now,
+	};
+
+	await db.batch([
+		db.prepare(
+			`UPDATE explore_categories_draft
+			 SET name_id = ?, name_en = ?, icon = ?, color = ?, sort_order = ?, is_enabled = ?, updated_at = ?
+			 WHERE id = ?;`
+		).bind(
+			updated.name_id,
+			updated.name_en,
+			updated.icon,
+			updated.color,
+			updated.sort_order,
+			updated.is_enabled,
+			updated.updated_at,
+			id
+		),
+		db.prepare(
+			`UPDATE publish_metadata SET has_unpublished_changes = 1, draft_updated_at = ? WHERE id = 'current';`
+		).bind(now),
+	]);
+}
+
+/**
+ * Deletes a draft explore category. Safe backward-compatible: reassigns items to 'all'.
+ */
+export async function deleteDraftExploreCategory(
+	db: D1Database,
+	id: string
+): Promise<void> {
+	const now = new Date().toISOString();
+
+	await db.batch([
+		db.prepare("DELETE FROM explore_categories_draft WHERE id = ?;").bind(id),
+		db.prepare("UPDATE explore_items_draft SET category = 'all', updated_at = ? WHERE category = ?;").bind(now, id),
+		db.prepare(
+			`UPDATE publish_metadata SET has_unpublished_changes = 1, draft_updated_at = ? WHERE id = 'current';`
+		).bind(now),
+	]);
+}
+
+/**
+ * Reorders draft explore categories.
+ */
+export async function reorderDraftExploreCategories(
+	db: D1Database,
+	orderedIds: string[]
+): Promise<void> {
+	const now = new Date().toISOString();
+	const statements = orderedIds.map((id, index) =>
+		db
+			.prepare("UPDATE explore_categories_draft SET sort_order = ?, updated_at = ? WHERE id = ?;")
+			.bind(index, now, id)
+	);
+
+	statements.push(
+		db.prepare(
+			`UPDATE publish_metadata SET has_unpublished_changes = 1, draft_updated_at = ? WHERE id = 'current';`
+		).bind(now)
+	);
+
+	await db.batch(statements);
+}
+
+/**
  * Reads publication metadata.
  */
 export async function getPublishMetadata(db: D1Database): Promise<PublishMetadataRecord | null> {
@@ -1660,6 +1845,14 @@ export async function publishAllDrafts(
 			 FROM explore_subcategories_draft;`
 		),
 
+		// 3d. Promote explore_categories_draft to explore_categories
+		db.prepare("DELETE FROM explore_categories;"),
+		db.prepare(
+			`INSERT INTO explore_categories (id, name_id, name_en, icon, color, sort_order, is_enabled, created_at, updated_at)
+			 SELECT id, name_id, name_en, icon, color, sort_order, is_enabled, created_at, updated_at
+			 FROM explore_categories_draft;`
+		),
+
 		// 4. Promote appearance_settings draft to published
 		db.prepare(
 			`INSERT INTO appearance_settings (
@@ -1795,6 +1988,14 @@ export async function discardAllDrafts(db: D1Database): Promise<void> {
 			`INSERT INTO explore_subcategories_draft (id, category, label_id, label_en, icon, color, sort_order, created_at, updated_at)
 			 SELECT id, category, label_id, label_en, icon, color, sort_order, created_at, updated_at
 			 FROM explore_subcategories;`
+		),
+
+		// 3d. Reset explore_categories_draft from explore_categories
+		db.prepare("DELETE FROM explore_categories_draft;"),
+		db.prepare(
+			`INSERT INTO explore_categories_draft (id, name_id, name_en, icon, color, sort_order, is_enabled, created_at, updated_at)
+			 SELECT id, name_id, name_en, icon, color, sort_order, is_enabled, created_at, updated_at
+			 FROM explore_categories;`
 		),
 
 		// 4. Reset appearance_settings draft from published

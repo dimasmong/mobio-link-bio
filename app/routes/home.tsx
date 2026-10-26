@@ -6,6 +6,7 @@ import {
 	getLinks,
 	getContactMethods,
 	getExploreItems,
+	getExploreCategories,
 	getExploreSubcategories,
 	getAppearanceRecord,
 	getPublishMetadata,
@@ -55,32 +56,27 @@ export async function loader({ context }: Route.LoaderArgs) {
 
 	if (env?.DB) {
 		try {
-			const [dbProfile, dbLinks, dbContacts, dbExplore, dbAppearance, pubMeta, dbSubcategories] = await Promise.all([
+			const [dbProfile, dbLinks, dbContacts, dbExplore, dbAppearance, pubMeta, dbCategories, dbSubcategories] = await Promise.all([
 				getProfileRecord(env.DB, "published"),
 				getLinks(env.DB, "published", true),
 				getContactMethods(env.DB, "published", true),
 				getExploreItems(env.DB, "published", true),
 				getAppearanceRecord(env.DB, "published"),
 				getPublishMetadata(env.DB),
+				getExploreCategories(env.DB, "published"),
 				getExploreSubcategories(env.DB, "published"),
 			]);
 
 			appearance = dbAppearance;
 
-			const isPublishedActive = Boolean(
-				(pubMeta && pubMeta.version > 1) ||
-				(dbProfile && dbProfile.name.trim().length > 0) ||
-				dbLinks.length > 0
-			);
-
-			if (isPublishedActive && dbProfile) {
+			if (dbProfile) {
 				let avatarUrl = dbProfile.avatar_url || profileData.avatarUrl;
 				if (dbProfile.avatar_media_id && dbProfile.avatar_media_id.trim() !== "") {
 					avatarUrl = `/api/public/media/${dbProfile.avatar_media_id.trim()}`;
 				}
 
 				profile = {
-					...profileData,
+					...profile,
 					name: dbProfile.name || profileData.name,
 					handle: dbProfile.handle || profileData.handle,
 					avatarUrl,
@@ -92,39 +88,55 @@ export async function loader({ context }: Route.LoaderArgs) {
 						id: dbProfile.bio_id || "",
 						en: dbProfile.bio_en || "",
 					},
-					links: dbLinks.map((l) => ({
-						id: l.id,
-						title: { id: l.title_id, en: l.title_en },
-						description:
-							l.description_id || l.description_en
-								? { id: l.description_id || "", en: l.description_en || "" }
-								: undefined,
-						url: l.url,
-						platform: l.platform,
-						icon: l.icon || "globe",
-						enabled: Boolean(l.is_enabled),
-						icon_type: l.icon_type,
-						icon_url: l.icon_url,
-						icon_media_id: l.icon_media_id,
-					})),
-					contact: {
-						...profileData.contact,
-						methods: dbContacts.map((c) => ({
-							id: c.id,
-							platform: (c.platform === "custom" ? "other" : c.platform) as any,
-							label: { id: c.label_id, en: c.label_en },
-							value: c.value,
-							url: c.url,
-						})),
-					},
 				};
 			}
 
-			// Apply explore items & subcategories if published in D1
-			if (dbExplore.length > 0 || (dbSubcategories && dbSubcategories.length > 0)) {
+			// Apply links from published D1
+			if (dbLinks.length > 0) {
+				profile.links = dbLinks.map((l) => ({
+					id: l.id,
+					title: { id: l.title_id, en: l.title_en },
+					description:
+						l.description_id || l.description_en
+							? { id: l.description_id || "", en: l.description_en || "" }
+							: undefined,
+					url: l.url,
+					platform: l.platform,
+					icon: l.icon || "globe",
+					enabled: Boolean(l.is_enabled),
+					icon_type: l.icon_type,
+					icon_url: l.icon_url,
+					icon_media_id: l.icon_media_id,
+				}));
+			}
+
+			// Apply contact methods from published D1
+			if (dbContacts.length > 0) {
+				profile.contact = {
+					...profile.contact,
+					methods: dbContacts.map((c) => ({
+						id: c.id,
+						platform: (c.platform === "custom" ? "other" : c.platform) as any,
+						label: { id: c.label_id, en: c.label_en },
+						value: c.value,
+						url: c.url,
+					})),
+				};
+			}
+
+			// Apply explore items & categories if published in D1
+			if (dbExplore.length > 0 || (dbCategories && dbCategories.length > 0) || (dbSubcategories && dbSubcategories.length > 0)) {
 				profile.explore = {
 					...profile.explore,
 					enabled: true,
+					categories: (dbCategories || []).map((cat) => ({
+						id: cat.id,
+						name: { id: cat.name_id, en: cat.name_en },
+						icon: cat.icon,
+						color: cat.color,
+						sortOrder: cat.sort_order,
+						isEnabled: Boolean(cat.is_enabled),
+					})),
 					subcategories: (dbSubcategories || []).map((sub) => ({
 						id: sub.id,
 						category: sub.category,
@@ -213,7 +225,7 @@ export async function loader({ context }: Route.LoaderArgs) {
 					...profile.cover,
 					enabled: Boolean(dbAppearance.cover_enabled),
 					coverUrl,
-					aspectRatio: dbAppearance.cover_aspect_ratio || "aspect-[21/9]",
+					aspectRatio: dbAppearance.cover_aspect_ratio || "21:9",
 				};
 			}
 		} catch (err) {
@@ -286,9 +298,39 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		[activeTab]
 	);
 
+	// Visitor Telemetry (Phase 4): Privacy-friendly, anonymous tab session, zero PII, zero cookies
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+
+		let sessionKey = "";
+		try {
+			sessionKey = sessionStorage.getItem("mobio_session") || "";
+			if (!sessionKey || sessionKey.length < 8) {
+				sessionKey = crypto.randomUUID();
+				sessionStorage.setItem("mobio_session", sessionKey);
+			}
+		} catch {
+			sessionKey = Math.random().toString(36).substring(2) + Date.now().toString(36);
+		}
+
+		try {
+			fetch("/api/public/telemetry", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					page: activeTab,
+					sessionKey,
+				}),
+				keepalive: true,
+			}).catch(() => {});
+		} catch {
+			// Silent fallback
+		}
+	}, [activeTab]);
+
 	return (
 		<div
-			className="relative min-h-screen text-theme-primary selection:bg-[var(--accent-subtle)] selection:text-[var(--accent-color)]"
+			className="relative min-h-[100dvh] flex flex-col text-theme-primary selection:bg-[var(--accent-subtle)] selection:text-[var(--accent-color)]"
 			data-theme={themeVariables["--theme-mode"]}
 			style={dynamicStyles}
 		>
@@ -304,8 +346,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				onToggleLang={setLang}
 			/>
 
-			{/* App-Like Centered Container */}
-			<main className="relative z-10 w-full min-h-screen px-4 sm:px-6 pt-6 sm:pt-8 pb-36 sm:pb-44 flex flex-col items-center">
+			{/* App-Like Centered Main Container (flex-grow pushes footer down on short content) */}
+			<main className="relative z-10 w-full flex-grow px-4 sm:px-6 pt-6 sm:pt-8 pb-8 flex flex-col items-center">
 				<div className="w-full max-w-xl sm:max-w-2xl mx-auto flex flex-col items-center">
 					{/* 1. HOME TAB PANEL: Pure Profile Glass Card with Unified Cover & Overlapping Avatar + Vertical Links */}
 					<div
@@ -329,9 +371,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
 								{/* Regular Links: Strict Single Vertical Column */}
 								<VerticalLinkList links={profile.links} lang={lang} />
-
-								{/* Minimalist Personal Footer */}
-								<Footer profile={profile} lang={lang} />
 							</>
 						)}
 					</div>
@@ -347,10 +386,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						}`}
 					>
 						{activeTab === "explore" && (
-							<>
-								<ExploreSection config={profile.explore} lang={lang} />
-								<Footer profile={profile} lang={lang} />
-							</>
+							<ExploreSection config={profile.explore} lang={lang} />
 						)}
 					</div>
 
@@ -365,14 +401,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						}`}
 					>
 						{activeTab === "contact" && (
-							<>
-								<ContactSection config={profile.contact} lang={lang} />
-								<Footer profile={profile} lang={lang} />
-							</>
+							<ContactSection config={profile.contact} lang={lang} />
 						)}
 					</div>
 				</div>
 			</main>
+
+			{/* Minimalist Personal Footer as the definitive final element in document flow */}
+			<footer className="relative z-10 w-full pb-28 sm:pb-32 pt-2 flex flex-col items-center">
+				<div className="w-full max-w-xl sm:max-w-2xl mx-auto px-4 flex flex-col items-center">
+					<Footer profile={profile} lang={lang} />
+				</div>
+			</footer>
 		</div>
 	);
 }

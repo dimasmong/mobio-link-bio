@@ -121,7 +121,7 @@ export function FloatingNav({
 			{/* DESKTOP: Floating Bottom Navigation Dock */}
 			<aside
 				aria-label="Desktop Tab Navigation"
-				className="hidden sm:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40 transition-all duration-300"
+				className="hidden sm:flex fixed bottom-8 left-1/2 -translate-x-1/2 z-40 transition-all duration-300"
 			>
 				<div
 					role="tablist"
@@ -232,8 +232,8 @@ export function FloatingNav({
 				aria-label="Mobile Tab Navigation Dock"
 				className={`sm:hidden fixed left-1/2 -translate-x-1/2 z-40 transition-all duration-300 ${
 					isScrollingDown
-						? "bottom-3 scale-95 opacity-90"
-						: "bottom-5 scale-100 opacity-100"
+						? "bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] scale-95 opacity-90"
+						: "bottom-[calc(1.75rem+env(safe-area-inset-bottom,0px))] scale-100 opacity-100"
 				}`}
 			>
 				<div

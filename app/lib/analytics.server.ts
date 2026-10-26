@@ -33,6 +33,23 @@ export interface ReferrerCount {
 	percentage: number;
 }
 
+export interface PageViewBreakdown {
+	page: string;
+	views: number;
+	percentage: number;
+}
+
+export interface VisitorAnalyticsSummary {
+	totalPageViewsPeriod: number;
+	todayPageViews: number;
+	last7DaysPageViews: number;
+	last30DaysPageViews: number;
+	totalPageViewsAllTime: number;
+	uniqueVisitorSessions: number;
+	pageBreakdown: PageViewBreakdown[];
+	timeSeries: DailyClickPoint[];
+}
+
 export interface ClickAnalyticsSummary {
 	range: "today" | "7d" | "30d" | "all";
 	totalClicksPeriod: number;
@@ -45,6 +62,11 @@ export interface ClickAnalyticsSummary {
 	linkBreakdown: LinkClickBreakdown[];
 	timeSeries: DailyClickPoint[];
 	topReferrers: ReferrerCount[];
+	visitors?: VisitorAnalyticsSummary;
+}
+
+export interface StudioAnalyticsSummary extends ClickAnalyticsSummary {
+	visitors: VisitorAnalyticsSummary;
 }
 
 /**
@@ -130,10 +152,10 @@ export async function getClickSummary(
 	try {
 		// 1. Total counts across multiple periods
 		const [periodRes, todayRes, sevenDaysRes, thirtyDaysRes, allTimeRes] = await Promise.all([
-			db.prepare("SELECT count(*) as count FROM click_events WHERE clicked_at >= ?;").bind(dateBoundary).first<{ count: number }>(),
-			db.prepare("SELECT count(*) as count FROM click_events WHERE clicked_at >= ?;").bind(todayIso).first<{ count: number }>(),
-			db.prepare("SELECT count(*) as count FROM click_events WHERE clicked_at >= ?;").bind(sevenDaysIso).first<{ count: number }>(),
-			db.prepare("SELECT count(*) as count FROM click_events WHERE clicked_at >= ?;").bind(thirtyDaysIso).first<{ count: number }>(),
+			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime(?);").bind(dateBoundary).first<{ count: number }>(),
+			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime('now', 'start of day');").first<{ count: number }>(),
+			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime('now', '-7 days');").first<{ count: number }>(),
+			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime('now', '-30 days');").first<{ count: number }>(),
 			db.prepare("SELECT count(*) as count FROM click_events;").first<{ count: number }>(),
 		]);
 
@@ -156,7 +178,7 @@ export async function getClickSummary(
 				l.id, l.title_id, l.title_en, l.url, l.platform, l.icon, l.sort_order,
 				count(c.id) as clicks
 			   FROM links l
-			   LEFT JOIN click_events c ON l.id = c.link_id AND c.clicked_at >= ?
+			   LEFT JOIN click_events c ON l.id = c.link_id AND datetime(c.clicked_at) >= datetime(?)
 			   GROUP BY l.id
 			   ORDER BY clicks DESC, l.sort_order ASC;`;
 
@@ -194,9 +216,9 @@ export async function getClickSummary(
 		// Fetch counts grouped by date
 		const timeSeriesRes = await db
 			.prepare(
-				`SELECT substr(clicked_at, 1, 10) as day, count(*) as count
+				`SELECT substr(replace(clicked_at, 'T', ' '), 1, 10) as day, count(*) as count
 				 FROM click_events
-				 WHERE clicked_at >= ?
+				 WHERE datetime(clicked_at) >= datetime(?)
 				 GROUP BY day
 				 ORDER BY day ASC;`
 			)
@@ -233,10 +255,10 @@ export async function getClickSummary(
 			.prepare(
 				`SELECT referrer, count(*) as count
 				 FROM click_events
-				 WHERE clicked_at >= ?
+				 WHERE datetime(clicked_at) >= datetime(?)
 				 GROUP BY referrer
 				 ORDER BY count DESC
-				 LIMIT 5;`
+				 LIMIT 10;`
 			)
 			.bind(dateBoundary)
 			.all<{ referrer: string; count: number }>();
@@ -287,4 +309,195 @@ export async function getClickSummary(
  */
 export async function resetClickEvents(db: D1Database): Promise<void> {
 	await db.prepare("DELETE FROM click_events;").run();
+}
+
+/**
+ * Records a privacy-preserving page view event into Cloudflare D1.
+ * Filters automated scrapers/bots and uses ephemeral session hash with zero raw IP storage.
+ */
+export async function recordPageView(
+	db: D1Database,
+	params: {
+		page: string;
+		sessionKey: string;
+		referrer?: string;
+		userAgent?: string;
+	}
+): Promise<void> {
+	// 1. Filter automated search bots and crawler noise
+	const ua = params.userAgent || "";
+	if (/bot|spider|crawl|slurp|headless|bingpreview|facebookexternalhit|whatsapp|telegrambot/i.test(ua)) {
+		return;
+	}
+
+	// 2. Validate and sanitize page identifier
+	const rawPage = params.page?.toLowerCase().trim() || "home";
+	const page = ["home", "explore", "contact"].includes(rawPage) ? rawPage : "home";
+
+	// 3. Ephemeral anonymous session key (strictly scoped to current browser tab)
+	const rawSession = params.sessionKey?.trim() || "";
+	if (!rawSession || rawSession.length < 8) {
+		return;
+	}
+	const sessionHash = rawSession.slice(0, 36);
+
+	const id = crypto.randomUUID();
+	const now = new Date().toISOString();
+	const sanitizedRef = sanitizeReferrer(params.referrer);
+
+	try {
+		await db
+			.prepare(
+				`INSERT INTO page_views (id, page, session_hash, viewed_at, referrer)
+				 VALUES (?, ?, ?, ?, ?);`
+			)
+			.bind(id, page, sessionHash, now, sanitizedRef)
+			.run();
+	} catch (err: unknown) {
+		console.warn("Failed to record page view:", err);
+	}
+}
+
+/**
+ * Aggregates website visitor analytics (Page Views, Unique Visitor Sessions, Page Breakdown, Trends).
+ */
+export async function getVisitorSummary(
+	db: D1Database,
+	range: "today" | "7d" | "30d" | "all" = "7d"
+): Promise<VisitorAnalyticsSummary> {
+	const now = new Date();
+	let dateBoundary = "1970-01-01 00:00:00";
+	let daysCount = 7;
+
+	if (range === "today") {
+		const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+		dateBoundary = startOfToday.toISOString();
+		daysCount = 1;
+	} else if (range === "7d") {
+		const past7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+		dateBoundary = past7.toISOString();
+		daysCount = 7;
+	} else if (range === "30d") {
+		const past30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+		dateBoundary = past30.toISOString();
+		daysCount = 30;
+	} else if (range === "all") {
+		dateBoundary = "1970-01-01 00:00:00";
+		daysCount = 30;
+	}
+
+	try {
+		const [periodRes, todayRes, sevenDaysRes, thirtyDaysRes, allTimeRes, sessionsRes, pagesRes, timeSeriesRes] =
+			await Promise.all([
+				db.prepare("SELECT count(*) as count FROM page_views WHERE datetime(viewed_at) >= datetime(?);").bind(dateBoundary).first<{ count: number }>(),
+				db.prepare("SELECT count(*) as count FROM page_views WHERE datetime(viewed_at) >= datetime('now', 'start of day');").first<{ count: number }>(),
+				db.prepare("SELECT count(*) as count FROM page_views WHERE datetime(viewed_at) >= datetime('now', '-7 days');").first<{ count: number }>(),
+				db.prepare("SELECT count(*) as count FROM page_views WHERE datetime(viewed_at) >= datetime('now', '-30 days');").first<{ count: number }>(),
+				db.prepare("SELECT count(*) as count FROM page_views;").first<{ count: number }>(),
+				db.prepare("SELECT count(DISTINCT session_hash) as count FROM page_views WHERE datetime(viewed_at) >= datetime(?);").bind(dateBoundary).first<{ count: number }>(),
+				db.prepare(
+					`SELECT page, count(*) as views
+					 FROM page_views
+					 WHERE datetime(viewed_at) >= datetime(?)
+					 GROUP BY page
+					 ORDER BY views DESC;`
+				).bind(dateBoundary).all<{ page: string; views: number }>(),
+				db.prepare(
+					`SELECT substr(replace(viewed_at, 'T', ' '), 1, 10) as day, count(*) as count
+					 FROM page_views
+					 WHERE datetime(viewed_at) >= datetime(?)
+					 GROUP BY day
+					 ORDER BY day ASC;`
+				).bind(dateBoundary).all<{ day: string; count: number }>(),
+			]);
+
+		const totalPageViewsPeriod = periodRes?.count ?? 0;
+		const todayPageViews = todayRes?.count ?? 0;
+		const last7DaysPageViews = sevenDaysRes?.count ?? 0;
+		const last30DaysPageViews = thirtyDaysRes?.count ?? 0;
+		const totalPageViewsAllTime = allTimeRes?.count ?? 0;
+		const uniqueVisitorSessions = sessionsRes?.count ?? 0;
+
+		const rawPages = pagesRes.results ?? [];
+		const pageBreakdown: PageViewBreakdown[] = rawPages.map((p) => {
+			const views = p.views || 0;
+			const percentage = totalPageViewsPeriod > 0 ? Math.round((views / totalPageViewsPeriod) * 100) : 0;
+			return {
+				page: p.page,
+				views,
+				percentage,
+			};
+		});
+
+		const dayMap = new Map<string, number>();
+		(timeSeriesRes.results ?? []).forEach((row) => {
+			if (row.day) dayMap.set(row.day, row.count);
+		});
+
+		const timeSeries: DailyClickPoint[] = [];
+		const pointDays = range === "today" ? 1 : daysCount;
+		for (let i = pointDays - 1; i >= 0; i--) {
+			const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+			const yyyy = d.getUTCFullYear();
+			const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+			const dd = String(d.getUTCDate()).padStart(2, "0");
+			const dateStr = `${yyyy}-${mm}-${dd}`;
+			const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+			const label = `${d.getUTCDate()} ${monthNames[d.getUTCMonth()]}`;
+
+			timeSeries.push({
+				date: dateStr,
+				label,
+				clicks: dayMap.get(dateStr) || 0,
+			});
+		}
+
+		return {
+			totalPageViewsPeriod,
+			todayPageViews,
+			last7DaysPageViews,
+			last30DaysPageViews,
+			totalPageViewsAllTime,
+			uniqueVisitorSessions,
+			pageBreakdown,
+			timeSeries,
+		};
+	} catch (err: unknown) {
+		console.warn("Failed to aggregate visitor summary:", err);
+		return {
+			totalPageViewsPeriod: 0,
+			todayPageViews: 0,
+			last7DaysPageViews: 0,
+			last30DaysPageViews: 0,
+			totalPageViewsAllTime: 0,
+			uniqueVisitorSessions: 0,
+			pageBreakdown: [],
+			timeSeries: [],
+		};
+	}
+}
+
+/**
+ * Combines both Click Monitor and Website Visitor Analytics in one call.
+ */
+export async function getStudioAnalyticsSummary(
+	db: D1Database,
+	range: "today" | "7d" | "30d" | "all" = "7d"
+): Promise<StudioAnalyticsSummary> {
+	const [clicks, visitors] = await Promise.all([
+		getClickSummary(db, range),
+		getVisitorSummary(db, range),
+	]);
+
+	return {
+		...clicks,
+		visitors,
+	};
+}
+
+/**
+ * Clears all visitor analytics telemetry.
+ */
+export async function resetVisitorEvents(db: D1Database): Promise<void> {
+	await db.prepare("DELETE FROM page_views;").run();
 }

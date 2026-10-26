@@ -7,6 +7,11 @@ import {
 	deleteDraftExploreItem,
 	duplicateDraftExploreItem,
 	reorderDraftExploreItems,
+	getExploreCategories,
+	createDraftExploreCategory,
+	updateDraftExploreCategory,
+	deleteDraftExploreCategory,
+	reorderDraftExploreCategories,
 	getExploreSubcategories,
 	createDraftExploreSubcategory,
 	updateDraftExploreSubcategory,
@@ -38,8 +43,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	}
 
 	const explore = await getExploreItems(env.DB, "draft");
+	const categories = await getExploreCategories(env.DB, "draft");
 	const subcategories = await getExploreSubcategories(env.DB, "draft");
-	return Response.json({ status: "ok", explore, subcategories });
+	return Response.json({ status: "ok", explore, categories, subcategories });
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -58,6 +64,49 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	const method = request.method.toUpperCase();
+
+	// --- Category Actions (Single-Tier Customizable Main Categories) ---
+	if (body.action === "create_category") {
+		const nameId = typeof body.name_id === "string" ? body.name_id.trim() : "";
+		const nameEn = typeof body.name_en === "string" ? body.name_en.trim() : nameId;
+		if (!nameId) {
+			return Response.json({ error: "Nama kategori (ID) wajib diisi." }, { status: 422 });
+		}
+		const cat = await createDraftExploreCategory(env.DB, {
+			id: typeof body.id === "string" ? body.id.trim() : undefined,
+			name_id: nameId,
+			name_en: nameEn,
+			icon: typeof body.icon === "string" ? body.icon.trim() : "folder",
+			color: typeof body.color === "string" ? body.color.trim() : "#8b5cf6",
+			is_enabled: typeof body.is_enabled === "number" ? body.is_enabled : 1,
+		});
+		return Response.json({ status: "ok", message: "Kategori berhasil dibuat.", category: cat }, { status: 201 });
+	}
+
+	if (body.action === "update_category") {
+		const id = typeof body.id === "string" ? body.id.trim() : "";
+		if (!id) {
+			return Response.json({ error: "Parameter 'id' wajib diisi." }, { status: 422 });
+		}
+		await updateDraftExploreCategory(env.DB, id, body);
+		return Response.json({ status: "ok", message: "Kategori berhasil diperbarui." });
+	}
+
+	if (body.action === "delete_category") {
+		const id = typeof body.id === "string" ? body.id.trim() : "";
+		if (!id) {
+			return Response.json({ error: "Parameter 'id' wajib diisi." }, { status: 422 });
+		}
+		await deleteDraftExploreCategory(env.DB, id);
+		return Response.json({ status: "ok", message: "Kategori berhasil dihapus." });
+	}
+
+	if (body.action === "reorder_categories") {
+		if (Array.isArray(body.orderedIds)) {
+			await reorderDraftExploreCategories(env.DB, body.orderedIds as string[]);
+		}
+		return Response.json({ status: "ok", message: "Urutan kategori berhasil diperbarui." });
+	}
 
 	// --- Subcategory Actions (Can be invoked via POST/PUT/DELETE with body.action) ---
 	if (body.action === "create_subcategory") {

@@ -65,7 +65,7 @@ async function runFinalLayoutTests() {
 		});
 
 		await page.setViewportSize({ width: 1440, height: 900 });
-		await page.goto(BASE_URL, { waitUntil: "networkidle" });
+		await page.goto(BASE_URL, { waitUntil: "load" });
 
 		// Verify no separate floating LanguageToggle exists outside navigation
 		const separateLanguageToggle = await page.$("main > div > div > button:has-text('ID'), main > div > .LanguageToggle");
@@ -117,7 +117,7 @@ async function runFinalLayoutTests() {
 			cover_enabled: 0,
 			cover_url: "",
 		});
-		await page.goto(BASE_URL, { waitUntil: "networkidle" });
+		await page.goto(BASE_URL, { waitUntil: "load" });
 
 		const coverWhenDisabled = await page.$("header .glass-liquid-primary div[class*='aspect-'] img");
 		if (coverWhenDisabled) {

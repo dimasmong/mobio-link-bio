@@ -1,6 +1,6 @@
 import type { Route } from "./+types/api.studio.analytics";
 import { requireAdmin } from "../lib/auth.server";
-import { getClickSummary, resetClickEvents } from "../lib/analytics.server";
+import { getStudioAnalyticsSummary, resetClickEvents, resetVisitorEvents } from "../lib/analytics.server";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const env = context.cloudflare?.env;
@@ -18,7 +18,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		| "30d"
 		| "all";
 
-	const summary = await getClickSummary(env.DB, range);
+	const summary = await getStudioAnalyticsSummary(env.DB, range);
 	return Response.json({ status: "ok", analytics: summary });
 }
 
@@ -32,8 +32,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	const method = request.method.toUpperCase();
 	if (method === "DELETE") {
-		await resetClickEvents(env.DB);
-		return Response.json({ status: "ok", message: "Data klik analitik berhasil direset." });
+		const url = new URL(request.url);
+		const target = url.searchParams.get("target") || "all";
+		if (target === "visitors") {
+			await resetVisitorEvents(env.DB);
+			return Response.json({ status: "ok", message: "Data kunjungan berhasil direset." });
+		} else if (target === "clicks") {
+			await resetClickEvents(env.DB);
+			return Response.json({ status: "ok", message: "Data klik analitik berhasil direset." });
+		} else {
+			await Promise.all([resetClickEvents(env.DB), resetVisitorEvents(env.DB)]);
+			return Response.json({ status: "ok", message: "Seluruh data analitik berhasil direset." });
+		}
 	}
 
 	return Response.json({ error: `Metode HTTP '${method}' tidak diizinkan.` }, { status: 405 });

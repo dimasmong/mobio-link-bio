@@ -76,6 +76,15 @@ export interface ExplorePhoto {
 	alt?: string;
 }
 
+export interface ExploreCategory {
+	id: string;
+	name: LocalizedString;
+	icon?: string;
+	color?: string;
+	sortOrder?: number;
+	isEnabled?: boolean;
+}
+
 export interface ExploreSubcategory {
 	id: string;
 	category: string;
@@ -111,6 +120,7 @@ export interface ExploreConfig {
 	enabled: boolean;
 	title: LocalizedString;
 	description?: LocalizedString;
+	categories?: ExploreCategory[];
 	subcategories?: ExploreSubcategory[];
 	items: ExploreItem[];
 }

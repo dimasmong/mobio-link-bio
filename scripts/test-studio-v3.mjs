@@ -119,7 +119,7 @@ console.log("\nTest 4: Verifying ExploreSection Component (Thumbnails, Multi-Pho
 	assert.ok(exploreSectionFile.includes("currentSlideIndex + 1"), "Lightbox must show photo counter (e.g. 1 / 5)");
 	assert.ok(exploreSectionFile.includes("onTouchStart") && exploreSectionFile.includes("onTouchEnd"), "Lightbox must support mobile touch swipe");
 	assert.ok(exploreSectionFile.includes("ArrowLeft") && exploreSectionFile.includes("ArrowRight"), "Lightbox must support keyboard arrow navigation");
-	assert.ok(exploreSectionFile.includes("categories.map"), "ExploreSection must render category filter tabs");
+	assert.ok(exploreSectionFile.includes("categories.map") || exploreSectionFile.includes("displayCategories.map"), "ExploreSection must render category filter tabs");
 
 	console.log("  ✅ ExploreSection includes resilient thumbnails, multi-photo slideshow lightbox, and category filter tabs.");
 }
@@ -131,11 +131,11 @@ console.log("\nTest 5: Verifying Desktop Bottom Navigation Dock...");
 {
 	const floatingNavFile = fs.readFileSync(path.join(rootDir, "app/components/FloatingNav.tsx"), "utf-8");
 
-	assert.ok(floatingNavFile.includes("fixed bottom-6 left-1/2 -translate-x-1/2"), "Desktop nav must be docked at bottom");
+	assert.ok(floatingNavFile.includes("fixed bottom-8 left-1/2 -translate-x-1/2") || floatingNavFile.includes("fixed bottom-6 left-1/2 -translate-x-1/2"), "Desktop nav must be docked at bottom");
 	assert.ok(floatingNavFile.includes("absolute bottom-full mb-3 right-0"), "Desktop language dropdown must open upward above dock");
 
 	const homeFile = fs.readFileSync(path.join(rootDir, "app/routes/home.tsx"), "utf-8");
-	assert.ok(homeFile.includes("pb-36 sm:pb-44") || homeFile.includes("pb-36 sm:pb-40"), "Home layout must provide ample bottom padding for bottom dock");
+	assert.ok(homeFile.includes("pb-28 sm:pb-32") || homeFile.includes("pb-36 sm:pb-44") || homeFile.includes("pb-36 sm:pb-40"), "Home layout must provide ample bottom padding for bottom dock");
 
 	console.log("  ✅ Desktop navigation is repositioned to bottom dock with upward-opening language dropdown.");
 }

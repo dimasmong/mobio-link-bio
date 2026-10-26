@@ -3,9 +3,10 @@ import type { BackgroundConfig } from "../data/profile";
 
 interface FixedBackgroundProps {
 	config: BackgroundConfig;
+	isContained?: boolean;
 }
 
-export function FixedBackground({ config }: FixedBackgroundProps) {
+export function FixedBackground({ config, isContained = false }: FixedBackgroundProps) {
 	const videoRef = useRef<HTMLVideoElement>(null);
 
 	// Pause video when document is hidden or user prefers reduced motion
@@ -34,8 +35,8 @@ export function FixedBackground({ config }: FixedBackgroundProps) {
 	}, [config.type]);
 
 	const overlayStyle: React.CSSProperties = {
-		backgroundColor: config.overlayColor || "rgba(248, 250, 252, 0.45)",
-		opacity: config.overlayOpacity ?? 0.45,
+		backgroundColor: config.overlayColor || "var(--bg-overlay-color, rgba(248, 250, 252, 0.45))",
+		opacity: config.overlayOpacity ?? ("var(--bg-overlay-opacity, 0.45)" as any),
 	};
 
 	const filterStyle: React.CSSProperties = {
@@ -45,7 +46,9 @@ export function FixedBackground({ config }: FixedBackgroundProps) {
 
 	return (
 		<div
-			className="fixed inset-0 w-full h-full -z-20 pointer-events-none overflow-hidden select-none"
+			className={`${
+				isContained ? "absolute inset-0" : "fixed inset-0"
+			} w-full h-full z-0 pointer-events-none overflow-hidden select-none`}
 			aria-hidden="true"
 		>
 			{/* 1. Gradient / Animated Frost Aurora Mesh */}

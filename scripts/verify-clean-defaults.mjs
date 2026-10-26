@@ -50,7 +50,7 @@ async function run() {
 	// -------------------------------------------------------------------------
 	console.log("TEST 1: Verifying Public Homepage Neutral Defaults...");
 	await page.setViewportSize({ width: 1440, height: 900 });
-	const res = await page.goto(BASE_URL, { waitUntil: "networkidle" });
+	const res = await page.goto(BASE_URL, { waitUntil: "load" });
 
 	const title = await page.title();
 	report.publicTitleClean =
@@ -163,7 +163,7 @@ async function run() {
 	// -------------------------------------------------------------------------
 	console.log("\nTEST 6: Verifying MOBIO Studio Dashboard Initial Clean Defaults...");
 	await page.setExtraHTTPHeaders(authHeaders);
-	await page.goto(`${BASE_URL}/studio`, { waitUntil: "networkidle" });
+	await page.goto(`${BASE_URL}/studio`, { waitUntil: "load" });
 
 	const overviewContent = await page.textContent("main");
 	report.studioOverviewClean =
@@ -215,7 +215,7 @@ async function run() {
 		{ name: "1440px (Desktop)", width: 1440, height: 900 },
 	];
 
-	await page.goto(BASE_URL, { waitUntil: "networkidle" });
+	await page.goto(BASE_URL, { waitUntil: "load" });
 	for (const vp of viewports) {
 		await page.setViewportSize({ width: vp.width, height: vp.height });
 		await page.waitForTimeout(100);

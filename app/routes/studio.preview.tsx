@@ -7,6 +7,7 @@ import {
 	getLinks,
 	getContactMethods,
 	getExploreItems,
+	getExploreCategories,
 	getExploreSubcategories,
 	getAppearanceRecord,
 	getPublishMetadata,
@@ -45,13 +46,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	if (env?.DB) {
 		try {
-			const [dbProfile, dbLinks, dbContacts, dbExplore, dbAppearance, pubMeta, dbSubcategories] = await Promise.all([
+			const [dbProfile, dbLinks, dbContacts, dbExplore, dbAppearance, pubMeta, dbCategories, dbSubcategories] = await Promise.all([
 				getProfileRecord(env.DB, "draft"),
 				getLinks(env.DB, "draft", false),
 				getContactMethods(env.DB, "draft", false),
 				getExploreItems(env.DB, "draft", false),
 				getAppearanceRecord(env.DB, "draft"),
 				getPublishMetadata(env.DB),
+				getExploreCategories(env.DB, "draft"),
 				getExploreSubcategories(env.DB, "draft"),
 			]);
 
@@ -65,7 +67,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				}
 
 				profile = {
-					...profileData,
+					...profile,
 					name: dbProfile.name || profileData.name,
 					handle: dbProfile.handle || profileData.handle,
 					avatarUrl,
@@ -77,39 +79,55 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 						id: dbProfile.bio_id || "",
 						en: dbProfile.bio_en || "",
 					},
-					links: dbLinks.map((l) => ({
-						id: l.id,
-						title: { id: l.title_id, en: l.title_en },
-						description:
-							l.description_id || l.description_en
-								? { id: l.description_id || "", en: l.description_en || "" }
-								: undefined,
-						url: l.url,
-						platform: l.platform,
-						icon: l.icon || "globe",
-						enabled: Boolean(l.is_enabled),
-						icon_type: l.icon_type,
-						icon_url: l.icon_url,
-						icon_media_id: l.icon_media_id,
-					})),
-					contact: {
-						...profileData.contact,
-						methods: dbContacts.map((c) => ({
-							id: c.id,
-							platform: (c.platform === "custom" ? "other" : c.platform) as any,
-							label: { id: c.label_id, en: c.label_en },
-							value: c.value,
-							url: c.url,
-						})),
-					},
 				};
 			}
 
-			// Apply explore items and subcategories from draft
-			if (dbExplore.length > 0 || (dbSubcategories && dbSubcategories.length > 0)) {
+			// Apply links from draft
+			if (dbLinks.length > 0) {
+				profile.links = dbLinks.map((l) => ({
+					id: l.id,
+					title: { id: l.title_id, en: l.title_en },
+					description:
+						l.description_id || l.description_en
+							? { id: l.description_id || "", en: l.description_en || "" }
+							: undefined,
+					url: l.url,
+					platform: l.platform,
+					icon: l.icon || "globe",
+					enabled: Boolean(l.is_enabled),
+					icon_type: l.icon_type,
+					icon_url: l.icon_url,
+					icon_media_id: l.icon_media_id,
+				}));
+			}
+
+			// Apply contact methods from draft
+			if (dbContacts.length > 0) {
+				profile.contact = {
+					...profile.contact,
+					methods: dbContacts.map((c) => ({
+						id: c.id,
+						platform: (c.platform === "custom" ? "other" : c.platform) as any,
+						label: { id: c.label_id, en: c.label_en },
+						value: c.value,
+						url: c.url,
+					})),
+				};
+			}
+
+			// Apply explore items and categories from draft
+			if (dbExplore.length > 0 || (dbCategories && dbCategories.length > 0) || (dbSubcategories && dbSubcategories.length > 0)) {
 				profile.explore = {
 					...profile.explore,
 					enabled: true,
+					categories: (dbCategories || []).map((cat) => ({
+						id: cat.id,
+						name: { id: cat.name_id, en: cat.name_en },
+						icon: cat.icon,
+						color: cat.color,
+						sortOrder: cat.sort_order,
+						isEnabled: Boolean(cat.is_enabled),
+					})),
 					subcategories: (dbSubcategories || []).map((sub) => ({
 						id: sub.id,
 						category: sub.category,
@@ -331,24 +349,26 @@ export default function StudioPreview({ loaderData }: Route.ComponentProps) {
 			</header>
 
 			{/* Preview Viewport Frame */}
-			<div className="flex-1 w-full flex justify-center bg-slate-950/70 p-0 sm:py-6 overflow-x-hidden">
+			<div className={`flex-1 w-full flex ${viewport === "desktop" ? "flex-col" : "justify-center bg-slate-950 p-2 sm:py-6 overflow-x-hidden"}`}>
 				<div
 					className={`w-full transition-all duration-300 relative ${
 						viewport === "mobile"
-							? "max-w-[400px] shadow-2xl sm:rounded-3xl border border-slate-800 overflow-hidden min-h-[844px]"
+							? "max-w-[400px] shadow-2xl sm:rounded-3xl border border-slate-800 overflow-hidden min-h-[844px] flex flex-col"
 							: viewport === "tablet"
-							? "max-w-[768px] shadow-2xl sm:rounded-3xl border border-slate-800 overflow-hidden min-h-[900px]"
-							: "max-w-full"
+							? "max-w-[768px] shadow-2xl sm:rounded-3xl border border-slate-800 overflow-hidden min-h-[900px] flex flex-col"
+							: "flex-1 flex flex-col min-h-[calc(100dvh-53px)]"
 					}`}
 				>
 					{/* Real Website Rendering using Draft Data */}
 					<div
-						className="relative min-h-screen text-theme-primary selection:bg-[var(--accent-subtle)] selection:text-[var(--accent-color)] overflow-hidden"
+						className={`relative flex-1 flex flex-col text-theme-primary selection:bg-[var(--accent-subtle)] selection:text-[var(--accent-color)] ${
+							viewport === "desktop" ? "min-h-[calc(100dvh-53px)]" : "min-h-full"
+						}`}
 						data-theme={themeVariables["--theme-mode"]}
 						style={themeVariables as unknown as React.CSSProperties}
 					>
 						{/* Background */}
-						<FixedBackground config={profile.background} />
+						<FixedBackground config={profile.background} isContained={viewport !== "desktop"} />
 
 						{/* Floating Navigation Dock */}
 						<FloatingNav
@@ -359,8 +379,8 @@ export default function StudioPreview({ loaderData }: Route.ComponentProps) {
 							onToggleLang={setLang}
 						/>
 
-						{/* Centered Main Content */}
-						<main className="relative z-10 w-full min-h-screen px-4 sm:px-6 pt-6 sm:pt-8 pb-36 sm:pb-44 flex flex-col items-center">
+						{/* Centered Main Content (flex-grow pushes footer down on short content) */}
+						<main className="relative z-10 w-full flex-grow px-4 sm:px-6 pt-6 sm:pt-8 pb-8 flex flex-col items-center">
 							<div className="w-full max-w-xl sm:max-w-2xl mx-auto flex flex-col items-center">
 								{/* HOME TAB */}
 								{activeTab === "home" && (
@@ -369,7 +389,6 @@ export default function StudioPreview({ loaderData }: Route.ComponentProps) {
 											<ProfileGlassCard profile={profile} lang={lang} />
 										</section>
 										<VerticalLinkList links={profile.links} lang={lang} isPreview={true} />
-										<Footer profile={profile} lang={lang} />
 									</div>
 								)}
 
@@ -377,7 +396,6 @@ export default function StudioPreview({ loaderData }: Route.ComponentProps) {
 								{activeTab === "explore" && (
 									<div className="w-full flex flex-col items-center tab-panel-enter">
 										<ExploreSection config={profile.explore} lang={lang} />
-										<Footer profile={profile} lang={lang} />
 									</div>
 								)}
 
@@ -385,11 +403,17 @@ export default function StudioPreview({ loaderData }: Route.ComponentProps) {
 								{activeTab === "contact" && (
 									<div className="w-full flex flex-col items-center tab-panel-enter">
 										<ContactSection config={profile.contact} lang={lang} />
-										<Footer profile={profile} lang={lang} />
 									</div>
 								)}
 							</div>
 						</main>
+
+						{/* Footer as the definitive final element in document flow */}
+						<footer className="relative z-10 w-full pb-28 sm:pb-32 pt-2 flex flex-col items-center">
+							<div className="w-full max-w-xl sm:max-w-2xl mx-auto px-4 flex flex-col items-center">
+								<Footer profile={profile} lang={lang} />
+							</div>
+						</footer>
 					</div>
 				</div>
 			</div>

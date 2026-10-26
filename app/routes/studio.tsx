@@ -7,6 +7,7 @@ import {
 	getLinks,
 	getContactMethods,
 	getExploreItems,
+	getExploreCategories,
 	getExploreSubcategories,
 	getAppearanceRecord,
 	getPublishMetadata,
@@ -15,13 +16,14 @@ import {
 	type LinkRecord,
 	type ContactMethodRecord,
 	type ExploreItemRecord,
+	type ExploreCategoryRecord,
 	type ExploreSubcategoryRecord,
 	type ExploreBlockType,
 	type AppearanceRecord,
 	type PublishMetadataRecord,
 } from "../lib/db.server";
 import type { MediaAssetRecord } from "../lib/media.server";
-import { getClickSummary, type ClickAnalyticsSummary } from "../lib/analytics.server";
+import { getStudioAnalyticsSummary, type StudioAnalyticsSummary, type ClickAnalyticsSummary } from "../lib/analytics.server";
 import { IconPicker } from "../components/IconPicker";
 import { LinkIconRenderer, getRecommendedIcon } from "../components/IconLibrary";
 import {
@@ -60,14 +62,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			draftContacts: [] as ContactMethodRecord[],
 			draftAppearance: null as AppearanceRecord | null,
 			draftExplore: [] as ExploreItemRecord[],
+			draftCategories: [] as ExploreCategoryRecord[],
 			draftSubcategories: [] as ExploreSubcategoryRecord[],
 			publishMetadata: null as PublishMetadataRecord | null,
-			initialAnalytics: null as ClickAnalyticsSummary | null,
+			initialAnalytics: null as StudioAnalyticsSummary | null,
 			envMode: import.meta.env.MODE,
 		};
 	}
 
-	const [dbStatus, draftProfile, draftLinks, draftContacts, draftExplore, draftAppearance, publishMetadata, initialAnalytics, draftSubcategories] = await Promise.all([
+	const [dbStatus, draftProfile, draftLinks, draftContacts, draftExplore, draftAppearance, publishMetadata, initialAnalytics, draftCategories, draftSubcategories] = await Promise.all([
 		getDatabaseStatus(env?.DB),
 		env?.DB ? getProfileRecord(env.DB, "draft") : null,
 		env?.DB ? getLinks(env.DB, "draft") : [],
@@ -75,7 +78,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		env?.DB ? getExploreItems(env.DB, "draft") : [],
 		env?.DB ? getAppearanceRecord(env.DB, "draft") : null,
 		env?.DB ? getPublishMetadata(env.DB) : null,
-		env?.DB ? getClickSummary(env.DB, "7d") : null,
+		env?.DB ? getStudioAnalyticsSummary(env.DB, "7d") : null,
+		env?.DB ? getExploreCategories(env.DB, "draft") : [],
 		env?.DB ? getExploreSubcategories(env.DB, "draft") : [],
 	]);
 
@@ -89,6 +93,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		draftLinks,
 		draftContacts,
 		draftExplore,
+		draftCategories,
 		draftSubcategories,
 		draftAppearance,
 		publishMetadata,
@@ -265,8 +270,20 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 	const [uploadError, setUploadError] = useState<string | null>(null);
 	const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
 
-	// Explore items & Subcategories state (Phase 4 & Phase 6)
+	// Explore items & Categories state (Single-Tier Customizable Main Categories)
 	const [exploreItems, setExploreItems] = useState<ExploreItemRecord[]>(loaderData.draftExplore || []);
+	const [categories, setCategories] = useState<ExploreCategoryRecord[]>(loaderData.draftCategories || []);
+	const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+	const [editingCategory, setEditingCategory] = useState<ExploreCategoryRecord | null>(null);
+	const [categoryForm, setCategoryForm] = useState({
+		id: "",
+		name_id: "",
+		name_en: "",
+		icon: "folder",
+		color: "#8b5cf6",
+		is_enabled: true,
+	});
+	const [isSubmittingCategory, setIsSubmittingCategory] = useState(false);
 	const [subcategories, setSubcategories] = useState<ExploreSubcategoryRecord[]>(loaderData.draftSubcategories || []);
 	const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
 	const [editingSubcat, setEditingSubcat] = useState<ExploreSubcategoryRecord | null>(null);
@@ -303,12 +320,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		is_enabled: true,
 	});
 
-	// Analytics state (Phase 5)
+	// Analytics state (Click Monitor & Website Visitor Telemetry)
 	const [analyticsRange, setAnalyticsRange] = useState<"today" | "7d" | "30d" | "all">("7d");
-	const [analyticsData, setAnalyticsData] = useState<ClickAnalyticsSummary | null>(loaderData.initialAnalytics || null);
+	const [analyticsData, setAnalyticsData] = useState<StudioAnalyticsSummary | null>(loaderData.initialAnalytics || null);
 	const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 	const [isResetAnalyticsOpen, setIsResetAnalyticsOpen] = useState(false);
 	const [isResettingAnalytics, setIsResettingAnalytics] = useState(false);
+	const [resetAnalyticsTarget, setResetAnalyticsTarget] = useState<"all" | "clicks" | "visitors">("all");
 
 	const fetchAnalytics = async (range: "today" | "7d" | "30d" | "all") => {
 		setAnalyticsRange(range);
@@ -316,27 +334,34 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		try {
 			const res = await fetch(`/api/studio/analytics?range=${range}`);
 			if (!res.ok) throw new Error("Gagal memuat analitik");
-			const data = (await res.json()) as { status: string; analytics: ClickAnalyticsSummary };
+			const data = (await res.json()) as { status: string; analytics: StudioAnalyticsSummary };
 			setAnalyticsData(data.analytics);
 		} catch (err) {
 			console.error("fetchAnalytics error:", err);
-			showToast("Gagal memuat data analitik klik.", "error");
+			showToast("Gagal memuat data analitik.", "error");
 		} finally {
 			setIsLoadingAnalytics(false);
 		}
 	};
 
+	// Auto refresh analytics when navigating to Click Monitor tab
+	useEffect(() => {
+		if (activeSection === "clicks") {
+			fetchAnalytics(analyticsRange);
+		}
+	}, [activeSection]);
+
 	const handleResetAnalytics = async () => {
 		setIsResettingAnalytics(true);
 		try {
-			const res = await fetch("/api/studio/analytics", { method: "DELETE" });
+			const res = await fetch(`/api/studio/analytics?target=${resetAnalyticsTarget}`, { method: "DELETE" });
 			if (!res.ok) throw new Error("Gagal mereset analitik");
 			await fetchAnalytics(analyticsRange);
 			setIsResetAnalyticsOpen(false);
-			showToast("Data analitik klik berhasil direset.", "success");
+			showToast("Data analitik berhasil direset.", "success");
 		} catch (err) {
 			console.error("handleResetAnalytics error:", err);
-			showToast("Gagal mereset data analitik klik.", "error");
+			showToast("Gagal mereset data analitik.", "error");
 		} finally {
 			setIsResettingAnalytics(false);
 		}
@@ -1211,6 +1236,132 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			showToast("Gagal menyimpan subkategori.", "error");
 		} finally {
 			setIsSubmittingSubcat(false);
+		}
+	};
+
+	// Category Handlers (Single-Tier Customizable Main Categories)
+	const handleSaveCategory = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!categoryForm.name_id.trim()) {
+			showToast("Nama kategori (ID) wajib diisi.", "error");
+			return;
+		}
+		setIsSubmittingCategory(true);
+		try {
+			if (editingCategory) {
+				const res = await fetch("/api/studio/explore", {
+					method: "PUT",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						action: "update_category",
+						id: editingCategory.id,
+						name_id: categoryForm.name_id.trim(),
+						name_en: categoryForm.name_en.trim() || categoryForm.name_id.trim(),
+						icon: categoryForm.icon.trim() || "folder",
+						color: categoryForm.color || "#8b5cf6",
+						is_enabled: categoryForm.is_enabled ? 1 : 0,
+					}),
+				});
+				if (res.ok) {
+					setCategories((prev) =>
+						prev.map((c) =>
+							c.id === editingCategory.id
+								? {
+										...c,
+										name_id: categoryForm.name_id.trim(),
+										name_en: categoryForm.name_en.trim() || categoryForm.name_id.trim(),
+										icon: categoryForm.icon.trim() || "folder",
+										color: categoryForm.color || "#8b5cf6",
+										is_enabled: categoryForm.is_enabled ? 1 : 0,
+								  }
+								: c
+						)
+					);
+					setEditingCategory(null);
+					setCategoryForm({ id: "", name_id: "", name_en: "", icon: "folder", color: "#8b5cf6", is_enabled: true });
+					showToast("Kategori berhasil diperbarui.", "success");
+					markUnpublished();
+				} else {
+					const err = await res.json().catch(() => ({}));
+					showToast((err as { error?: string })?.error || "Gagal memperbarui kategori.", "error");
+				}
+			} else {
+				const catId = categoryForm.id.trim() || categoryForm.name_id.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+				const res = await fetch("/api/studio/explore", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						action: "create_category",
+						id: catId,
+						name_id: categoryForm.name_id.trim(),
+						name_en: categoryForm.name_en.trim() || categoryForm.name_id.trim(),
+						icon: categoryForm.icon.trim() || "folder",
+						color: categoryForm.color || "#8b5cf6",
+						is_enabled: categoryForm.is_enabled ? 1 : 0,
+					}),
+				});
+				const data = (await res.json()) as { status: string; category?: ExploreCategoryRecord; error?: string };
+				if (res.ok && data.category) {
+					setCategories((prev) => [...prev, data.category!]);
+					setCategoryForm({ id: "", name_id: "", name_en: "", icon: "folder", color: "#8b5cf6", is_enabled: true });
+					showToast("Kategori baru berhasil ditambahkan.", "success");
+					markUnpublished();
+				} else {
+					showToast(data.error || "Gagal membuat kategori.", "error");
+				}
+			}
+		} catch {
+			showToast("Gagal menyimpan kategori.", "error");
+		} finally {
+			setIsSubmittingCategory(false);
+		}
+	};
+
+	const handleDeleteCategory = async (id: string) => {
+		try {
+			const res = await fetch("/api/studio/explore", {
+				method: "DELETE",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ action: "delete_category", id }),
+			});
+			if (res.ok) {
+				setCategories((prev) => prev.filter((c) => c.id !== id));
+				setExploreItems((prev) =>
+					prev.map((item) => (item.category === id ? { ...item, category: "all" } : item))
+				);
+				if (editingCategory?.id === id) {
+					setEditingCategory(null);
+					setCategoryForm({ id: "", name_id: "", name_en: "", icon: "folder", color: "#8b5cf6", is_enabled: true });
+				}
+				showToast("Kategori berhasil dihapus. Item dialihkan ke 'Semua'.", "info");
+				markUnpublished();
+			} else {
+				showToast("Gagal menghapus kategori.", "error");
+			}
+		} catch {
+			showToast("Gagal menghapus kategori.", "error");
+		}
+	};
+
+	const handleReorderCategory = async (idx: number, direction: "up" | "down") => {
+		const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+		if (targetIdx < 0 || targetIdx >= categories.length) return;
+		const reordered = [...categories];
+		const [moved] = reordered.splice(idx, 1);
+		reordered.splice(targetIdx, 0, moved);
+		setCategories(reordered);
+		markUnpublished();
+		try {
+			await fetch("/api/studio/explore", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					action: "reorder_categories",
+					ids: reordered.map((c) => c.id),
+				}),
+			});
+		} catch {
+			showToast("Gagal mengubah urutan kategori.", "error");
 		}
 	};
 
@@ -2818,26 +2969,40 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											</label>
 											<div className="flex flex-wrap gap-2">
 												{[
-													{ label: "Ultrawide (21:9)", val: "aspect-[21/9] sm:aspect-[24/9]" },
-													{ label: "Standar (16:9)", val: "aspect-[16/9]" },
-													{ label: "Panorama (3:1)", val: "aspect-[3/1]" },
-												].map((opt) => (
-													<button
-														key={opt.val}
-														type="button"
-														onClick={() => {
-															setAppearance({ ...appearance, cover_aspect_ratio: opt.val });
-															markUnpublished();
-														}}
-														className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-															appearance.cover_aspect_ratio === opt.val
-																? "bg-violet-600 text-white border-violet-500 shadow-sm"
-																: "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
-														}`}
-													>
-														{opt.label}
-													</button>
-												))}
+													{ label: "Ultrawide (21:9)", id: "21:9" },
+													{ label: "Standar (16:9)", id: "16:9" },
+													{ label: "Panorama (3:1)", id: "3:1" },
+												].map((opt) => {
+													const currentRatio = (appearance.cover_aspect_ratio || "21:9").includes("16:9")
+														? "16:9"
+														: (appearance.cover_aspect_ratio || "21:9").includes("3:1")
+														? "3:1"
+														: "21:9";
+													const isSelected = currentRatio === opt.id;
+													return (
+														<button
+															key={opt.id}
+															type="button"
+															onClick={() => {
+																const updatedAppearance: AppearanceRecord = {
+																	...appearance,
+																	cover_aspect_ratio: opt.id,
+																};
+																setAppearance(updatedAppearance);
+																markUnpublished();
+																saveDraftAppearanceDirectly(updatedAppearance);
+																showToast(`Rasio cover diubah ke ${opt.label}`, "info");
+															}}
+															className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+																isSelected
+																	? "bg-violet-600 text-white border-violet-500 shadow-sm"
+																	: "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+															}`}
+														>
+															{opt.label}
+														</button>
+													);
+												})}
 											</div>
 										</div>
 
@@ -3148,15 +3313,15 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										<button
 											type="button"
 											onClick={() => {
-												setEditingSubcat(null);
-												setSubcatForm({ category: "work", label_id: "", label_en: "", color: "#8b5cf6" });
-												setIsSubcategoryModalOpen(true);
+												setEditingCategory(null);
+												setCategoryForm({ id: "", name_id: "", name_en: "", icon: "folder", color: "#8b5cf6", is_enabled: true });
+												setIsCategoryModalOpen(true);
 											}}
 											className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold transition-all border border-slate-700 cursor-pointer flex items-center gap-1.5"
 										>
-											<span>🏷 Kelola Subkategori</span>
+											<span>📁 Kelola Kategori</span>
 											<span className="px-1.5 py-0.2 rounded-full bg-slate-700 text-[10px] text-slate-300">
-												{subcategories.length}
+												{categories.length}
 											</span>
 										</button>
 										<button
@@ -3183,16 +3348,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs">
 										{[
 											{ id: "all", label: "Semua" },
-											{ id: "project", label: "Proyek" },
-											{ id: "gallery", label: "Galeri" },
-											{ id: "image", label: "Foto" },
-											{ id: "video", label: "Video" },
-											{ id: "music", label: "Musik" },
-											{ id: "game", label: "Game" },
-											{ id: "review", label: "Review" },
-											{ id: "note", label: "Catatan" },
-											{ id: "link", label: "Link" },
-											{ id: "custom", label: "Kustom" },
+											...categories.map((c) => ({ id: c.id, label: c.name_id })),
 										].map((cat) => (
 											<button
 												key={cat.id}
@@ -3213,7 +3369,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								{/* Explore Items List */}
 								{(() => {
 									const filtered = exploreItems.filter((item) => {
-										const matchesType = exploreFilterType === "all" || item.type === exploreFilterType;
+										const matchesType = exploreFilterType === "all" || item.category === exploreFilterType || item.type === exploreFilterType;
 										const matchesQuery =
 											!exploreSearchQuery ||
 											item.title_id.toLowerCase().includes(exploreSearchQuery.toLowerCase()) ||
@@ -3405,7 +3561,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 					)}
 
 					{/* =========================================================================
-					    SECTION: CLICK MONITOR & LINK ANALYTICS (PHASE 5)
+					    SECTION: CLICK MONITOR & WEBSITE VISITOR ANALYTICS
 					    ========================================================================= */}
 					{activeSection === "clicks" && (
 						<div className="space-y-6">
@@ -3415,11 +3571,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<div className="flex items-center gap-2 mb-1">
 										<span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
 										<h2 className="text-lg sm:text-xl font-bold text-white">
-											Click Monitor & Analitik Tautan
+											Click Monitor & Website Visitor Analytics
 										</h2>
 									</div>
 									<p className="text-xs sm:text-sm text-slate-400">
-										Telemetri terdistribusi Cloudflare D1. Bebas pelacakan cookie & PII (Personally Identifiable Information).
+										Telemetri real-time terdistribusi Cloudflare D1. Privasi terjamin tanpa pelacakan cookie, tanpa IP, dan penyaringan bot otomatis.
 									</p>
 								</div>
 
@@ -3482,6 +3638,240 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										Reset Klik
 									</button>
 								</div>
+							</div>
+
+							{/* =========================================================================
+							    PART A: WEBSITE VISITOR TELEMETRY
+							    ========================================================================= */}
+							<div className="space-y-4">
+								<div className="flex items-center justify-between">
+									<div className="flex items-center gap-2">
+										<span className="p-1.5 rounded-lg bg-indigo-950/80 border border-indigo-800/60 text-indigo-400">
+											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+											</svg>
+										</span>
+										<h3 className="text-sm font-bold text-white uppercase tracking-wider">
+											Statistik Kunjungan Website (Visitor Telemetry)
+										</h3>
+									</div>
+									<span className="text-xs text-slate-400 font-mono">
+										Total Sepanjang Waktu: <strong className="text-indigo-300">{analyticsData?.visitors?.totalPageViewsAllTime ?? 0}</strong>
+									</span>
+								</div>
+
+								{/* 4 Visitor Metric Cards */}
+								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+										<div className="flex items-center justify-between text-slate-400 mb-2">
+											<span className="text-xs font-semibold uppercase tracking-wider">Kunjungan ({analyticsRange})</span>
+											<span className="p-1.5 rounded-lg bg-indigo-950/60 text-indigo-400">
+												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+												</svg>
+											</span>
+										</div>
+										<div className="text-2xl sm:text-3xl font-extrabold text-white">
+											{analyticsData?.visitors?.totalPageViewsPeriod ?? 0}
+										</div>
+										<div className="text-[11px] text-slate-500 mt-2">
+											Total Page Views dalam periode
+										</div>
+									</div>
+
+									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+										<div className="flex items-center justify-between text-slate-400 mb-2">
+											<span className="text-xs font-semibold uppercase tracking-wider">Kunjungan Hari Ini</span>
+											<span className="p-1.5 rounded-lg bg-emerald-950/60 text-emerald-400">
+												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+												</svg>
+											</span>
+										</div>
+										<div className="text-2xl sm:text-3xl font-extrabold text-white">
+											{analyticsData?.visitors?.todayPageViews ?? 0}
+										</div>
+										<div className="text-[11px] text-slate-500 mt-2">
+											Sejak pukul 00:00 UTC hari ini
+										</div>
+									</div>
+
+									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+										<div className="flex items-center justify-between text-slate-400 mb-2">
+											<span className="text-xs font-semibold uppercase tracking-wider">Pengunjung Unik (Est.)</span>
+											<span className="p-1.5 rounded-lg bg-cyan-950/60 text-cyan-400">
+												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+												</svg>
+											</span>
+										</div>
+										<div className="text-2xl sm:text-3xl font-extrabold text-white">
+											{analyticsData?.visitors?.uniqueVisitorSessions ?? 0}
+										</div>
+										<div className="text-[11px] text-slate-500 mt-2">
+											Sesi browser unik aman privasi
+										</div>
+									</div>
+
+									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+										<div className="flex items-center justify-between text-slate-400 mb-2">
+											<span className="text-xs font-semibold uppercase tracking-wider">7 Hari Terakhir</span>
+											<span className="p-1.5 rounded-lg bg-purple-950/60 text-purple-400">
+												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+												</svg>
+											</span>
+										</div>
+										<div className="text-2xl sm:text-3xl font-extrabold text-white">
+											{analyticsData?.visitors?.last7DaysPageViews ?? 0}
+										</div>
+										<div className="text-[11px] text-slate-500 mt-2">
+											30 hari: {analyticsData?.visitors?.last30DaysPageViews ?? 0} kunjungan
+										</div>
+									</div>
+								</div>
+
+								{/* Page Breakdown & Visitor Trend Charts */}
+								<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+									{/* Page Breakdown */}
+									<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
+										<div className="flex items-center justify-between mb-4">
+											<div>
+												<h4 className="text-sm font-bold text-white">Rincian Kunjungan Halaman</h4>
+												<p className="text-xs text-slate-400">Distribusi penayangan per rute halaman</p>
+											</div>
+											<span className="text-xs text-slate-400 font-mono">
+												{analyticsData?.visitors?.totalPageViewsPeriod ?? 0} Views
+											</span>
+										</div>
+
+										{(() => {
+											const breakdown = analyticsData?.visitors?.pageBreakdown || [];
+											const pageLabels: Record<string, { label: string; icon: string; color: string; barColor: string }> = {
+												home: { label: "Beranda (Home & Bio)", icon: "🏠", color: "text-emerald-400", barColor: "bg-emerald-500" },
+												explore: { label: "Eksplorasi (Showcase)", icon: "✨", color: "text-violet-400", barColor: "bg-violet-500" },
+												contact: { label: "Kontak (Contact)", icon: "💬", color: "text-amber-400", barColor: "bg-amber-500" },
+											};
+
+											if (breakdown.length === 0) {
+												return (
+													<div className="h-36 flex items-center justify-center text-xs text-slate-500 italic border border-slate-800 rounded-2xl">
+														Belum ada penayangan halaman pada periode ini.
+													</div>
+												);
+											}
+
+											return (
+												<div className="space-y-3.5 pt-1">
+													{breakdown.map((item) => {
+														const meta = pageLabels[item.page] || {
+															label: item.page,
+															icon: "📄",
+															color: "text-slate-300",
+															barColor: "bg-slate-500",
+														};
+														return (
+															<div key={item.page} className="space-y-1.5">
+																<div className="flex items-center justify-between text-xs">
+																	<span className="font-semibold text-white flex items-center gap-1.5">
+																		<span>{meta.icon}</span>
+																		<span>{meta.label}</span>
+																	</span>
+																	<span className="font-mono text-slate-300">
+																		<strong className="text-white">{item.views}</strong> views ({item.percentage}%)
+																	</span>
+																</div>
+																<div className="w-full h-2 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+																	<div
+																		className={`h-full rounded-full transition-all duration-500 ${meta.barColor}`}
+																		style={{ width: `${Math.max(item.percentage, item.views > 0 ? 3 : 0)}%` }}
+																	/>
+																</div>
+															</div>
+														);
+													})}
+												</div>
+											);
+										})()}
+									</div>
+
+									{/* Visitor Daily Trend Chart */}
+									<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
+										<div className="flex items-center justify-between mb-4">
+											<div>
+												<h4 className="text-sm font-bold text-white">Tren Kunjungan Harian</h4>
+												<p className="text-xs text-slate-400">Frekuensi page views harian</p>
+											</div>
+											<div className="text-xs text-slate-400 font-mono">
+												{analyticsData?.visitors?.timeSeries?.reduce((acc, curr) => acc + curr.clicks, 0) ?? 0} Views
+											</div>
+										</div>
+
+										{(() => {
+											const series = analyticsData?.visitors?.timeSeries || [];
+											const maxViews = Math.max(...series.map((s) => s.clicks), 1);
+
+											if (series.length === 0) {
+												return (
+													<div className="h-36 flex items-center justify-center text-xs text-slate-500 italic border border-slate-800 rounded-2xl">
+														Belum ada data kunjungan harian untuk ditampilkan.
+													</div>
+												);
+											}
+
+											return (
+												<div className="h-40 pt-4 flex flex-col justify-end">
+													<div className="flex items-end gap-1.5 sm:gap-2 h-28 w-full">
+														{series.map((item, idx) => {
+															const heightPercent = Math.max((item.clicks / maxViews) * 100, item.clicks > 0 ? 8 : 4);
+															return (
+																<div
+																	key={idx}
+																	className="flex-1 flex flex-col items-center gap-1 group relative h-full justify-end"
+																>
+																	<span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity font-mono">
+																		{item.clicks}
+																	</span>
+																	<div
+																		className="w-full rounded-t-lg transition-all duration-300 relative group-hover:brightness-125"
+																		style={{
+																			height: `${heightPercent}%`,
+																			background: item.clicks > 0
+																				? "linear-gradient(to top, #3b82f6, #60a5fa)"
+																				: "#1e293b",
+																		}}
+																	>
+																		<div className="absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg">
+																			{item.clicks} kunjungan
+																		</div>
+																	</div>
+																	<span className="text-[10px] text-slate-500 whitespace-nowrap">
+																		{item.label}
+																	</span>
+																</div>
+															);
+														})}
+													</div>
+												</div>
+											);
+										})()}
+									</div>
+								</div>
+							</div>
+
+							{/* =========================================================================
+							    PART B: LINK CLICKS MONITOR
+							    ========================================================================= */}
+							<div className="pt-2 flex items-center gap-2">
+								<span className="p-1.5 rounded-lg bg-violet-950/80 border border-violet-800/60 text-violet-400">
+									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+									</svg>
+								</span>
+								<h3 className="text-sm font-bold text-white uppercase tracking-wider">
+									Interaksi & Klik Tautan (Link Clicks)
+								</h3>
 							</div>
 
 							{/* 4 Metric Cards */}
@@ -4337,9 +4727,22 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							{/* 2. Category & Subcategory Selector (Phase 6) */}
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-xl bg-slate-950/60 border border-slate-800">
 								<div>
-									<label htmlFor="ef-category" className="block text-xs font-semibold text-slate-300 mb-1">
-										Kategori Utama
-									</label>
+									<div className="flex items-center justify-between mb-1">
+										<label htmlFor="ef-category" className="block text-xs font-semibold text-slate-300">
+											Kategori
+										</label>
+										<button
+											type="button"
+											onClick={() => {
+												setEditingCategory(null);
+												setCategoryForm({ id: "", name_id: "", name_en: "", icon: "folder", color: "#8b5cf6", is_enabled: true });
+												setIsCategoryModalOpen(true);
+											}}
+											className="text-[10px] text-violet-400 hover:text-violet-300 font-semibold cursor-pointer"
+										>
+											+ Kelola Kategori
+										</button>
+									</div>
 									<select
 										id="ef-category"
 										value={exploreForm.category}
@@ -4347,42 +4750,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-violet-500 focus:outline-none"
 									>
 										<option value="all">Semua / Umum (General)</option>
-										<option value="work">Karya & Portofolio (Work)</option>
-										<option value="creative">Kreatif & Seni (Creative)</option>
-										<option value="personal">Pribadi (Personal)</option>
-										<option value="tech">Teknologi (Tech)</option>
-										<option value="photos">Foto & Visual (Photos)</option>
-									</select>
-								</div>
-								<div>
-									<div className="flex items-center justify-between mb-1">
-										<label htmlFor="ef-subcat" className="block text-xs font-semibold text-slate-300">
-											Subkategori (Opsional)
-										</label>
-										<button
-											type="button"
-											onClick={() => {
-												setIsSubcategoryModalOpen(true);
-											}}
-											className="text-[10px] text-violet-400 hover:text-violet-300 font-semibold cursor-pointer"
-										>
-											+ Kelola
-										</button>
-									</div>
-									<select
-										id="ef-subcat"
-										value={exploreForm.subcategory_id}
-										onChange={(e) => setExploreForm({ ...exploreForm, subcategory_id: e.target.value })}
-										className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-violet-500 focus:outline-none"
-									>
-										<option value="">— Tanpa Subkategori —</option>
-										{subcategories
-											.filter((s) => exploreForm.category === "all" || s.category === exploreForm.category)
-											.map((s) => (
-												<option key={s.id} value={s.id}>
-													{s.label_id} ({s.label_en})
-												</option>
-											))}
+										{categories.map((cat) => (
+											<option key={cat.id} value={cat.id}>
+												{cat.name_id} ({cat.name_en})
+											</option>
+										))}
 									</select>
 								</div>
 							</div>
@@ -4863,21 +5235,21 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			)}
 
 			{/* =========================================================================
-			    MODALS: SUBCATEGORY MANAGER (PHASE 6)
+			    MODALS: CATEGORY MANAGER (PHASE 2 - SINGLE TIER)
 			    ========================================================================= */}
-			{isSubcategoryModalOpen && (
+			{isCategoryModalOpen && (
 				<div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
 					<div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl my-8">
 						<div className="flex items-center justify-between mb-4">
 							<div>
-								<h3 className="text-base font-bold text-white">Kelola Subkategori Explore</h3>
-								<p className="text-xs text-slate-400">Atur filter subkategori untuk menyusun konten lebih rapi.</p>
+								<h3 className="text-base font-bold text-white">Kelola Kategori Explore</h3>
+								<p className="text-xs text-slate-400">Atur kategori satu tingkat untuk menyusun konten Explore. Menghapus kategori akan mengalihkan item ke 'Semua'.</p>
 							</div>
 							<button
 								type="button"
 								onClick={() => {
-									setIsSubcategoryModalOpen(false);
-									setEditingSubcat(null);
+									setIsCategoryModalOpen(false);
+									setEditingCategory(null);
 								}}
 								className="text-slate-400 hover:text-white text-sm cursor-pointer"
 							>
@@ -4886,69 +5258,98 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						</div>
 
 						{/* Form Tambah / Edit */}
-						<form onSubmit={handleSaveSubcategory} className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 mb-5 flex flex-col gap-3">
+						<form onSubmit={handleSaveCategory} className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 mb-5 flex flex-col gap-3">
 							<span className="text-xs font-bold text-violet-400 uppercase tracking-wider">
-								{editingSubcat ? "Edit Subkategori" : "+ Tambah Subkategori Baru"}
+								{editingCategory ? "Edit Kategori" : "+ Tambah Kategori Baru"}
 							</span>
 
-							<div>
-								<label className="block text-xs text-slate-400 mb-1">Kategori Induk</label>
-								<select
-									value={subcatForm.category}
-									onChange={(e) => setSubcatForm({ ...subcatForm, category: e.target.value })}
-									className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:border-violet-500 focus:outline-none"
-								>
-									<option value="work">Karya & Portofolio (work)</option>
-									<option value="creative">Kreatif & Seni (creative)</option>
-									<option value="personal">Pribadi (personal)</option>
-									<option value="tech">Teknologi (tech)</option>
-									<option value="photos">Foto & Visual (photos)</option>
-									<option value="all">Umum (all)</option>
-								</select>
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+								<div>
+									<label className="block text-xs text-slate-400 mb-1">Nama (ID) *</label>
+									<input
+										type="text"
+										required
+										value={categoryForm.name_id}
+										onChange={(e) => setCategoryForm({ ...categoryForm, name_id: e.target.value })}
+										placeholder="e.g. Karya Desain"
+										className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+									/>
+								</div>
+								<div>
+									<label className="block text-xs text-slate-400 mb-1">Nama (EN)</label>
+									<input
+										type="text"
+										value={categoryForm.name_en}
+										onChange={(e) => setCategoryForm({ ...categoryForm, name_en: e.target.value })}
+										placeholder="e.g. Design Works"
+										className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+									/>
+								</div>
 							</div>
 
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 								<div>
-									<label className="block text-xs text-slate-400 mb-1">Label (ID) *</label>
-									<input
-										type="text"
-										required
-										value={subcatForm.label_id}
-										onChange={(e) => setSubcatForm({ ...subcatForm, label_id: e.target.value })}
-										placeholder="e.g. Desain UI"
-										className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
-									/>
+									<label className="block text-xs text-slate-400 mb-1">Ikon Kategori</label>
+									<select
+										value={categoryForm.icon}
+										onChange={(e) => setCategoryForm({ ...categoryForm, icon: e.target.value })}
+										className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white focus:border-violet-500 focus:outline-none"
+									>
+										<option value="folder">📁 Folder / Umum</option>
+										<option value="spark">✨ Spark / Unggulan</option>
+										<option value="image">🖼 Gambar / Galeri</option>
+										<option value="video">🎬 Video</option>
+										<option value="music">🎵 Musik</option>
+										<option value="gamepad">🎮 Game</option>
+										<option value="star">⭐ Ulasan / Review</option>
+										<option value="code">💻 Portofolio / Kode</option>
+										<option value="bookmark">🔖 Bookmark</option>
+										<option value="globe">🌐 Web / Link</option>
+										<option value="palette">🎨 Kreatif</option>
+									</select>
 								</div>
 								<div>
-									<label className="block text-xs text-slate-400 mb-1">Label (EN)</label>
+									<label className="block text-xs text-slate-400 mb-1">ID Kategori (Slug)</label>
 									<input
 										type="text"
-										value={subcatForm.label_en}
-										onChange={(e) => setSubcatForm({ ...subcatForm, label_en: e.target.value })}
-										placeholder="e.g. UI Design"
-										className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
+										value={categoryForm.id}
+										disabled={!!editingCategory}
+										onChange={(e) => setCategoryForm({ ...categoryForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "") })}
+										placeholder="Otomatis jika kosong"
+										className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200 disabled:opacity-50 focus:border-violet-500 focus:outline-none"
 									/>
 								</div>
 							</div>
 
 							<div className="flex items-center justify-between gap-3 pt-1">
-								<div className="flex items-center gap-2">
-									<label className="text-xs text-slate-400">Warna Aksen:</label>
-									<input
-										type="color"
-										value={subcatForm.color || "#8b5cf6"}
-										onChange={(e) => setSubcatForm({ ...subcatForm, color: e.target.value })}
-										className="w-7 h-7 rounded-lg bg-transparent border border-slate-700 cursor-pointer"
-									/>
+								<div className="flex items-center gap-3">
+									<div className="flex items-center gap-1.5">
+										<label className="text-xs text-slate-400">Warna:</label>
+										<input
+											type="color"
+											value={categoryForm.color || "#8b5cf6"}
+											onChange={(e) => setCategoryForm({ ...categoryForm, color: e.target.value })}
+											className="w-7 h-7 rounded-lg bg-transparent border border-slate-700 cursor-pointer"
+										/>
+									</div>
+									<label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+										<input
+											type="checkbox"
+											checked={categoryForm.is_enabled}
+											onChange={(e) => setCategoryForm({ ...categoryForm, is_enabled: e.target.checked })}
+											className="w-4 h-4 rounded text-violet-600 bg-slate-900 border-slate-700"
+										/>
+										<span>Aktif</span>
+									</label>
 								</div>
 
 								<div className="flex items-center gap-2">
-									{editingSubcat && (
+									{editingCategory && (
 										<button
 											type="button"
 											onClick={() => {
-												setEditingSubcat(null);
-												setSubcatForm({ category: "work", label_id: "", label_en: "", color: "#8b5cf6" });
+												setEditingCategory(null);
+												setCategoryForm({ id: "", name_id: "", name_en: "", icon: "folder", color: "#8b5cf6", is_enabled: true });
 											}}
 											className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
 										>
@@ -4957,42 +5358,68 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									)}
 									<button
 										type="submit"
-										disabled={isSubmittingSubcat}
+										disabled={isSubmittingCategory}
 										className="px-4 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
 									>
-										{isSubmittingSubcat ? "Menyimpan..." : editingSubcat ? "Perbarui" : "Tambah"}
+										{isSubmittingCategory ? "Menyimpan..." : editingCategory ? "Perbarui" : "Tambah"}
 									</button>
 								</div>
 							</div>
 						</form>
 
-						{/* Daftar Subkategori yang Ada */}
+						{/* Daftar Kategori */}
 						<div>
 							<h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-								Daftar Subkategori ({subcategories.length})
+								Daftar Kategori ({categories.length})
 							</h4>
-							{subcategories.length === 0 ? (
+							{categories.length === 0 ? (
 								<p className="text-xs text-slate-500 italic py-4 text-center">
-									Belum ada subkategori. Tambahkan subkategori pertama di atas.
+									Belum ada kategori. Tambahkan kategori pertama di atas.
 								</p>
 							) : (
 								<div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
-									{subcategories.map((sub) => (
+									{categories.map((cat, idx) => (
 										<div
-											key={sub.id}
+											key={cat.id}
 											className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-3"
 										>
 											<div className="flex items-center gap-2.5 min-w-0">
+												<div className="flex flex-col gap-0.5 shrink-0">
+													<button
+														type="button"
+														disabled={idx === 0}
+														onClick={() => handleReorderCategory(idx, "up")}
+														className="text-[10px] text-slate-500 hover:text-slate-200 disabled:opacity-20 cursor-pointer"
+														title="Pindah ke Atas"
+													>
+														▲
+													</button>
+													<button
+														type="button"
+														disabled={idx === categories.length - 1}
+														onClick={() => handleReorderCategory(idx, "down")}
+														className="text-[10px] text-slate-500 hover:text-slate-200 disabled:opacity-20 cursor-pointer"
+														title="Pindah ke Bawah"
+													>
+														▼
+													</button>
+												</div>
 												<span
-													className="w-3 h-3 rounded-full shrink-0"
-													style={{ backgroundColor: sub.color || "#8b5cf6" }}
+													className="w-3.5 h-3.5 rounded-full shrink-0"
+													style={{ backgroundColor: cat.color || "#8b5cf6" }}
 												/>
 												<div className="min-w-0">
-													<div className="text-xs font-bold text-white truncate">
-														{sub.label_id} <span className="text-slate-400 font-normal">({sub.label_en})</span>
+													<div className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+														<span>{cat.name_id}</span>
+														{cat.name_en && cat.name_en !== cat.name_id && (
+															<span className="text-slate-400 font-normal">({cat.name_en})</span>
+														)}
+														{cat.is_enabled === 0 && (
+															<span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-slate-400">Nonaktif</span>
+														)}
 													</div>
 													<span className="text-[10px] text-violet-400 font-mono">
-														kat: {sub.category}
+														id: {cat.id} • icon: {cat.icon || "folder"}
 													</span>
 												</div>
 											</div>
@@ -5001,12 +5428,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												<button
 													type="button"
 													onClick={() => {
-														setEditingSubcat(sub);
-														setSubcatForm({
-															category: sub.category,
-															label_id: sub.label_id,
-															label_en: sub.label_en,
-															color: sub.color || "#8b5cf6",
+														setEditingCategory(cat);
+														setCategoryForm({
+															id: cat.id,
+															name_id: cat.name_id,
+															name_en: cat.name_en,
+															icon: cat.icon || "folder",
+															color: cat.color || "#8b5cf6",
+															is_enabled: cat.is_enabled === 1,
 														});
 													}}
 													className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold cursor-pointer"
@@ -5015,7 +5444,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												</button>
 												<button
 													type="button"
-													onClick={() => handleDeleteSubcategory(sub.id)}
+													onClick={() => handleDeleteCategory(cat.id)}
 													className="px-2 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 text-[11px] font-semibold cursor-pointer"
 												>
 													Hapus
@@ -5154,10 +5583,37 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							</svg>
 						</div>
 
-						<h3 className="text-base font-bold text-white mb-2">Reset Data Klik Analitik?</h3>
-						<p className="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
-							Tindakan ini akan menghapus seluruh catatan klik yang tersimpan di tabel Cloudflare D1 (<code className="text-slate-300">click_events</code>). Data yang telah dihapus tidak dapat dipulihkan kembali.
+						<h3 className="text-base font-bold text-white mb-2">Reset Data Analitik?</h3>
+						<p className="text-xs sm:text-sm text-slate-400 mb-4 leading-relaxed">
+							Pilih target data yang ingin direset pada tabel Cloudflare D1. Data yang telah dihapus tidak dapat dipulihkan kembali.
 						</p>
+
+						<div className="grid grid-cols-1 gap-2 mb-6 text-xs">
+							{[
+								{ id: "all", label: "Semua Data (Kunjungan & Klik)" },
+								{ id: "visitors", label: "Hanya Data Kunjungan Website (page_views)" },
+								{ id: "clicks", label: "Hanya Data Klik Tautan (click_events)" },
+							].map((opt) => (
+								<label
+									key={opt.id}
+									className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+										resetAnalyticsTarget === opt.id
+											? "bg-rose-950/40 border-rose-600 text-white"
+											: "bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200"
+									}`}
+								>
+									<input
+										type="radio"
+										name="reset-target"
+										value={opt.id}
+										checked={resetAnalyticsTarget === opt.id}
+										onChange={() => setResetAnalyticsTarget(opt.id as any)}
+										className="w-4 h-4 text-rose-600 bg-slate-900 border-slate-700"
+									/>
+									<span className="font-semibold">{opt.label}</span>
+								</label>
+							))}
+						</div>
 
 						<div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
 							<button
