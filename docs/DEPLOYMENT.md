@@ -49,28 +49,39 @@ A guided, 10-minute manual setup guarantees that your deployment is **secure, fa
 
 ---
 
-## 3. Manual Deployment Workflow
+## 3. Deployment Workflows
 
-Follow these steps for any new release or update:
+### A. Independent Self-Hosted Deployment (Fork / Instance)
+For self-hosters deploying their own instance, always use `--config wrangler.instance.json`:
 
 ```bash
-# 1. Ensure working directory is clean and up to date
-git checkout main
-git pull origin main
+# 1. Run preflight verification
+node scripts/preflight-instance.mjs
 
-# 2. Install dependencies
-npm ci
-
-# 3. Type check & generate Worker types
+# 2. Type check
 npm run typecheck
 
-# 4. Build SSR server and client assets
+# 3. Build SSR server and client assets (Vite automatically detects wrangler.instance.json)
 npm run build
 
-# 5. Apply any pending database migrations
-npx wrangler d1 migrations apply DB --remote
+# 4. Apply migrations to your remote Cloudflare D1 database
+npx wrangler d1 migrations apply DB --remote --config wrangler.instance.json
 
-# 6. Deploy to Cloudflare Workers
+# 5. Deploy to your personal Cloudflare Workers account
+npx wrangler deploy --config wrangler.instance.json
+```
+
+### B. Upstream Production Deployment (Project Maintainer Only)
+For the original project maintainer deploying `me.dimasmong.web.id`:
+
+```bash
+# Run production preflight verification
+node scripts/preflight-instance.mjs --prod
+
+# Build and deploy targeting wrangler.json
+npm run typecheck
+npm run build
+npx wrangler d1 migrations apply DB --remote
 npx wrangler deploy
 ```
 

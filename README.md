@@ -96,13 +96,18 @@ cd mobio-link-bio
 # 2. Install dependencies
 npm install
 
-# 3. Create local development variables file
-cp .dev.vars.example .dev.vars
+# 3. Create your isolated local instance configuration
+# Windows CMD:        copy wrangler.example.json wrangler.instance.json
+# PowerShell / Bash:  cp wrangler.example.json wrangler.instance.json
 
-# 4. Apply migrations to your local SQLite database
-npx wrangler d1 migrations apply DB --local
+# 4. Create local development variables file
+# Windows CMD:        copy .dev.vars.example .dev.vars
+# PowerShell / Bash:  cp .dev.vars.example .dev.vars
 
-# 5. Start the local development server
+# 5. Apply migrations to your local SQLite database
+npx wrangler d1 migrations apply DB --local --config wrangler.instance.json
+
+# 6. Start the local development server
 npm run dev
 ```
 

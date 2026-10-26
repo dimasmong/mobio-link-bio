@@ -29,19 +29,37 @@ MOBIO enforces a strict separation between public configuration, encrypted produ
 | `VALUE_FROM_CLOUDFLARE`| Variable | All (`vars`) | Optional | Informational variable injected into Worker context. |
 
 ### How to Set Production Secrets
-Never put production credentials into `.dev.vars` or commit them into Git. Set them directly via the Wrangler CLI:
+Never put production credentials into `.dev.vars` or commit them into Git. Set them directly via the Wrangler CLI targeting your instance configuration:
 ```bash
-npx wrangler secret put CF_ACCESS_TEAM_NAME
-npx wrangler secret put CF_ACCESS_AUD
-npx wrangler secret put ADMIN_EMAIL
+# For independent self-hosted instances:
+npx wrangler secret put CF_ACCESS_TEAM_NAME --config wrangler.instance.json
+npx wrangler secret put CF_ACCESS_AUD --config wrangler.instance.json
+npx wrangler secret put ADMIN_EMAIL --config wrangler.instance.json
 ```
 Or manage them in the Cloudflare Dashboard under **Workers & Pages** ➔ **Your Worker** ➔ **Settings** ➔ **Variables and Secrets**.
 
 ---
 
-## 2. Wrangler Configuration (`wrangler.json`)
+## 2. Wrangler Configuration Model
 
-The `wrangler.json` file configures your Cloudflare Worker runtime, bindings, and routing.
+MOBIO uses an explicit dual-configuration architecture to protect the production deployment while granting self-hosters complete independence:
+
+| File | Purpose | Tracked in Git? | Scope |
+| :--- | :--- | :--- | :--- |
+| `wrangler.json` | Project maintainer's production configuration (`me.dimasmong.web.id`). **Do NOT edit.** | ✅ Yes | Upstream production |
+| `wrangler.example.json` | Clean reference template with clear placeholders. | ✅ Yes | Reusable reference |
+| `wrangler.instance.json` | **Your local instance configuration.** Contains your personal D1 UUID and R2 bucket. | ❌ No (`.gitignore`) | Your independent deployment |
+
+### Instance Configuration Reference (`wrangler.instance.json`)
+
+To create your instance configuration:
+```cmd
+:: Windows Command Prompt:
+copy wrangler.example.json wrangler.instance.json
+
+:: PowerShell / macOS / Linux:
+cp wrangler.example.json wrangler.instance.json
+```
 
 ```json
 {
@@ -99,7 +117,7 @@ The `wrangler.json` file configures your Cloudflare Worker runtime, bindings, an
 To bind MOBIO to your own custom domain (e.g., `bio.example.com` or `links.example.com`):
 
 1. **Verify DNS:** Ensure your domain is active on Cloudflare DNS.
-2. **Add Custom Domain in `wrangler.json`:**
+2. **Add Custom Domain in `wrangler.instance.json`:**
    ```json
    "workers_dev": false,
    "routes": [
@@ -109,7 +127,7 @@ To bind MOBIO to your own custom domain (e.g., `bio.example.com` or `links.examp
      }
    ]
    ```
-3. **Deploy:** Run `npx wrangler deploy`. Cloudflare automatically provisions an SSL/TLS certificate and routes traffic to your Worker.
+3. **Deploy:** Run `npx wrangler deploy --config wrangler.instance.json`. Cloudflare automatically provisions an SSL/TLS certificate and routes traffic to your Worker.
 4. **Update Access Application:** Ensure your Cloudflare Access Application domain in Zero Trust points to `bio.example.com` with path `studio`.
 
 ---

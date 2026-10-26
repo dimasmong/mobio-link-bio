@@ -109,6 +109,15 @@ for (const mdFile of mdFiles) {
 	console.log(`  ✓ All internal cross-links in '${mdFile}' verified.`);
 }
 
+// 8. Verify Instance Isolation & Preflight Guard
+console.log("\nTEST 8: Auditing Instance Isolation & Preflight Guard...");
+const gitignoreContent = fs.readFileSync(path.resolve(process.cwd(), ".gitignore"), "utf-8");
+assert.ok(gitignoreContent.includes("wrangler.instance.json"), ".gitignore must contain wrangler.instance.json");
+console.log("  ✓ wrangler.instance.json is properly ignored in .gitignore.");
+
+assert.ok(fs.existsSync(path.resolve(process.cwd(), "scripts/preflight-instance.mjs")), "scripts/preflight-instance.mjs must exist");
+console.log("  ✓ scripts/preflight-instance.mjs guard exists.");
+
 console.log("\n============================================================");
 console.log("ALL OPEN SOURCE READINESS CHECKS PASSED SUCCESSFULLY! 🎉");
 console.log("============================================================\n");

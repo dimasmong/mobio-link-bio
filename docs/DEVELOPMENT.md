@@ -31,13 +31,22 @@ cd mobio-link-bio
 # 2. Install dependencies
 npm install
 
-# 3. Create local development variables file
+# 3. Create your isolated local instance configuration
+# Windows CMD:
+copy wrangler.example.json wrangler.instance.json
+# PowerShell / macOS / Linux:
+cp wrangler.example.json wrangler.instance.json
+
+# 4. Create local development variables file
+# Windows CMD:
+copy .dev.vars.example .dev.vars
+# PowerShell / macOS / Linux:
 cp .dev.vars.example .dev.vars
 
-# 4. Apply migrations to your local SQLite database
-npx wrangler d1 migrations apply DB --local
+# 5. Apply migrations to your local SQLite database
+npx wrangler d1 migrations apply DB --local --config wrangler.instance.json
 
-# 5. Start the local development server
+# 6. Start the local development server
 npm run dev
 ```
 
@@ -50,6 +59,7 @@ Visit [http://localhost:5173](http://localhost:5173).
 MOBIO uses `@cloudflare/vite-plugin` paired with Vite's Environment API:
 
 - In development (`npm run dev`), Cloudflare's open-source `workerd` runtime emulates Cloudflare Workers directly within the Vite dev server.
+- `vite.config.ts` dynamically detects `wrangler.instance.json` when present, binding your personal local D1 database and R2 storage seamlessly. If absent, it defaults safely to `wrangler.json`.
 - Bindings like `context.cloudflare.env.DB` and `context.cloudflare.env.MEDIA_BUCKET` are fully operational locally.
 - Server-side loaders and actions execute in the emulated worker environment, mirroring production behavior with high fidelity.
 

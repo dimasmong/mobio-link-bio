@@ -11,7 +11,7 @@ This guide walks you step-by-step through setting up, configuring, and deploying
 3. [Install Project Dependencies](#3-install-project-dependencies)
 4. [Authenticate Cloudflare Wrangler](#4-authenticate-cloudflare-wrangler)
 5. [Provision Cloudflare Resources (D1 & R2)](#5-provision-cloudflare-resources-d1--r2)
-6. [Configure Your Wrangler Settings](#6-configure-your-wrangler-settings)
+6. [Create Your Isolated Instance Configuration (`wrangler.instance.json`)](#6-create-your-isolated-instance-configuration-wranglerinstancejson)
 7. [Apply Database Migrations (0001 – 0011)](#7-apply-database-migrations-0001--0011)
 8. [Configure Cloudflare Access (Zero Trust Security)](#8-configure-cloudflare-access-zero-trust-security)
 9. [Configure Cloudflare Worker Secrets](#9-configure-cloudflare-worker-secrets)
@@ -58,7 +58,7 @@ npm install
 
 ## 4. Authenticate Cloudflare Wrangler
 
-Authorize Cloudflare's CLI tool (`wrangler`) with your Cloudflare account:
+Authorize Cloudflare's CLI tool (`wrangler`) with your personal Cloudflare account:
 
 ```bash
 npx wrangler login
@@ -88,7 +88,7 @@ binding = "DB"
 database_name = "mobio-studio-db"
 database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ```
-📋 **Save the `database_id` UUID.** You will need it in the next step.
+📋 **Save the `database_id` UUID.** You will need it in Step 6.
 
 ### B. Create Your Cloudflare R2 Media Bucket
 Run:
@@ -103,12 +103,34 @@ Creating bucket 'mobio-media-bucket'...
 
 ---
 
-## 6. Configure Your Wrangler Settings
+## 6. Create Your Isolated Instance Configuration (`wrangler.instance.json`)
 
-If you cloned the repository, `wrangler.example.json` is provided as a clean reference.
+> [!WARNING]
+> **DO NOT EDIT OR OVERWRITE `wrangler.json`!**  
+> The repository includes a tracked `wrangler.json` file which is reserved exclusively for the project maintainer's production deployment (`me.dimasmong.web.id`). Editing it can cause Git merge conflicts when syncing upstream updates or result in accidental deployment errors.
 
-1. Open `wrangler.json` (or copy from `wrangler.example.json`):
-2. Replace the placeholder database ID with your own `database_id` generated in Step 5A:
+Instead, create your own local instance configuration file from the provided template:
+
+### Step 1: Copy the Template File
+- **Windows Command Prompt (CMD):**
+  ```cmd
+  copy wrangler.example.json wrangler.instance.json
+  ```
+- **PowerShell / macOS / Linux:**
+  ```bash
+  cp wrangler.example.json wrangler.instance.json
+  ```
+
+> 🔒 **Git Protection:** `wrangler.instance.json` is already included in `.gitignore`. Your personal database IDs, bucket names, and worker settings will remain strictly private on your computer and will never be committed to Git.
+
+### Step 2: Configure Your Settings
+Open `wrangler.instance.json` in your code editor:
+
+1. **Worker Name:** Choose a name for your worker (e.g. `"my-link-bio"`):
+   ```json
+   "name": "my-link-bio"
+   ```
+2. **D1 Database ID:** Replace `"YOUR_D1_DATABASE_ID"` with the UUID generated in Step 5A:
    ```json
    "d1_databases": [
      {
@@ -119,7 +141,7 @@ If you cloned the repository, `wrangler.example.json` is provided as a clean ref
      }
    ]
    ```
-3. Verify that your R2 bucket name matches what you created in Step 5B:
+3. **R2 Bucket Name:** Ensure `bucket_name` matches your created bucket (default `"mobio-media-bucket"`):
    ```json
    "r2_buckets": [
      {
@@ -128,17 +150,20 @@ If you cloned the repository, `wrangler.example.json` is provided as a clean ref
      }
    ]
    ```
-4. Custom Domain (Optional):
-   - If you want to deploy initially to Cloudflare's free `*.workers.dev` subdomain, set `"workers_dev": true` and remove the `routes` block.
-   - If you have an active custom domain in your Cloudflare account, configure:
-     ```json
-     "routes": [
-       {
-         "pattern": "bio.yourdomain.com",
-         "custom_domain": true
-       }
-     ]
-     ```
+4. **Target Subdomain / Domain:**
+   - By default, `"workers_dev": true` is enabled, allowing you to deploy immediately to a free Cloudflare subdomain (e.g., `https://my-link-bio.your-subdomain.workers.dev`).
+   - If you want to use a custom domain, see [docs/CONFIGURATION.md](CONFIGURATION.md#4-custom-domain-setup).
+
+### Step 3: Run Configuration Preflight Check
+Verify that your configuration is valid and free of placeholders:
+```bash
+node scripts/preflight-instance.mjs
+```
+Expected output:
+```text
+✅ Preflight check PASSED for 'wrangler.instance.json'!
+Ready for safe migrations and deployment. 🚀
+```
 
 ---
 
@@ -146,20 +171,22 @@ If you cloned the repository, `wrangler.example.json` is provided as a clean ref
 
 MOBIO Link Bio maintains 11 additive, idempotent database migrations that set up your draft/publish schemas, appearance tables, media assets, categories, and privacy-safe click telemetry.
 
-### A. Apply Migrations to Your Local Development Environment
+Always pass `--config wrangler.instance.json` to ensure operations target your personal resources:
+
+### A. Apply Migrations Locally (for `npm run dev`)
 ```bash
-npx wrangler d1 migrations apply DB --local
+npx wrangler d1 migrations apply DB --local --config wrangler.instance.json
 ```
-Select `Yes` when prompted. This initializes your local SQLite storage for `npm run dev`.
+Select `Yes` when prompted. This initializes your local SQLite storage.
 
 ### B. Apply Migrations to Your Remote Cloudflare D1 Database
-> [!WARNING]
-> This command modifies your **remote Cloudflare D1 database**. Ensure you have configured your own `database_id` in `wrangler.json`.
+> [!IMPORTANT]
+> This command applies the schema migrations to **your remote Cloudflare D1 database** created in Step 5A.
 
 ```bash
-npx wrangler d1 migrations apply DB --remote
+npx wrangler d1 migrations apply DB --remote --config wrangler.instance.json
 ```
-Wrangler will display the 11 migrations (`0001_initial_schema.sql` through `0011_interaction_events.sql`). Confirm with `y` to apply.
+Wrangler will list the 11 migrations (`0001_initial_schema.sql` through `0011_interaction_events.sql`). Confirm with `y` to apply.
 
 ---
 
@@ -179,7 +206,7 @@ MOBIO Studio (`/studio*` and `/api/studio/*`) is protected by **Cloudflare Acces
    - **Application name:** `MOBIO Studio`
    - **Session Duration:** `24 hours` (or your preference)
    - **Application domain:**
-     - Subdomain / Domain: your worker's domain (e.g. `bio.yourdomain.com` or `mobio-link-bio.your-subdomain.workers.dev`)
+     - Subdomain / Domain: your worker's domain (e.g. `bio.yourdomain.com` or `my-link-bio.your-subdomain.workers.dev`)
      - Path: `studio`
 4. Click **Next**.
 
@@ -202,17 +229,17 @@ MOBIO Studio (`/studio*` and `/api/studio/*`) is protected by **Cloudflare Acces
 
 Production deployments enforce **fail-closed** cryptographic JWT verification. Cloudflare Access parameters are stored in encrypted Worker Secrets so they are never exposed in Git or client bundles.
 
-Run these three commands in your terminal:
+Run these three commands targeting your instance configuration:
 
 ```bash
 # 1. Your Cloudflare Zero Trust Team Name (from Step 8.1)
-npx wrangler secret put CF_ACCESS_TEAM_NAME
+npx wrangler secret put CF_ACCESS_TEAM_NAME --config wrangler.instance.json
 
 # 2. Your Application Audience (AUD) Tag (from Step 8.4)
-npx wrangler secret put CF_ACCESS_AUD
+npx wrangler secret put CF_ACCESS_AUD --config wrangler.instance.json
 
 # 3. Your Admin Email Whitelist (from Step 8.3)
-npx wrangler secret put ADMIN_EMAIL
+npx wrangler secret put ADMIN_EMAIL --config wrangler.instance.json
 ```
 
 When prompted, paste the respective value for each secret.
@@ -221,10 +248,14 @@ When prompted, paste the respective value for each secret.
 
 ## 10. Local Development Verification
 
-Before deploying, test that your application runs smoothly locally:
+Test that your application runs smoothly locally:
 
 1. Copy `.dev.vars.example` to `.dev.vars`:
    ```bash
+   # Windows CMD:
+   copy .dev.vars.example .dev.vars
+
+   # PowerShell / Bash:
    cp .dev.vars.example .dev.vars
    ```
 2. Open `.dev.vars` and set your local admin simulation identity:
@@ -235,6 +266,7 @@ Before deploying, test that your application runs smoothly locally:
    ```bash
    npm run dev
    ```
+   *(Note: The build engine automatically detects `wrangler.instance.json` and binds your local D1/R2 storage).*
 4. Open [http://localhost:5173](http://localhost:5173) to see the public site (starts with clean default content).
 5. Open [http://localhost:5173/studio](http://localhost:5173/studio) to verify that MOBIO Studio loads in local simulation mode.
 
@@ -242,24 +274,27 @@ Before deploying, test that your application runs smoothly locally:
 
 ## 11. Deploy to Cloudflare Workers
 
-Build and deploy your application to Cloudflare Workers:
+Build and deploy your application to your personal Cloudflare Workers account:
 
 ```bash
-# 1. Run typecheck to guarantee type safety
+# 1. Verify configuration integrity
+node scripts/preflight-instance.mjs
+
+# 2. Run typecheck to guarantee type safety
 npm run typecheck
 
-# 2. Build the production React Router SSR bundles
+# 3. Build the production React Router SSR bundles
 npm run build
 
-# 3. Deploy to your Cloudflare account
-npx wrangler deploy
+# 4. Deploy your Worker to Cloudflare
+npx wrangler deploy --config wrangler.instance.json
 ```
 
 Wrangler will output your live URL:
 ```text
-Uploaded mobio-link-bio (3.21 sec)
-Deployed mobio-link-bio triggers (0.50 sec)
-  https://bio.yourdomain.com (or https://my-mobio-link-bio.your-name.workers.dev)
+Uploaded my-link-bio (3.21 sec)
+Deployed my-link-bio triggers (0.50 sec)
+  https://my-link-bio.your-subdomain.workers.dev (or https://bio.yourdomain.com)
 Current Version ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 

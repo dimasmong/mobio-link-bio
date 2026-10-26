@@ -45,15 +45,19 @@ Running `npx wrangler d1 ...` or `npx wrangler deploy` outputs:
 `Error: D1_ERROR: database_id is required` or `Resource not found`.
 
 ### Cause:
-Your `wrangler.json` contains a placeholder `database_id` instead of a real D1 database UUID.
+Your `wrangler.instance.json` is missing or contains an unreplaced placeholder (`YOUR_D1_DATABASE_ID`).
 
 ### Solution:
-1. List your D1 databases:
+1. List your personal D1 databases:
    ```bash
    npx wrangler d1 list
    ```
 2. Copy the UUID of your database (e.g. `mobio-studio-db`).
-3. Open `wrangler.json` and paste the UUID into the `database_id` field under `d1_databases`.
+3. Open `wrangler.instance.json` and paste the UUID into the `database_id` field under `d1_databases`.
+4. Run the preflight guard to confirm:
+   ```bash
+   node scripts/preflight-instance.mjs
+   ```
 
 ---
 
@@ -63,16 +67,19 @@ Your `wrangler.json` contains a placeholder `database_id` instead of a real D1 d
 `Error: D1_ERROR: table already exists` or migration fails partway through.
 
 ### Cause:
-Migrations were applied out of order or executed on a partially migrated database.
+Migrations were applied out of order or executed without specifying `--config wrangler.instance.json`.
 
 ### Solution:
-1. Check migration status:
+1. Check migration status on your personal database:
    ```bash
-   npx wrangler d1 migrations list DB --remote
+   npx wrangler d1 migrations list DB --remote --config wrangler.instance.json
    ```
-2. In local development, you can safely reset local state by deleting `.wrangler/state/v3/d1` and re-running `npx wrangler d1 migrations apply DB --local`.
+2. In local development, you can safely reset local state by deleting `.wrangler/state/v3/d1` and re-running:
+   ```bash
+   npx wrangler d1 migrations apply DB --local --config wrangler.instance.json
+   ```
 3. > [!CAUTION]
-   > **NEVER** delete or drop tables from your production D1 database. MOBIO migrations (0001 through 0011) use `IF NOT EXISTS` guards and are safe to re-run.
+   > **NEVER** delete or drop tables from a remote D1 database. MOBIO migrations (0001 through 0011) use `IF NOT EXISTS` guards and are safe to re-run.
 
 ---
 
@@ -82,11 +89,11 @@ Migrations were applied out of order or executed on a partially migrated databas
 `Error: Cannot read properties of undefined (reading 'MEDIA_BUCKET')` or image uploads fail.
 
 ### Solution:
-1. Verify bucket existence:
+1. Verify bucket existence in your personal account:
    ```bash
    npx wrangler r2 bucket list
    ```
-2. Ensure the bucket name in `wrangler.json` matches your created bucket:
+2. Ensure the bucket name in `wrangler.instance.json` matches your created bucket:
    ```json
    "r2_buckets": [
      {
@@ -144,10 +151,10 @@ You have configured an `ADMIN_EMAIL` secret in your Worker, and the email you us
 Production requests detected a JWT, but the Worker has not been configured with your Cloudflare Zero Trust Team Name and Application AUD tag.
 
 ### Solution:
-Set both required secrets via Wrangler:
+Set both required secrets via Wrangler targeting your instance configuration:
 ```bash
-npx wrangler secret put CF_ACCESS_TEAM_NAME
-npx wrangler secret put CF_ACCESS_AUD
+npx wrangler secret put CF_ACCESS_TEAM_NAME --config wrangler.instance.json
+npx wrangler secret put CF_ACCESS_AUD --config wrangler.instance.json
 ```
 See [docs/INSTALLATION.md](INSTALLATION.md#step-8-configure-cloudflare-access-zero-trust-security) for instructions on where to find these values.
 
@@ -161,7 +168,7 @@ Uploading an avatar or cover in MOBIO Studio displays "Upload failed" or 413 Pay
 ### Solution:
 1. Check image file size: MOBIO recommends images under 5MB for optimal mobile loading speeds.
 2. Supported formats: JPEG, PNG, WebP, SVG, and GIF.
-3. Ensure your Cloudflare R2 bucket exists and is bound in `wrangler.json`.
+3. Ensure your Cloudflare R2 bucket exists and is bound in `wrangler.instance.json`.
 
 ---
 

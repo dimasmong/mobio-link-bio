@@ -65,6 +65,7 @@ flowchart TD
    - If D1 is unreachable or uninitialized, loaders gracefully fall back to default profile definitions in `app/data/profile.ts`.
 4. **Streaming HTML Output:** `app/entry.server.tsx` executes `renderToReadableStream()` from `react-dom/server`. Semantic HTML streams to the browser with complete meta tags, OG cards, and inline SVG assets.
 5. **Client Hydration:** `app/entry.client.tsx` hydrates interactive state (language switching, tab panels, lightbox modals) without causing hydration mismatch.
+6. **Configuration Isolation:** `vite.config.ts` dynamically binds `wrangler.instance.json` when present, ensuring that self-hosters compile and run against their own bindings without modifying the upstream production `wrangler.json`.
 
 ---
 
