@@ -2540,9 +2540,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
 									<div>
-										<h3 className="text-sm font-bold text-white mb-1">Preset Tema Visual (16 Koleksi)</h3>
+										<h3 className="text-sm font-bold text-white mb-1">Preset Tema Visual (30 Koleksi)</h3>
 										<p className="text-xs text-slate-400">
-											Pilih salah satu dari 16 preset premium teruji (8 Light Mode & 8 Dark Mode) untuk menerapkan karakteristik tema dan warna aksen secara instan.
+											Pilih salah satu dari 30 preset premium teruji (15 Light Mode & 15 Dark Mode) untuk menerapkan karakteristik tema dan warna aksen secara instan.
 										</p>
 									</div>
 									{/* Filter Tabs */}
@@ -2554,7 +2554,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												presetFilter === "all" ? "bg-violet-600 text-white shadow-xs" : "text-slate-400 hover:text-white"
 											}`}
 										>
-											Semua (16)
+											Semua Tema (30)
 										</button>
 										<button
 											type="button"
@@ -2563,7 +2563,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												presetFilter === "light" ? "bg-violet-600 text-white shadow-xs" : "text-slate-400 hover:text-white"
 											}`}
 										>
-											☀️ Light (8)
+											☀️ Light (15)
 										</button>
 										<button
 											type="button"
@@ -2572,7 +2572,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												presetFilter === "dark" ? "bg-violet-600 text-white shadow-xs" : "text-slate-400 hover:text-white"
 											}`}
 										>
-											🌙 Dark (8)
+											🌙 Dark (15)
 										</button>
 									</div>
 								</div>

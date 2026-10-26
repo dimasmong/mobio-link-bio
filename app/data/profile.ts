@@ -320,12 +320,12 @@ export const profileData: ProfileData = {
 		},
 	},
 
-	// Footer Pribadi
+	// Footer Pribadi (Disabled in V3.2)
 	footer: {
-		showFooter: true,
+		showFooter: false,
 		customText: {
-			id: "Hak cipta dilindungi undang-undang.",
-			en: "All rights reserved.",
+			id: "",
+			en: "",
 		},
 	},
 };

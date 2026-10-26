@@ -103,14 +103,11 @@ function getCategoryLabel(catKey: string, lang: Language): string {
 export function ExploreSection({ config, lang }: ExploreSectionProps) {
 	const [activeLightboxItem, setActiveLightboxItem] = useState<ExploreItem | null>(null);
 	const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
-	const [activeCategory, setActiveCategory] = useState<string>("all");
 	const touchStartX = useRef<number | null>(null);
 
-	// Extract or assemble single-tier categories: "Semua" + configured custom categories + fallback from items
+	// Extract single-tier custom categories (No "Semua / All" filter)
 	const displayCategories = useMemo(() => {
-		const result: { id: string; name: { id: string; en: string }; icon?: string; color?: string }[] = [
-			{ id: "all", name: { id: "Semua", en: "All" } },
-		];
+		const result: { id: string; name: { id: string; en: string }; icon?: string; color?: string }[] = [];
 
 		if (config.categories && config.categories.length > 0) {
 			config.categories
@@ -124,32 +121,67 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 					});
 				});
 		} else {
-			// Fallback: extract unique categories from items
+			// Fallback: extract unique categories from items (excluding 'all')
 			const seen = new Set<string>();
 			(config.items || []).forEach((item) => {
-				if (item.category && item.category !== "all" && !seen.has(item.category)) {
-					seen.add(item.category);
+				const cat = item.category?.trim();
+				if (cat && cat !== "all" && !seen.has(cat)) {
+					seen.add(cat);
 					result.push({
-						id: item.category,
+						id: cat,
 						name: {
-							id: getCategoryLabel(item.category, "id"),
-							en: getCategoryLabel(item.category, "en"),
+							id: getCategoryLabel(cat, "id"),
+							en: getCategoryLabel(cat, "en"),
 						},
 					});
 				}
 			});
 		}
 
+		// Legacy item safety: Check if there are active items with category === "all" or uncategorized that don't match any category in `result`
+		const resultIds = new Set(result.map((r) => r.id));
+		const hasOrphanItems = (config.items || []).some(
+			(item) => !item.category || item.category === "all" || !resultIds.has(item.category)
+		);
+		if (hasOrphanItems) {
+			result.push({
+				id: "uncategorized",
+				name: {
+					id: "Lainnya",
+					en: "Other",
+				},
+				icon: "folder",
+			});
+		}
+
 		return result;
 	}, [config.categories, config.items]);
 
+	// Default to the first available enabled category
+	const [activeCategory, setActiveCategory] = useState<string>(() => {
+		return displayCategories[0]?.id || "";
+	});
+
+	// If activeCategory is not in displayCategories or empty, automatically select the first enabled category
+	useEffect(() => {
+		if (displayCategories.length > 0 && !displayCategories.some((c) => c.id === activeCategory)) {
+			setActiveCategory(displayCategories[0].id);
+		}
+	}, [displayCategories, activeCategory]);
+
 	// Filter items strictly by activeCategory
 	const filteredItems = useMemo(() => {
+		if (!activeCategory) return [];
 		return (config.items || []).filter((item) => {
-			if (activeCategory === "all") return true;
-			return (item.category || "all") === activeCategory;
+			if (activeCategory === "uncategorized") {
+				const knownCategoryIds = new Set(
+					(config.categories || []).filter((c) => c.isEnabled !== false).map((c) => c.id)
+				);
+				return !item.category || item.category === "all" || !knownCategoryIds.has(item.category);
+			}
+			return (item.category || "") === activeCategory;
 		});
-	}, [config.items, activeCategory]);
+	}, [config.items, activeCategory, config.categories]);
 
 	// Slides for active lightbox item
 	const slides: ExplorePhoto[] = useMemo(() => {
@@ -646,17 +678,18 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 				</div>
 				) : (
 					/* Filter Empty State */
-					<div className="glass-liquid-secondary rounded-3xl p-8 text-center flex flex-col items-center">
-						<p className="text-sm font-semibold text-theme-secondary mb-1">
-							{lang === "id" ? "Tidak ada konten pada kategori ini" : "No content in this category"}
+					<div className="glass-liquid-secondary rounded-3xl p-8 sm:p-10 text-center flex flex-col items-center">
+						<div className="w-10 h-10 rounded-full bg-theme-accent-subtle text-theme-accent border flex items-center justify-center mb-3 shadow-2xs">
+							<CompassIcon className="w-5 h-5" />
+						</div>
+						<h3 className="text-sm sm:text-base font-bold text-theme-primary mb-1">
+							{lang === "id" ? "Belum ada konten pada kategori ini" : "No items in this category yet"}
+						</h3>
+						<p className="text-xs text-theme-muted max-w-sm">
+							{lang === "id"
+								? "Pilih kategori lain di atas untuk melihat konten yang tersedia."
+								: "Select another category above to view available items."}
 						</p>
-						<button
-							type="button"
-							onClick={() => setActiveCategory("all")}
-							className="text-xs font-bold text-[var(--accent-color)] hover:underline mt-2 cursor-pointer"
-						>
-							{lang === "id" ? "Tampilkan Semua Konten" : "Show All Content"}
-						</button>
 					</div>
 				)
 			) : (

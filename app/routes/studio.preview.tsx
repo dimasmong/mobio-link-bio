@@ -20,7 +20,6 @@ import { ProfileGlassCard } from "../components/ProfileGlassCard";
 import { VerticalLinkList } from "../components/VerticalLinkList";
 import { ExploreSection } from "../components/ExploreSection";
 import { ContactSection } from "../components/ContactSection";
-import { Footer } from "../components/Footer";
 
 export function meta() {
 	return [
@@ -379,8 +378,8 @@ export default function StudioPreview({ loaderData }: Route.ComponentProps) {
 							onToggleLang={setLang}
 						/>
 
-						{/* Centered Main Content (flex-grow pushes footer down on short content) */}
-						<main className="relative z-10 w-full flex-grow px-4 sm:px-6 pt-6 sm:pt-8 pb-8 flex flex-col items-center">
+						{/* Centered Main Content */}
+						<main className="relative z-10 w-full flex-grow px-4 sm:px-6 pt-6 sm:pt-8 pb-28 sm:pb-32 flex flex-col items-center">
 							<div className="w-full max-w-xl sm:max-w-2xl mx-auto flex flex-col items-center">
 								{/* HOME TAB */}
 								{activeTab === "home" && (
@@ -407,13 +406,6 @@ export default function StudioPreview({ loaderData }: Route.ComponentProps) {
 								)}
 							</div>
 						</main>
-
-						{/* Footer as the definitive final element in document flow */}
-						<footer className="relative z-10 w-full pb-28 sm:pb-32 pt-2 flex flex-col items-center">
-							<div className="w-full max-w-xl sm:max-w-2xl mx-auto px-4 flex flex-col items-center">
-								<Footer profile={profile} lang={lang} />
-							</div>
-						</footer>
 					</div>
 				</div>
 			</div>
