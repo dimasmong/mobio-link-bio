@@ -36,6 +36,7 @@ const REQUIRED_FILES = [
 	"scripts/deploy-instance.mjs",
 	"scripts/migrate-instance.mjs",
 	"scripts/build-prod.mjs",
+	"scripts/test-wrapper-safety.mjs",
 ];
 
 for (const file of REQUIRED_FILES) {
@@ -336,10 +337,24 @@ try {
 	console.log("  ✓ deploy:instance script safely halts deployment execution on preflight failure.");
 
 	const migrateScript = path.resolve(process.cwd(), "scripts/migrate-instance.mjs");
-	const migrateRes = spawnSync(process.execPath, [migrateScript], { encoding: "utf-8" });
+	// When called without mode flag, must fail immediately on argument validation
+	const migrateNoMode = spawnSync(process.execPath, [migrateScript], { encoding: "utf-8" });
+	assert.notEqual(migrateNoMode.status, 0, "migrate:instance must exit non-zero without mode flag");
+	assert.ok(migrateNoMode.stderr.includes("Migration mode is required") || migrateNoMode.stdout.includes("Migration mode is required"), "migrate:instance must require --local or --remote");
+	console.log("  ✓ migrate:instance requires explicit mode (--local or --remote).");
+
+	// When called with --remote (and instance file missing), must halt on preflight
+	const migrateRes = spawnSync(process.execPath, [migrateScript, "--remote"], { encoding: "utf-8" });
 	assert.notEqual(migrateRes.status, 0, "migrate:instance must exit non-zero when preflight fails");
 	assert.ok(migrateRes.stderr.includes("Instance migration halted") || migrateRes.stdout.includes("Instance migration halted"), "migrate:instance must halt before executing wrangler");
 	console.log("  ✓ migrate:instance script safely halts migration execution on preflight failure.");
+
+	// TEST 11: Execute Full Wrapper Security Test Suite
+	console.log("\nTEST 11: Running Dedicated Wrapper Safety Test Suite...");
+	const wrapperTestScript = path.resolve(process.cwd(), "scripts/test-wrapper-safety.mjs");
+	const wrapperTestRes = spawnSync(process.execPath, [wrapperTestScript], { encoding: "utf-8" });
+	assert.equal(wrapperTestRes.status, 0, `Dedicated wrapper safety suite must pass:\n${wrapperTestRes.stderr || wrapperTestRes.stdout}`);
+	console.log("  ✓ Dedicated wrapper script safety test suite passed completely.");
 } finally {
 	fs.rmSync(tmpDir, { recursive: true, force: true });
 }

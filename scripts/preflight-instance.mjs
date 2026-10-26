@@ -221,11 +221,15 @@ if (isDirectCli) {
 	const args = process.argv.slice(2);
 	const isProd = args.includes("--prod");
 
-	// Allow custom config path via --config <path>
+	// Allow custom config path via --config <path> or --config=<path>
 	let targetConfig = isProd ? "wrangler.json" : "wrangler.instance.json";
-	const configFlagIdx = args.indexOf("--config");
-	if (configFlagIdx !== -1 && args[configFlagIdx + 1]) {
-		targetConfig = args[configFlagIdx + 1];
+	for (let i = 0; i < args.length; i++) {
+		if (args[i] === "--config" && args[i + 1]) {
+			targetConfig = args[i + 1];
+			i++;
+		} else if (args[i].startsWith("--config=")) {
+			targetConfig = args[i].slice("--config=".length);
+		}
 	}
 
 	const configPath = path.resolve(process.cwd(), targetConfig);

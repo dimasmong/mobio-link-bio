@@ -302,9 +302,11 @@ npm run deploy:instance
 > **Safety Warning for Self-Hosters:**
 > Do **NOT** run `npx wrangler deploy` or `npm run deploy` without `--config`!
 > The repository includes a tracked `wrangler.json` file which is reserved exclusively for the project maintainer's production deployment (`me.dimasmong.web.id`). Running unqualified deploy commands targets that production file instead of your own.
-> Always use `npm run deploy:instance` or pass `--config wrangler.instance.json` explicitly.
+>
+> Direct Wrangler commands bypass the automated safety wrappers and preflight checks, and therefore are **not recommended for beginners**.
+> Always use `npm run deploy:instance` (which strictly permits only `--dry-run` or no arguments, preventing configuration overrides) and `npm run migrate:instance` (which strictly requires explicit target modes).
 
-*(Direct CLI alternative: `npx wrangler deploy --config wrangler.instance.json`)*
+*(Direct CLI alternative for advanced users: `npx wrangler deploy --config wrangler.instance.json`)*
 
 Wrangler will output your live URL:
 ```text

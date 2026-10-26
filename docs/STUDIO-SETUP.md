@@ -282,6 +282,8 @@ npm run deploy:instance
 > **Deployment Safety Notice for Self-Hosters:**
 > Do **NOT** run `npx wrangler deploy` or `npm run deploy` without explicit configuration!
 > The repository tracks an upstream maintainer configuration file (`wrangler.json`) targeting `me.dimasmong.web.id`. Running unqualified deploy commands targets that upstream production file instead of your own.
+>
+> Direct Wrangler commands bypass the safety wrappers and preflight validation, and are **not recommended for beginners**.
 > Always use `npm run deploy:instance` (or pass `--config wrangler.instance.json` explicitly) to guarantee deployment to your personal Cloudflare Worker.
 
 *(For the original repository maintainer only, deploying to upstream production uses `npm run build:prod` and `npm run deploy`.)*

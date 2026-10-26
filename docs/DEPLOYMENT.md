@@ -75,15 +75,17 @@ npm run deploy:instance
 > **Safety Warning for Self-Hosters:**
 > Do **NOT** run `npx wrangler deploy` or `npm run deploy` without `--config`!
 > The repository includes a tracked `wrangler.json` file which is reserved exclusively for the project maintainer's production deployment (`me.dimasmong.web.id`). Running unqualified deploy commands targets that production file instead of your own.
-> Always use `npm run deploy:instance` or pass `--config wrangler.instance.json` explicitly.
+>
+> Direct Wrangler commands bypass the automated safety wrappers and preflight checks, and therefore are **not recommended for beginners**.
+> Always use `npm run deploy:instance` (which only accepts `--dry-run` or no arguments, preventing configuration overrides) and `npm run migrate:instance` (which strictly requires explicit target modes).
 
-#### Direct CLI Alternatives:
-If you prefer running direct Wrangler commands:
+#### Direct CLI Alternatives (Advanced Users Only):
+If you run direct Wrangler commands without the npm wrapper scripts, you must always provide explicit configuration and bindings:
 ```bash
-# Apply migrations:
+# Apply migrations to remote instance D1:
 npx wrangler d1 migrations apply DB --remote --config wrangler.instance.json
 
-# Deploy worker:
+# Deploy worker targeting instance configuration:
 npx wrangler deploy --config wrangler.instance.json
 ```
 
