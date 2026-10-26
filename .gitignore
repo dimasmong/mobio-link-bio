@@ -206,6 +206,12 @@ dist
 test-artifacts/
 test-screenshots/
 backups/
+*.sqlite
+*.sqlite3
+*.db
+*.sql.bak
+dump.sql
+backup*.sql
 
 ### Generated Types & Agent Metadata ###
 worker-configuration.d.ts

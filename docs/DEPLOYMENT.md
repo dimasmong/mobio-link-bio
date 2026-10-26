@@ -1,0 +1,188 @@
+# Deployment Guide
+
+This guide covers production deployment strategies, continuous integration, zero-downtime releases, and health checks for **MOBIO Link Bio** on Cloudflare Workers.
+
+---
+
+## 📑 Table of Contents
+
+1. [Architecture Overview](#1-architecture-overview)
+2. [Why No One-Click Deploy Button?](#2-why-no-one-click-deploy-button)
+3. [Manual Deployment Workflow](#3-manual-deployment-workflow)
+4. [Continuous Integration (GitHub Actions)](#4-continuous-integration-github-actions)
+5. [Staging vs. Production](#5-staging-vs-production)
+6. [Rollbacks & Version History](#6-rollbacks--version-history)
+7. [Health & Monitoring](#7-health--monitoring)
+
+---
+
+## 1. Architecture Overview
+
+MOBIO runs as a **Cloudflare Worker** utilizing modern **React Router v7 Framework Mode with Server-Side Rendering (SSR)**.
+
+```mermaid
+flowchart LR
+    User[Visitor / Admin Browser] --> Edge[Cloudflare Global Edge]
+    Edge --> Access{Route == /studio*?}
+    Access -- Yes --> CF ये AccessAuth[Cloudflare Access Zero Trust OTP]
+    CF AccessAuth -- Valid JWT --> Worker[MOBIO Edge Worker (SSR)]
+    Access -- No (Public) --> Worker
+    Worker --> D1[(Cloudflare D1 Database)]
+    Worker --> R2[(Cloudflare R2 Storage)]
+```
+
+- **Edge SSR:** HTML streams instantly from Cloudflare's nearest edge location with sub-50ms Time to First Byte (TTFB).
+- **Data Locality:** Cloudflare D1 provides low-latency SQLite query execution at the edge.
+- **Media Delivery:** Cloudflare R2 serves uploaded assets without egress fees.
+
+---
+
+## 2. Why No One-Click Deploy Button?
+
+Many projects provide a generic "Deploy with Workers" button. MOBIO deliberately avoids this for critical security and operational reasons:
+
+1. **Zero Trust Access Requirement:** A one-click button cannot provision Cloudflare Zero Trust policies or configure one-time passcode (OTP) email rules. Providing a one-click deployment would either leave the Studio CMS unprotected or require an insecure default password.
+2. **Database Migrations:** Cloudflare's automated deployment buttons cannot execute sequential schema migrations against D1 databases during initial provisioning.
+3. **Sovereign Isolation:** Manual setup ensures that every self-hoster explicitly owns their D1 database UUID, R2 bucket, and secret keys with zero shared dependencies.
+
+A guided, 10-minute manual setup guarantees that your deployment is **secure, fail-closed, and sovereign** from day one.
+
+---
+
+## 3. Manual Deployment Workflow
+
+Follow these steps for any new release or update:
+
+```bash
+# 1. Ensure working directory is clean and up to date
+git checkout main
+git pull origin main
+
+# 2. Install dependencies
+npm ci
+
+# 3. Type check & generate Worker types
+npm run typecheck
+
+# 4. Build SSR server and client assets
+npm run build
+
+# 5. Apply any pending database migrations
+npx wrangler d1 migrations apply DB --remote
+
+# 6. Deploy to Cloudflare Workers
+npx wrangler deploy
+```
+
+---
+
+## 4. Continuous Integration (GitHub Actions)
+
+You can automate deployment via GitHub Actions while keeping credentials safe.
+
+### Required GitHub Repository Secrets:
+- `CLOUDFLARE_API_TOKEN`: Cloudflare API token with `Workers Scripts:Edit`, `D1:Edit`, and `R2:Edit` permissions.
+- `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare Account ID (found on any Cloudflare dashboard sidebar).
+
+### Example Workflow: `.github/workflows/deploy.yml`
+
+```yaml
+name: Deploy MOBIO Link Bio
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build SSR App
+        run: npm run build
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+```
+
+---
+
+## 5. Staging vs. Production
+
+To create a separate staging environment:
+
+1. Create a staging D1 database (`mobio-studio-db-staging`) and R2 bucket (`mobio-media-staging`).
+2. Add an `env.staging` block in `wrangler.json`:
+   ```json
+   "env": {
+     "staging": {
+       "name": "my-mobio-staging",
+       "workers_dev": true,
+       "d1_databases": [
+         {
+           "binding": "DB",
+           "database_name": "mobio-studio-db-staging",
+           "database_id": "STAGING_D1_ID",
+           "migrations_dir": "migrations"
+         }
+       ]
+     }
+   }
+   ```
+3. Deploy to staging via:
+   ```bash
+   npx wrangler deploy --env staging
+   ```
+
+---
+
+## 6. Rollbacks & Version History
+
+Cloudflare Workers automatically archives prior deployments:
+
+1. **List Previous Deployments:**
+   ```bash
+   npx wrangler deployments list
+   ```
+2. **Instant Rollback:**
+   In the Cloudflare Dashboard under **Workers & Pages** ➔ **mobio-link-bio** ➔ **Deployments**, select any previous deployment and click **Rollback to this version**. Rollbacks take effect worldwide in milliseconds.
+
+---
+
+## 7. Health & Monitoring
+
+MOBIO includes a dedicated public health check endpoint:
+
+```bash
+curl -I https://your-domain.com/api/public/health
+```
+
+Expected Response:
+```http
+HTTP/2 200 OK
+content-type: application/json; charset=utf-8
+cache-control: no-store, no-cache, must-revalidate
+
+{"status":"ok","timestamp":"2026-10-27T02:00:00.000Z","version":"4.2.0"}
+```
+
+Use this endpoint with uptime monitoring services (e.g. UptimeRobot, Better Stack, Pingdom) to monitor service availability.

@@ -1,163 +1,149 @@
-# Mobio Link Bio
+# MOBIO Link Bio
 
-A modern, high-performance personal Link in Bio web application featuring a **Full Premium Liquid Glass** aesthetic. Built with **React Router v7 Framework Mode (SSR)**, **Cloudflare Workers** edge runtime, and **Tailwind CSS v4**.
-
----
-
-## 🌟 Highlights
-
-- **Server-Side Rendered (SSR):** High-speed semantic HTML streaming directly from the Cloudflare Workers edge runtime via Web Streams API. Instant first-contentful paint and 100% SEO/crawler friendly.
-- **Full Premium Liquid Glass Design System:**
-  - Realistic multi-layered translucent glass panels (`backdrop-filter: blur(24px) saturate(180%)`).
-  - Specular edge highlights (`inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.95)`) and multi-layer diffuse floating shadows.
-  - Frost Aurora aesthetic with lavender, ice blue, and soft violet refractions.
-- **Fixed Fullscreen Background Engine:**
-  - Supports 3 modes: CSS animated gradient mesh, static high-res image, or background video.
-  - Built-in safe media playback: automatically pauses when hidden (tab switch) or when `prefers-reduced-motion` is detected.
-  - Integrated adaptive readability overlay (`rgba(248, 250, 252, 0.45)`).
-- **Customizable Cover Banner:**
-  - High-res cover image or an animated specular Liquid Glass Aurora fallback banner.
-- **Dedicated Profile Glass Card:**
-  - Elegant circular avatar with polished liquid glass ring and automatic monogram initials fallback.
-  - Pure profile presentation: name, handle, location, and bio ONLY (strictly separated from links and actions).
-- **Single-Column Vertical Link List:**
-  - All regular links are rendered in a clean, thumb-friendly single vertical column on **all screen sizes** (mobile, tablet, desktop).
-  - Smooth hover sheen, platform-specific iconography, and clear external link indicators.
-- **Floating Navigation Dock:**
-  - **Desktop:** Floating top pill bar.
-  - **Mobile:** Floating bottom capsule dock that compacts gracefully on scroll down.
-  - Dynamic active section tracking via `IntersectionObserver` with smooth scrolling to `#home`, `#explore`, and `#contact`.
-- **Modular Explore Section (`#explore`):**
-  - Project cards with tech stack tags and live external links.
-  - Interactive photo gallery with accessible Liquid Glass Lightbox modal (keyboard navigation, Escape key close, and backdrop blur).
-  - Music playlist previews, game showcase cards, and reading notes.
-- **Direct Action Contact Section (`#contact`):**
-  - One-click contact cards for Email, WhatsApp, Telegram, and Instagram (no fake backend forms).
-- **Dwibahasa / Bilingual Switcher:**
-  - Seamless toggle between Bahasa Indonesia (`ID`) and English (`EN`) across all components.
-- **Self-Hosted MOBIO Studio (`/studio`):**
-  - **Zero Trust Security:** Protected by Cloudflare Access with Email OTP and native Web Crypto RS256 JWKS verification.
-  - **Content Management:** Fully visual editors for Profile, Links, and Direct Action Contacts.
-  - **Appearance Studio:** Customize theme presets, Liquid Glass intensities, custom background positioning/scale, and upload media to Cloudflare R2.
-  - **Explore Editor (10 Content Models):** Manage Projects, Galleries, Videos, Audio playlists, Games, Reviews, Notes, Links, and Custom blocks.
-  - **Privacy-First Click Monitor:** Built-in link telemetry via first-party redirect (`/go/:linkId`), SHA-256 user-agent hashing, sanitized referrers, and zero PII collection.
-  - **Atomic Publishing:** Save edits to isolated draft tables in Cloudflare D1; promote atomically to public production in a single transaction with instant rollback (Discard).
-  - **Zero-Downtime Fallback:** Seamlessly falls back to neutral TypeScript defaults if database connectivity is unavailable.
-- **Single Source of Truth Configuration:**
-  - All profile details, background options, cover banner, links, explore items, and contact methods are centralized in [app/data/profile.ts](file:///c:/Users/Dimas%20Mong/Downloads/Project/Link%20in%20Bio/app/data/profile.ts).
+A sovereign, self-hosted personal **Link in Bio** and modular portfolio application built with a **Full Premium Liquid Glass** aesthetic, **React Router v7 Framework Mode (SSR)**, and **Cloudflare Workers**.
 
 ---
 
-## 🛠️ Tech Stack
+## 🌟 Overview
+
+**MOBIO Link Bio** is an open-source, independently deployable alternative to closed Link in Bio platforms. It allows creators, engineers, designers, and professionals to host their own modern identity card, link list, modular portfolio, and direct-action contact hub on their personal Cloudflare infrastructure.
+
+Every deployment is **100% sovereign and isolated**: you own your Cloudflare D1 database, your Cloudflare R2 media storage, and your Cloudflare Access Zero Trust administrative guard.
+
+---
+
+## ✨ Features
+
+### 🌐 Full Bilingual System (V4.2)
+- **English Default Everywhere:** Unauthenticated visitors, public views, and the entire Studio workspace load in English by default.
+- **Dedicated 2-Choice Language Selector:** Seamlessly switch between **English (`EN`)** and **Indonesian (`ID`)** via an accessible popover in the floating dock or the Studio header.
+- **Synchronized SSR:** Zero hydration mismatch and zero flash of wrong language via cookie parsing (`mobio_lang`) and client persistence.
+- **Dual-Language Content:** Supports localized bios, locations, link titles, contact methods, and explore items with deterministic fallbacks.
+
+### 🎨 Visual & Theme Customization
+- **30 Premium Color Themes:** Frost Aurora, Dark Sapphire, Emerald Glass, Violet Neon, Sunset Amber, Rose Quartz, Cyberpunk Slate, and 23 additional calibrated palettes.
+- **20 Layout Presets:** Minimal Stack, Neo Capsule, Soft Grid, Split Composition, Compact Center, Magazine Editorial, and 14 other thumb-friendly responsive arrangements.
+- **10 Profile Card Styles:** Floating Glass, Immersive Card, Minimalist Monogram, Bordered Glow, Split Header, Pill Minimal, and 4 other variations.
+- **3 Profile Card Sizes:** Compact (`sm`), Standard (`md`), Spacious (`lg`).
+- **24 Typography Presets:** Organized into Modern Sans, Elegant Serif, Tech Mono, and Expressive Display families with automatic Google Fonts streaming.
+- **Liquid Glass Materials:** Specular highlights (`inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.95)`), backdrop filters (`blur(24px) saturate(180%)`), and multi-layer floating drop shadows.
+- **Fullscreen Background Engine:** Supports animated CSS gradient mesh, static high-res images, or background videos with automatic pause on tab blur and `prefers-reduced-motion` detection.
+
+### 🔗 Content & Showcase Management
+- **Single-Column Vertical Link List:** Clean, thumb-friendly vertical links on all viewports with smooth hover sheens and platform-specific iconography.
+- **Custom Icon Library & Uploads:** Rich SVG icon picker, custom icon image uploads, or external URLs.
+- **Modular Explore Section:** Showcase Projects, Photo Galleries (with accessible Liquid Glass Lightbox modal), Music playlists, Reviews, and Notes.
+- **Customizable Explore Categories:** Add, edit, reorder, and color-code categories and subcategories.
+- **Direct Action Contact Section:** One-click contact cards for Email, WhatsApp, Telegram, and Instagram.
+
+### 🛡️ Sovereign Studio CMS (`/studio`)
+- **Zero Trust Security:** Administrative routes (`/studio*` and `/api/studio/*`) are protected by Cloudflare Access with Email OTP and native Web Crypto **RS256 JWKS** signature verification. Fails closed on missing or invalid JWTs.
+- **Draft & Publish Workflow:** Edit content safely in isolated draft tables; preview drafts live on multi-device viewports; publish atomically to production in a single D1 batch transaction with instant rollback (Discard).
+- **Privacy-First Click Monitor:** Built-in link and visitor telemetry via first-party redirect (`/go/:linkId`). Strictly separates actual interaction clicks from page views. Zero raw IP storage, zero tracking cookies, zero third-party scripts.
+- **Zero-Egress Media Storage:** Direct integration with Cloudflare R2 for uploading avatars, banners, and gallery photos.
+
+---
+
+## 📸 Screenshots
+
+| Public Page (English Default) | Public Page (Indonesian Switched) |
+| :---: | :---: |
+| ![Public Page English](docs/images/v4-2-public-en-default.png) | ![Public Page Indonesian](docs/images/v4-2-public-id-switched.png) |
+
+| Studio Dashboard (English Default) | Studio Dashboard (Indonesian Switched) |
+| :---: | :---: |
+| ![Studio English](docs/images/v4-2-studio-en-default.png) | ![Studio Indonesian](docs/images/v4-2-studio-id-switched.png) |
+
+| Multi-Device Draft Preview (`/studio/preview`) |
+| :---: |
+| ![Studio Draft Preview](docs/images/v4-2-studio-preview-page.png) |
+
+---
+
+## 🛠️ Technology Stack
 
 | Layer | Technology |
 | :--- | :--- |
-| **Framework** | React Router v7 (Framework Mode with SSR) |
-| **UI Library** | React 19 |
-| **Edge Runtime** | Cloudflare Workers (`workerd` simulation via Vite plugin) |
-| **Styling** | Tailwind CSS v4 (`@tailwindcss/vite`) + Custom Liquid Glass Tokens |
+| **Framework** | [React Router v7](https://reactrouter.com/) (Framework Mode with Edge SSR) |
+| **Frontend UI** | [React 19](https://react.dev/) |
+| **Edge Runtime** | [Cloudflare Workers](https://workers.cloudflare.com/) (`workerd`) |
+| **Database** | [Cloudflare D1](https://developers.cloudflare.com/d1/) (Serverless SQLite at the Edge) |
+| **Media Storage** | [Cloudflare R2](https://developers.cloudflare.com/r2/) (Zero-Egress Object Storage) |
+| **Security & Auth** | [Cloudflare Access Zero Trust](https://developers.cloudflare.com/cloudflare-one/identity/users/) (Email OTP + RS256 JWKS) |
+| **Styling** | [Tailwind CSS v4](https://tailwindcss.com/) + Custom Liquid Glass Material Tokens |
+| **Build Tool** | [Vite v7](https://vite.dev/) + `@cloudflare/vite-plugin` |
 | **Language** | TypeScript (Strict mode enabled) |
-| **Build Tool** | Vite v7 + `@cloudflare/vite-plugin` |
-| **Verification** | Playwright Browser Automation |
-| **Package Manager** | npm |
 
 ---
 
-## 📁 Project Structure
+## 📋 Prerequisites
 
-```text
-mobio-link-bio/
-├── app/
-│   ├── components/
-│   │   ├── Icons.tsx               # Scalable accessible SVG icon library
-│   │   ├── FixedBackground.tsx     # Fullscreen background (mesh / image / video)
-│   │   ├── CoverBanner.tsx         # Customizable cover banner with aurora fallback
-│   │   ├── ProfileGlassCard.tsx    # Dedicated profile card (avatar, name, bio)
-│   │   ├── VerticalLinkList.tsx    # Single-column vertical link card list
-│   │   ├── ExploreSection.tsx      # Modular explore cards + Lightbox modal
-│   │   ├── ContactSection.tsx      # Direct action contact cards
-│   │   ├── FloatingNav.tsx         # Responsive floating dock (Home / Explore / Contact)
-│   │   ├── LanguageToggle.tsx      # Liquid glass bilingual toggle (ID / EN)
-│   │   └── Footer.tsx              # Configurable personal copyright footer
-│   ├── data/
-│   │   └── profile.ts              # Single source of truth configuration
-│   ├── routes/
-│   │   ├── home.tsx                # Unified single-page Liquid Glass view
-│   │   └── api.public.health.ts    # Service health endpoint (GET /api/public/health)
-│   ├── app.css                     # Liquid glass material tokens, aurora mesh, keyframes
-│   ├── entry.server.tsx            # Cloudflare SSR streaming request pipeline
-│   ├── root.tsx                    # Root HTML document and font definitions
-│   └── routes.ts                   # React Router route definitions
-├── workers/
-│   └── app.ts                      # Cloudflare Worker fetch handler
-├── docs/
-│   └── ARCHITECTURE.md             # Technical architecture & material system spec
-├── public/
-│   ├── images/                     # Local avatar, cover, and gallery assets
-│   └── favicon.ico                 # Browser favicon
-├── scripts/
-│   └── test-liquid-glass.mjs       # Comprehensive Playwright end-to-end verification
-├── package.json                    # Dependencies & scripts
-├── tsconfig.json                   # Strict TypeScript configuration
-└── wrangler.json                   # Cloudflare Workers deployment configuration
-```
+To deploy your own instance of MOBIO Link Bio, you need:
+
+1. **Node.js:** v20.x or v22.x LTS (Node.js 24 is also supported).
+2. **npm:** v10.x or higher.
+3. **Cloudflare Account:** Free tier is 100% sufficient for Workers, D1, R2, and Zero Trust Access.
 
 ---
 
-## 🚀 Getting Started
-
-### Prerequisites
-
-- **Node.js:** v20.x or v22.x LTS
-- **npm:** v10.x or higher
-
-### Installation
-
-Clone the repository and install dependencies:
+## 🚀 Quick Start
 
 ```bash
+# 1. Clone your fork
+git clone https://github.com/YOUR_USERNAME/mobio-link-bio.git
+cd mobio-link-bio
+
+# 2. Install dependencies
 npm install
-```
 
-### Development
+# 3. Create local development variables file
+cp .dev.vars.example .dev.vars
 
-Run the local development server with Cloudflare Workers emulation:
+# 4. Apply migrations to your local SQLite database
+npx wrangler d1 migrations apply DB --local
 
-```bash
+# 5. Start the local development server
 npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-### Typecheck & Production Build
-
-```bash
-# Verify TypeScript types
-npm run typecheck
-
-# Build for Cloudflare Workers
-npm run build
-```
+> 📖 **Ready for production deployment?**  
+> Follow the complete step-by-step guide: [**docs/INSTALLATION.md**](docs/INSTALLATION.md).
 
 ---
 
-## 🛠️ Self-Hosted MOBIO Studio Setup
+## 📚 Documentation Index
 
-To set up your own sovereign self-hosted admin dashboard with Cloudflare D1, Cloudflare R2, and Cloudflare Access (Email OTP):
-
-👉 Read the complete guide: [docs/STUDIO-SETUP.md](file:///c:/Users/Dimas%20Mong/Downloads/Project/Link%20in%20Bio/docs/STUDIO-SETUP.md)
+- [**docs/INSTALLATION.md**](docs/INSTALLATION.md) — Step-by-step self-hosting setup from zero to deployed instance.
+- [**docs/CONFIGURATION.md**](docs/CONFIGURATION.md) — Comprehensive reference for environment variables, secrets, and bindings.
+- [**docs/DEPLOYMENT.md**](docs/DEPLOYMENT.md) — Deployment workflows, CI/CD with GitHub Actions, and version rollbacks.
+- [**docs/DEVELOPMENT.md**](docs/DEVELOPMENT.md) — Local development workflow, edge emulation, and automated test suites.
+- [**docs/TROUBLESHOOTING.md**](docs/TROUBLESHOOTING.md) — Solutions to common setup, Cloudflare Access, and D1 migration issues.
+- [**docs/ARCHITECTURE.md**](docs/ARCHITECTURE.md) — Deep dive into Edge SSR, dual-state D1 isolation, and security guarantees.
 
 ---
 
-## 🎨 Personalization
+## 🔒 Security
 
-To personalize the website, open:
-👉 [app/data/profile.ts](file:///c:/Users/Dimas%20Mong/Downloads/Project/Link%20in%20Bio/app/data/profile.ts)
+Administrative endpoints (`/studio*` and `/api/studio/*`) require Cloudflare Access. The application performs cryptographic validation of RS256 JWT signatures against Cloudflare JWKS and enforces matching Audience and Issuer claims.
 
-Consult [PERSONALIZATION-GUIDE.md](file:///c:/Users/Dimas%20Mong/Downloads/Project/Link%20in%20Bio/PERSONALIZATION-GUIDE.md) for full step-by-step instructions.
+To report a vulnerability responsibly, please consult [**SECURITY.md**](SECURITY.md).
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please see [**CONTRIBUTING.md**](CONTRIBUTING.md) for contribution guidelines, coding standards, and testing procedures. All participants must abide by the [**Code of Conduct**](CODE_OF_CONDUCT.md).
+
+---
+
+## 💬 Community & Support
+
+For bug reports, feature suggestions, or deployment discussions, please open an issue on the [**GitHub Issues**](https://github.com/dimasmong/mobio-link-bio/issues) page.
 
 ---
 
 ## 📄 License
 
-MIT © [Dimas Mong](https://github.com/dimasmong)
+This project is licensed under the [**MIT License**](LICENSE) © 2026 Dimas Mong.
