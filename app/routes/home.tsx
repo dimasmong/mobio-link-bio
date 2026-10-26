@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { Route } from "./+types/home";
-import { profileData, type Language } from "../data/profile";
+import { profileData } from "../data/profile";
+import {
+	type Language,
+	DEFAULT_LANGUAGE,
+	parseLanguageCookie,
+	setLanguagePreference,
+	getLocalizedText,
+	TRANSLATIONS,
+} from "../lib/i18n";
 import {
 	getProfileRecord,
 	getLinks,
@@ -23,14 +31,18 @@ import { ContactSection } from "../components/ContactSection";
 
 export function meta({ data }: Route.MetaArgs) {
 	const currentProfile = data?.profile || profileData;
+	const lang = data?.initialLang || DEFAULT_LANGUAGE;
 	const isNeutralDefault = !currentProfile.name || currentProfile.name === "Your Name";
 	const title = isNeutralDefault
 		? "MOBIO Link in Bio — Full Premium Liquid Glass"
 		: `${currentProfile.name} — Link in Bio`;
-	const description = currentProfile.bio?.id?.trim()
-		? `${currentProfile.name} (${currentProfile.handle}) — ${currentProfile.bio.id}`
+	const localizedBio = getLocalizedText(currentProfile.bio, lang);
+	const description = localizedBio
+		? `${currentProfile.name} (${currentProfile.handle}) — ${localizedBio}`
 		: isNeutralDefault
-		? "Self-hosted personal link in bio experience inspired by modern Liquid Glass interfaces."
+		? (lang === "id"
+			? "Pengalaman link in bio personal self-hosted yang terinspirasi dari antarmuka modern Liquid Glass."
+			: "Self-hosted personal link in bio experience inspired by modern Liquid Glass interfaces.")
 		: `${currentProfile.name} (${currentProfile.handle}) — Link in Bio`;
 
 	return [
@@ -49,8 +61,9 @@ export function meta({ data }: Route.MetaArgs) {
 	];
 }
 
-export async function loader({ context }: Route.LoaderArgs) {
+export async function loader({ request, context }: Route.LoaderArgs) {
 	const env = context.cloudflare?.env;
+	const initialLang = parseLanguageCookie(request.headers.get("Cookie"));
 	let profile = { ...profileData };
 	let appearance: AppearanceRecord | null = null;
 
@@ -237,7 +250,7 @@ export async function loader({ context }: Route.LoaderArgs) {
 	return {
 		profile,
 		appearance,
-		initialLang: "id" as Language,
+		initialLang,
 	};
 }
 
@@ -249,7 +262,34 @@ function parseHashToTab(hash: string): TabId {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-	const [lang, setLang] = useState<Language>(loaderData.initialLang || "id");
+	const [lang, setLangState] = useState<Language>(loaderData.initialLang || DEFAULT_LANGUAGE);
+
+	const setLang = useCallback((newLang: Language) => {
+		setLangState(newLang);
+		setLanguagePreference(newLang);
+	}, []);
+
+	// Synchronize client-side language preference from localStorage if available
+	useEffect(() => {
+		if (typeof window !== "undefined") {
+			try {
+				const saved = localStorage.getItem("mobio_lang");
+				if (saved && (saved === "en" || saved === "id") && saved !== lang) {
+					setLangState(saved as Language);
+				}
+			} catch {
+				// silent fallback
+			}
+		}
+	}, []);
+
+	// Synchronize document.documentElement.lang with current language state
+	useEffect(() => {
+		if (typeof document !== "undefined") {
+			document.documentElement.lang = lang;
+		}
+	}, [lang]);
+
 	const [activeTab, setActiveTab] = useState<TabId>("home");
 	const profile = loaderData.profile || profileData;
 	const appearance = loaderData.appearance;
@@ -393,7 +433,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 											: ""
 									}`}>
 										<section
-											aria-label={lang === "id" ? "Beranda & Profil" : "Home & Profile"}
+											aria-label={TRANSLATIONS[lang].public.homeAndProfileAria}
 											className={`w-full flex flex-col ${layoutTheme.alignment === "start" ? "items-start" : "items-center"}`}
 										>
 											<ProfileGlassCard

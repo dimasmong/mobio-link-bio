@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { ProfileData, Language } from "../data/profile";
+import { getLocalizedText, TRANSLATIONS } from "../lib/i18n";
 import { GlobeIcon } from "./Icons";
 import {
 	getProfileCardStyle,
@@ -32,8 +33,10 @@ export function ProfileGlassCard({
 	const [imageError, setImageError] = useState(false);
 	const initials = getInitials(profile.name);
 	const hasAvatar = Boolean(profile.avatarUrl && profile.avatarUrl.trim() !== "");
-	const hasLocation = Boolean(profile.location && profile.location[lang]?.trim());
-	const hasBio = Boolean(profile.bio && profile.bio[lang]?.trim());
+	const localizedLocation = getLocalizedText(profile.location, lang);
+	const hasLocation = Boolean(localizedLocation);
+	const localizedBio = getLocalizedText(profile.bio, lang);
+	const hasBio = Boolean(localizedBio);
 	const hasCover = Boolean(profile.cover?.enabled);
 	const hasCustomCover = Boolean(profile.cover?.coverUrl && profile.cover.coverUrl.trim() !== "");
 
@@ -74,7 +77,7 @@ export function ProfileGlassCard({
 		return hasCustomCover ? (
 			<img
 				src={profile.cover?.coverUrl}
-				alt={profile.cover?.alt ? profile.cover.alt[lang] : "Cover banner"}
+				alt={profile.cover?.alt ? getLocalizedText(profile.cover.alt, lang, TRANSLATIONS[lang].public.coverAlt) : TRANSLATIONS[lang].public.coverAlt}
 				className={`w-full h-full object-cover ${extraClass}`}
 				style={{ objectPosition: profile.cover?.focalPoint || "center", ...extraStyle }}
 				loading="eager"
@@ -111,14 +114,14 @@ export function ProfileGlassCard({
 							<span className="opacity-30 text-xs">•</span>
 							<span className="inline-flex items-center gap-1 font-medium text-theme-secondary px-2 py-0.5 rounded-full bg-[var(--glass-surface-secondary)]/60 border border-[var(--glass-border-subtle)]/50 text-xs">
 								<GlobeIcon className="w-2.5 h-2.5 text-theme-muted" />
-								{profile.location?.[lang]}
+								{localizedLocation}
 							</span>
 						</>
 					)}
 				</div>
 				{hasBio && (
 					<p className={`${sizeConfig.bioClass} text-theme-secondary leading-relaxed font-normal mt-1`}>
-						{profile.bio[lang]}
+						{localizedBio}
 					</p>
 				)}
 			</div>
@@ -188,7 +191,7 @@ export function ProfileGlassCard({
 												<span className="opacity-30">•</span>
 												<span className="text-theme-secondary inline-flex items-center gap-1">
 													<GlobeIcon className="w-2.5 h-2.5 text-theme-muted" />
-													{profile.location?.[lang]}
+													{localizedLocation}
 												</span>
 											</>
 										)}
@@ -197,7 +200,7 @@ export function ProfileGlassCard({
 							</div>
 							{hasBio && (
 								<p className={`${sizeConfig.bioClass} text-theme-secondary leading-relaxed font-normal text-left pt-1 border-t border-[var(--glass-border-subtle)]`}>
-									{profile.bio[lang]}
+									{localizedBio}
 								</p>
 							)}
 						</div>
@@ -329,12 +332,12 @@ export function ProfileGlassCard({
 								{hasLocation && (
 									<div className="inline-flex items-center gap-1 font-medium text-theme-secondary text-xs mb-1.5 justify-center sm:justify-start">
 										<GlobeIcon className="w-2.5 h-2.5 text-theme-muted" />
-										{profile.location?.[lang]}
+										{localizedLocation}
 									</div>
 								)}
 								{hasBio && (
 									<p className={`${sizeConfig.bioClass} text-theme-secondary leading-relaxed font-normal`}>
-										{profile.bio[lang]}
+										{localizedBio}
 									</p>
 								)}
 							</div>

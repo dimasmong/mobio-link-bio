@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { Route } from "./+types/studio.preview";
 import { requireAdmin } from "../lib/auth.server";
-import { profileData, type Language } from "../data/profile";
+import { profileData } from "../data/profile";
+import {
+	type Language,
+	DEFAULT_LANGUAGE,
+	parseLanguageCookie,
+	setLanguagePreference,
+	getLocalizedText,
+	TRANSLATIONS,
+} from "../lib/i18n";
 import {
 	getProfileRecord,
 	getLinks,
@@ -223,19 +231,39 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		}
 	}
 
+	const initialLang = parseLanguageCookie(request.headers.get("Cookie"));
+
 	return {
 		profile,
 		appearance,
 		hasUnpublished,
+		initialLang,
 	};
 }
 
 export default function StudioPreview({ loaderData }: Route.ComponentProps) {
 	const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
-	const [lang, setLang] = useState<Language>("id");
+	const [lang, setLangState] = useState<Language>(loaderData.initialLang || DEFAULT_LANGUAGE);
 	const [activeTab, setActiveTab] = useState<TabId>("home");
 	const [isPublishing, setIsPublishing] = useState(false);
 	const [publishSuccess, setPublishSuccess] = useState(false);
+
+	const setLang = useCallback((newLang: Language) => {
+		setLangState(newLang);
+		setLanguagePreference(newLang);
+	}, []);
+
+	// Synchronize client-side preference from localStorage if available
+	useEffect(() => {
+		if (typeof window !== "undefined") {
+			try {
+				const saved = localStorage.getItem("mobio_lang");
+				if (saved && (saved === "en" || saved === "id") && saved !== lang) {
+					setLangState(saved as Language);
+				}
+			} catch {}
+		}
+	}, []);
 
 	const profile = loaderData.profile || profileData;
 	const appearance = loaderData.appearance;
@@ -287,54 +315,80 @@ export default function StudioPreview({ loaderData }: Route.ComponentProps) {
 					</div>
 				</div>
 
-				{/* Center: Viewport Switcher */}
-				<div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
-					<button
-						type="button"
-						onClick={() => setViewport("mobile")}
-						className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-							viewport === "mobile"
-								? "bg-violet-600 text-white shadow-sm"
-								: "text-slate-400 hover:text-white"
-						}`}
-						title="Mobile (400px)"
-					>
-						<span>📱</span>
-						<span className="hidden sm:inline">Mobile (400px)</span>
-					</button>
-					<button
-						type="button"
-						onClick={() => setViewport("tablet")}
-						className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-							viewport === "tablet"
-								? "bg-violet-600 text-white shadow-sm"
-								: "text-slate-400 hover:text-white"
-						}`}
-						title="Tablet (768px)"
-					>
-						<span>💻</span>
-						<span className="hidden sm:inline">Tablet (768px)</span>
-					</button>
-					<button
-						type="button"
-						onClick={() => setViewport("desktop")}
-						className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-							viewport === "desktop"
-								? "bg-violet-600 text-white shadow-sm"
-								: "text-slate-400 hover:text-white"
-						}`}
-						title="Desktop (100%)"
-					>
-						<span>🖥️</span>
-						<span className="hidden sm:inline">Desktop</span>
-					</button>
+				{/* Center: Viewport Switcher & Quick Language Switcher */}
+				<div className="flex items-center gap-2">
+					<div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+						<button
+							type="button"
+							onClick={() => setViewport("mobile")}
+							className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+								viewport === "mobile"
+									? "bg-violet-600 text-white shadow-sm"
+									: "text-slate-400 hover:text-white"
+							}`}
+							title="Mobile (400px)"
+						>
+							<span>📱</span>
+							<span className="hidden sm:inline">Mobile (400px)</span>
+						</button>
+						<button
+							type="button"
+							onClick={() => setViewport("tablet")}
+							className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+								viewport === "tablet"
+									? "bg-violet-600 text-white shadow-sm"
+									: "text-slate-400 hover:text-white"
+							}`}
+							title="Tablet (768px)"
+						>
+							<span>💻</span>
+							<span className="hidden sm:inline">Tablet (768px)</span>
+						</button>
+						<button
+							type="button"
+							onClick={() => setViewport("desktop")}
+							className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+								viewport === "desktop"
+									? "bg-violet-600 text-white shadow-sm"
+									: "text-slate-400 hover:text-white"
+							}`}
+							title="Desktop (100%)"
+						>
+							<span>🖥️</span>
+							<span className="hidden sm:inline">Desktop</span>
+						</button>
+					</div>
+
+					{/* Language Selector Pill */}
+					<div className="hidden sm:flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs font-bold">
+						<button
+							type="button"
+							onClick={() => setLang("en")}
+							className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+								lang === "en" ? "bg-violet-600 text-white shadow-xs font-extrabold" : "text-slate-400 hover:text-white"
+							}`}
+							title="Switch preview to English"
+						>
+							EN
+						</button>
+						<button
+							type="button"
+							onClick={() => setLang("id")}
+							className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+								lang === "id" ? "bg-violet-600 text-white shadow-xs font-extrabold" : "text-slate-400 hover:text-white"
+							}`}
+							title="Switch preview to Indonesian"
+						>
+							ID
+						</button>
+					</div>
 				</div>
 
 				{/* Right: Quick Publish Button */}
 				<div className="flex items-center gap-2">
 					{publishSuccess ? (
 						<span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-							✓ Berhasil Diterbitkan!
+							✓ {lang === "id" ? "Berhasil Diterbitkan!" : "Published Successfully!"}
 						</span>
 					) : (
 						<button
@@ -343,7 +397,7 @@ export default function StudioPreview({ loaderData }: Route.ComponentProps) {
 							disabled={isPublishing}
 							className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
 						>
-							{isPublishing ? "Menerbitkan..." : "Terbitkan Draft"}
+							{isPublishing ? (lang === "id" ? "Menerbitkan..." : "Publishing...") : (lang === "id" ? "Terbitkan Draft" : "Publish Draft")}
 						</button>
 					)}
 				</div>

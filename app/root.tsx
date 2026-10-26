@@ -5,10 +5,12 @@ import {
 	Outlet,
 	Scripts,
 	ScrollRestoration,
+	useRouteLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { parseLanguageCookie, DEFAULT_LANGUAGE, type Language } from "./lib/i18n";
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -23,9 +25,17 @@ export const links: Route.LinksFunction = () => [
 	},
 ];
 
+export async function loader({ request }: Route.LoaderArgs) {
+	const lang = parseLanguageCookie(request.headers.get("Cookie"));
+	return { lang };
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
+	const rootData = useRouteLoaderData("root") as { lang?: Language } | undefined;
+	const lang = rootData?.lang || DEFAULT_LANGUAGE;
+
 	return (
-		<html lang="en">
+		<html lang={lang}>
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />

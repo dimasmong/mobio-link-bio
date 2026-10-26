@@ -1,5 +1,6 @@
 import React from "react";
 import type { ContactConfig, Language } from "../data/profile";
+import { getLocalizedText, TRANSLATIONS } from "../lib/i18n";
 import {
 	EmailIcon,
 	WhatsAppIcon,
@@ -80,14 +81,14 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 					<span className="w-5 h-5 rounded-full bg-[var(--accent-color)] text-[var(--accent-foreground)] flex items-center justify-center shrink-0 shadow-2xs">
 						<ContactIcon className="w-3 h-3" />
 					</span>
-					<h2 id="contact-heading" className="tracking-tight">{config.title[lang]}</h2>
+					<h2 id="contact-heading" className="tracking-tight">{getLocalizedText(config.title, lang, TRANSLATIONS[lang].public.contactHeading)}</h2>
 				</div>
 				{config.description &&
-					config.description[lang]?.trim() &&
-					!config.description[lang].toLowerCase().includes("silakan hubungi") &&
-					!config.description[lang].toLowerCase().includes("reach out via any") && (
+					getLocalizedText(config.description, lang) &&
+					!getLocalizedText(config.description, lang).toLowerCase().includes("silakan hubungi") &&
+					!getLocalizedText(config.description, lang).toLowerCase().includes("reach out via any") && (
 					<p className="text-xs sm:text-sm text-theme-muted max-w-md">
-						{config.description[lang]}
+						{getLocalizedText(config.description, lang)}
 					</p>
 				)}
 			</div>
@@ -115,7 +116,7 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 									</div>
 									<div className="min-w-0 flex-1">
 										<h3 className="text-sm sm:text-base font-bold text-theme-primary group-hover:text-[var(--accent-color)] transition-colors leading-snug">
-											{method.label[lang]}
+											{getLocalizedText(method.label, lang, method.platform)}
 										</h3>
 										<p className="text-xs text-theme-secondary truncate mt-0.5">
 											{method.value}
@@ -136,12 +137,10 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 						<ContactIcon className="w-6 h-6" />
 					</div>
 					<h3 className="text-base sm:text-lg font-bold text-theme-primary mb-1.5">
-						{lang === "id" ? "Kontak Belum Dikonfigurasi" : "No Contact Methods Configured Yet"}
+						{TRANSLATIONS[lang].public.contactEmptyTitle}
 					</h3>
 					<p className="text-xs sm:text-sm text-theme-muted max-w-md leading-relaxed">
-						{lang === "id"
-							? "Saluran komunikasi langsung seperti WhatsApp, Telegram, atau Email akan muncul di sini setelah diatur pada file app/data/profile.ts."
-							: "Direct communication channels like WhatsApp, Telegram, or Email will appear here once configured in app/data/profile.ts."}
+						{TRANSLATIONS[lang].public.contactEmptyDesc}
 					</p>
 				</div>
 			)}

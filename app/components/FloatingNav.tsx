@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import type { ProfileData, Language } from "../data/profile";
+import { getLocalizedText, TRANSLATIONS } from "../lib/i18n";
 import { HomeIcon, CompassIcon, ContactIcon, GlobeIcon } from "./Icons";
 
 export type TabId = "home" | "explore" | "contact";
@@ -60,17 +61,23 @@ export function FloatingNav({
 	const navItems: NavItem[] = [
 		{
 			id: "home",
-			label: profile.navigation.homeLabel[lang],
+			label: profile.navigation?.homeLabel
+				? getLocalizedText(profile.navigation.homeLabel, lang, TRANSLATIONS[lang].nav.home)
+				: TRANSLATIONS[lang].nav.home,
 			icon: <HomeIcon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />,
 		},
 		{
 			id: "explore",
-			label: profile.navigation.exploreLabel[lang],
+			label: profile.navigation?.exploreLabel
+				? getLocalizedText(profile.navigation.exploreLabel, lang, TRANSLATIONS[lang].nav.explore)
+				: TRANSLATIONS[lang].nav.explore,
 			icon: <CompassIcon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />,
 		},
 		{
 			id: "contact",
-			label: profile.navigation.contactLabel[lang],
+			label: profile.navigation?.contactLabel
+				? getLocalizedText(profile.navigation.contactLabel, lang, TRANSLATIONS[lang].nav.contact)
+				: TRANSLATIONS[lang].nav.contact,
 			icon: <ContactIcon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />,
 		},
 	];
@@ -125,7 +132,7 @@ export function FloatingNav({
 			>
 				<div
 					role="tablist"
-					aria-label={lang === "id" ? "Menu navigasi tab" : "Tab navigation menu"}
+					aria-label={TRANSLATIONS[lang].nav.tabNavAria}
 					className="glass-liquid-nav rounded-full p-2 flex items-center gap-1.5 shadow-2xl border border-[var(--glass-border-specular)] backdrop-blur-2xl"
 				>
 					{navItems.map((item, index) => {
@@ -165,7 +172,7 @@ export function FloatingNav({
 					<div className="relative" ref={desktopLangRef}>
 						<button
 							type="button"
-							aria-label="Pilih Bahasa / Language"
+							aria-label={TRANSLATIONS[lang].nav.langSelectAria}
 							aria-haspopup="menu"
 							aria-expanded={isLangOpen}
 							onClick={() => setIsLangOpen((prev) => !prev)}
@@ -184,30 +191,13 @@ export function FloatingNav({
 						{isLangOpen && (
 							<div
 								role="menu"
-								aria-label="Pilihan Bahasa"
+								aria-label={TRANSLATIONS[lang].nav.langSelectAria}
 								className="absolute bottom-full mb-3 right-0 glass-liquid-secondary rounded-2xl p-1.5 shadow-2xl border border-[var(--glass-border-specular)] min-w-[160px] flex flex-col gap-1 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-2xl"
 							>
 								<button
 									type="button"
 									role="menuitem"
-									aria-label="Bahasa Indonesia"
-									onClick={() => {
-										onToggleLang?.("id");
-										setIsLangOpen(false);
-									}}
-									className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-										lang === "id"
-											? "bg-theme-accent-subtle text-theme-accent font-bold"
-											: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
-									}`}
-								>
-									<span>ID (Indonesia)</span>
-									{lang === "id" && <span className="text-[11px] font-bold">✓</span>}
-								</button>
-								<button
-									type="button"
-									role="menuitem"
-									aria-label="English"
+									aria-label={TRANSLATIONS[lang].nav.langOptionEn}
 									onClick={() => {
 										onToggleLang?.("en");
 										setIsLangOpen(false);
@@ -218,8 +208,25 @@ export function FloatingNav({
 											: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
 									}`}
 								>
-									<span>EN (English)</span>
+									<span>{TRANSLATIONS[lang].nav.langOptionEn}</span>
 									{lang === "en" && <span className="text-[11px] font-bold">✓</span>}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									aria-label={TRANSLATIONS[lang].nav.langOptionId}
+									onClick={() => {
+										onToggleLang?.("id");
+										setIsLangOpen(false);
+									}}
+									className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+										lang === "id"
+											? "bg-theme-accent-subtle text-theme-accent font-bold"
+											: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
+									}`}
+								>
+									<span>{TRANSLATIONS[lang].nav.langOptionId}</span>
+									{lang === "id" && <span className="text-[11px] font-bold">✓</span>}
 								</button>
 							</div>
 						)}
@@ -238,7 +245,7 @@ export function FloatingNav({
 			>
 				<div
 					role="tablist"
-					aria-label={lang === "id" ? "Menu tab navigasi mobile" : "Mobile tab navigation menu"}
+					aria-label={TRANSLATIONS[lang].nav.mobileTabNavAria}
 					className="glass-liquid-nav rounded-full px-3 py-2 flex items-center gap-1.5 shadow-xl border border-[var(--glass-border-specular)]"
 				>
 					{navItems.map((item, index) => {
@@ -278,7 +285,7 @@ export function FloatingNav({
 					<div className="relative" ref={mobileLangRef}>
 						<button
 							type="button"
-							aria-label="Pilih Bahasa / Language"
+							aria-label={TRANSLATIONS[lang].nav.langSelectAria}
 							aria-haspopup="menu"
 							aria-expanded={isLangOpen}
 							onClick={() => setIsLangOpen((prev) => !prev)}
@@ -297,30 +304,13 @@ export function FloatingNav({
 						{isLangOpen && (
 							<div
 								role="menu"
-								aria-label="Pilihan Bahasa"
+								aria-label={TRANSLATIONS[lang].nav.langSelectAria}
 								className="absolute bottom-full mb-3 right-0 glass-liquid-secondary rounded-2xl p-1.5 shadow-2xl border border-[var(--glass-border-specular)] min-w-[145px] flex flex-col gap-1 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
 							>
 								<button
 									type="button"
 									role="menuitem"
-									aria-label="Bahasa Indonesia"
-									onClick={() => {
-										onToggleLang?.("id");
-										setIsLangOpen(false);
-									}}
-									className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-										lang === "id"
-											? "bg-theme-accent-subtle text-theme-accent font-bold"
-											: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
-									}`}
-								>
-									<span>ID (Indonesia)</span>
-									{lang === "id" && <span className="text-[11px] font-bold">✓</span>}
-								</button>
-								<button
-									type="button"
-									role="menuitem"
-									aria-label="English"
+									aria-label={TRANSLATIONS[lang].nav.langOptionEn}
 									onClick={() => {
 										onToggleLang?.("en");
 										setIsLangOpen(false);
@@ -331,8 +321,25 @@ export function FloatingNav({
 											: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
 									}`}
 								>
-									<span>EN (English)</span>
+									<span>{TRANSLATIONS[lang].nav.langOptionEn}</span>
 									{lang === "en" && <span className="text-[11px] font-bold">✓</span>}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									aria-label={TRANSLATIONS[lang].nav.langOptionId}
+									onClick={() => {
+										onToggleLang?.("id");
+										setIsLangOpen(false);
+									}}
+									className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+										lang === "id"
+											? "bg-theme-accent-subtle text-theme-accent font-bold"
+											: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
+									}`}
+								>
+									<span>{TRANSLATIONS[lang].nav.langOptionId}</span>
+									{lang === "id" && <span className="text-[11px] font-bold">✓</span>}
 								</button>
 							</div>
 						)}

@@ -204,6 +204,7 @@ dist
 
 ### Test Artifacts & Backups ###
 test-artifacts/
+test-screenshots/
 backups/
 
 ### Generated Types & Agent Metadata ###

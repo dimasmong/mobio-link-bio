@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import type { ExploreConfig, ExploreItem, Language, ExplorePhoto } from "../data/profile";
+import { getLocalizedText, TRANSLATIONS } from "../lib/i18n";
 import {
 	CodeIcon,
 	MusicIcon,
@@ -190,7 +191,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 			return activeLightboxItem.metadata.photos;
 		}
 		if (activeLightboxItem.coverImage) {
-			return [{ url: activeLightboxItem.coverImage, caption: activeLightboxItem.description?.[lang] || "" }];
+			return [{ url: activeLightboxItem.coverImage, caption: activeLightboxItem.description ? getLocalizedText(activeLightboxItem.description, lang) : "" }];
 		}
 		return [];
 	}, [activeLightboxItem, lang]);
@@ -265,14 +266,14 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 					<span className="w-5 h-5 rounded-full bg-[var(--accent-color)] text-[var(--accent-foreground)] flex items-center justify-center shrink-0 shadow-2xs">
 						<CompassIcon className="w-3 h-3" />
 					</span>
-					<h2 id="explore-heading" className="tracking-tight">{config.title[lang]}</h2>
+					<h2 id="explore-heading" className="tracking-tight">{getLocalizedText(config.title, lang, TRANSLATIONS[lang].public.exploreHeading)}</h2>
 				</div>
 				{config.description &&
-					config.description[lang]?.trim() &&
-					!config.description[lang].toLowerCase().includes("kumpulan proyek terpilih") &&
-					!config.description[lang].toLowerCase().includes("selected showcase of projects") && (
+					getLocalizedText(config.description, lang) &&
+					!getLocalizedText(config.description, lang).toLowerCase().includes("kumpulan proyek terpilih") &&
+					!getLocalizedText(config.description, lang).toLowerCase().includes("selected showcase of projects") && (
 					<p className="text-xs sm:text-sm text-theme-muted max-w-md">
-						{config.description[lang]}
+						{getLocalizedText(config.description, lang)}
 					</p>
 				)}
 			</div>
@@ -300,7 +301,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											style={{ backgroundColor: isCatActive ? "currentColor" : cat.color }}
 										/>
 									)}
-									<span>{cat.name[lang]}</span>
+									<span>{getLocalizedText(cat.name, lang, cat.id)}</span>
 								</button>
 							);
 						})}
@@ -315,6 +316,10 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 					{filteredItems.map((item) => {
 						const photosCount = item.metadata?.photos?.length || 1;
 						const isMultiPhoto = item.type === "gallery" && photosCount > 1;
+						const itemTitle = getLocalizedText(item.title, lang, "Untitled");
+						const itemSubtitle = getLocalizedText(item.subtitle, lang);
+						const itemDesc = getLocalizedText(item.description, lang);
+						const itemBadge = getLocalizedText(item.badge, lang, (TRANSLATIONS[lang].public as Record<string, string>)[item.type] || item.type);
 
 						// 1. Photo / Gallery / Artwork Card
 						if ((item.type === "gallery" || item.type === "image") && item.coverImage) {
@@ -335,13 +340,13 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 									}}
 									tabIndex={0}
 									role="button"
-									aria-label={`Lihat ${item.title[lang]}`}
+									aria-label={`${TRANSLATIONS[lang].public.viewItem} ${itemTitle}`}
 									className="glass-liquid-card rounded-2xl overflow-hidden group cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] relative"
 								>
 									<div className="relative aspect-[4/3] w-full overflow-hidden">
 										<ExploreImageThumbnail
 											src={item.coverImage}
-											alt={item.title[lang]}
+											alt={itemTitle}
 											className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
 										/>
 										<div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent opacity-85 group-hover:opacity-95 transition-opacity" />
@@ -350,7 +355,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										<div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
 											<span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/90 text-slate-800 shadow-2xs backdrop-blur-md">
 												{getExploreTypeIcon(item.type)}
-												<span>{item.badge ? item.badge[lang] : (item.type === "gallery" ? "Gallery" : "Photo")}</span>
+												<span>{itemBadge || (item.type === "gallery" ? TRANSLATIONS[lang].public.gallery : TRANSLATIONS[lang].public.photo)}</span>
 											</span>
 
 											{/* Multi-Photo Indicator Badge */}
@@ -365,11 +370,11 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										{/* Bottom Titles */}
 										<div className="absolute bottom-3 left-3 right-3 text-white">
 											<h3 className="text-sm sm:text-base font-bold leading-snug drop-shadow-xs">
-												{item.title[lang]}
+												{itemTitle}
 											</h3>
-											{item.subtitle && (
+											{itemSubtitle && (
 												<p className="text-xs text-white/80 line-clamp-1 mt-0.5">
-													{item.subtitle[lang]}
+													{itemSubtitle}
 												</p>
 											)}
 										</div>
@@ -393,7 +398,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										<div className="relative aspect-video w-full overflow-hidden bg-slate-900">
 											<ExploreImageThumbnail
 												src={item.coverImage}
-												alt={item.title[lang]}
+												alt={itemTitle}
 												aspectRatioClass="aspect-video"
 												className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
 											/>
@@ -406,7 +411,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											<div className="absolute top-3 left-3">
 												<span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/90 text-slate-800 shadow-2xs backdrop-blur-md">
 													<FilmIcon className="w-3.5 h-3.5 text-purple-600" />
-													<span>{item.badge ? item.badge[lang] : "Video"}</span>
+													<span>{itemBadge || TRANSLATIONS[lang].public.video}</span>
 												</span>
 											</div>
 										</div>
@@ -415,23 +420,23 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											<div className="flex items-center gap-1.5 mb-2">
 												<span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100/80 text-purple-700 border border-purple-200/50">
 													<FilmIcon className="w-3.5 h-3.5" />
-													<span>{item.badge ? item.badge[lang] : "Video"}</span>
+													<span>{itemBadge || TRANSLATIONS[lang].public.video}</span>
 												</span>
 											</div>
 										</div>
 									)}
 									<div className="p-5 pt-3">
 										<h3 className="text-base font-bold text-theme-primary group-hover:text-purple-700 transition-colors leading-snug mb-1">
-											{item.title[lang]}
+											{itemTitle}
 										</h3>
-										{item.subtitle && (
+										{itemSubtitle && (
 											<p className="text-xs text-purple-600 font-medium mb-2">
-												{item.subtitle[lang]}
+												{itemSubtitle}
 											</p>
 										)}
-										{item.description && (
+										{itemDesc && (
 											<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal">
-												{item.description[lang]}
+												{itemDesc}
 											</p>
 										)}
 									</div>
@@ -454,7 +459,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										<div className="flex items-center justify-between gap-2 mb-3">
 											<span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100/80 text-amber-700 border border-amber-200/50">
 												<GamepadIcon className="w-4 h-4 text-amber-600" />
-												<span>{item.badge ? item.badge[lang] : "Game"}</span>
+												<span>{itemBadge || TRANSLATIONS[lang].public.game}</span>
 											</span>
 											{item.metadata?.year && (
 												<span className="text-[11px] font-medium text-slate-400">
@@ -463,16 +468,16 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											)}
 										</div>
 										<h3 className="text-base font-bold text-theme-primary group-hover:text-amber-700 transition-colors leading-snug mb-1">
-											{item.title[lang]}
+											{itemTitle}
 										</h3>
-										{item.subtitle && (
+										{itemSubtitle && (
 											<p className="text-xs text-amber-600 font-medium mb-2">
-												{item.subtitle[lang]}
+												{itemSubtitle}
 											</p>
 										)}
-										{item.description && (
+										{itemDesc && (
 											<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal mb-3">
-												{item.description[lang]}
+												{itemDesc}
 											</p>
 										)}
 									</div>
@@ -507,7 +512,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										<div className="flex items-center justify-between gap-2 mb-3">
 											<span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-sky-100/80 text-sky-700 border border-sky-200/50">
 												<BookIcon className="w-4 h-4 text-sky-600" />
-												<span>{item.badge ? item.badge[lang] : "Review"}</span>
+												<span>{itemBadge || TRANSLATIONS[lang].public.review}</span>
 											</span>
 											{item.metadata?.rating && (
 												<span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/50">
@@ -516,16 +521,16 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											)}
 										</div>
 										<h3 className="text-base font-bold text-theme-primary leading-snug mb-1">
-											{item.title[lang]}
+											{itemTitle}
 										</h3>
-										{item.subtitle && (
+										{itemSubtitle && (
 											<p className="text-xs text-sky-600 font-medium mb-2">
-												{item.subtitle[lang]}
+												{itemSubtitle}
 											</p>
 										)}
-										{item.description && (
+										{itemDesc && (
 											<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal mb-3">
-												{item.description[lang]}
+												{itemDesc}
 											</p>
 										)}
 									</div>
@@ -539,7 +544,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 												onClick={() => trackExploreInteraction(item.id)}
 												className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-600 hover:text-sky-700 transition-colors"
 											>
-												<span>{lang === "id" ? "Baca Selengkapnya" : "Read More"}</span>
+												<span>{TRANSLATIONS[lang].public.readMore}</span>
 												<ExternalLinkIcon className="w-3.5 h-3.5" />
 											</a>
 										</div>
@@ -563,20 +568,20 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										<div className="flex items-center gap-1.5 mb-1.5">
 											<span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100/80 text-blue-700 border border-blue-200/50">
 												<ExternalLinkIcon className="w-3.5 h-3.5 text-blue-600" />
-												<span>{item.badge ? item.badge[lang] : "Link"}</span>
+												<span>{itemBadge || TRANSLATIONS[lang].public.link}</span>
 											</span>
 										</div>
 										<h3 className="text-base font-bold text-theme-primary group-hover:text-blue-700 transition-colors leading-snug truncate">
-											{item.title[lang]}
+											{itemTitle}
 										</h3>
-										{item.subtitle && (
+										{itemSubtitle && (
 											<p className="text-xs text-slate-500 truncate mt-0.5">
-												{item.subtitle[lang]}
+												{itemSubtitle}
 											</p>
 										)}
-										{item.description && (
+										{itemDesc && (
 											<p className="text-xs text-theme-secondary line-clamp-2 mt-1">
-												{item.description[lang]}
+												{itemDesc}
 											</p>
 										)}
 									</div>
@@ -602,7 +607,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										<div className="flex items-center justify-between gap-2 mb-3">
 											<span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-violet-100/80 text-violet-700 border border-violet-200/50">
 												{getExploreTypeIcon(item.type)}
-												<span>{item.badge ? item.badge[lang] : "Project"}</span>
+												<span>{itemBadge || TRANSLATIONS[lang].public.project}</span>
 											</span>
 											{item.metadata?.year && (
 												<span className="text-[11px] font-medium text-slate-400">
@@ -611,11 +616,11 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											)}
 										</div>
 										<h3 className="text-base font-bold text-theme-primary group-hover:text-violet-700 transition-colors leading-snug mb-1">
-											{item.title[lang]}
+											{itemTitle}
 										</h3>
-										{item.description && (
+										{itemDesc && (
 											<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal mb-3">
-												{item.description[lang]}
+												{itemDesc}
 											</p>
 										)}
 									</div>
@@ -655,14 +660,14 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 									</div>
 									<div className="min-w-0 flex-1">
 										<span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider block mb-0.5">
-											{item.badge ? item.badge[lang] : "Music"}
+											{itemBadge || TRANSLATIONS[lang].public.music}
 										</span>
 										<h3 className="text-sm sm:text-base font-bold text-theme-primary group-hover:text-emerald-700 transition-colors leading-snug truncate">
-											{item.title[lang]}
+											{itemTitle}
 										</h3>
-										{item.subtitle && (
+										{itemSubtitle && (
 											<p className="text-xs text-slate-500 truncate mt-0.5">
-												{item.subtitle[lang]}
+												{itemSubtitle}
 											</p>
 										)}
 									</div>
@@ -682,20 +687,20 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 								<div className="flex items-center gap-1.5 mb-2">
 									<span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100/90 text-slate-700 border border-slate-200/70">
 										{getExploreTypeIcon(item.type)}
-										<span>{item.badge ? item.badge[lang] : (item.type === "custom" ? "Custom" : "Note")}</span>
+										<span>{itemBadge || (item.type === "custom" ? TRANSLATIONS[lang].public.custom : TRANSLATIONS[lang].public.note)}</span>
 									</span>
-									{item.subtitle && (
+									{itemSubtitle && (
 										<span className="text-xs font-medium text-slate-400">
-											• {item.subtitle[lang]}
+											• {itemSubtitle}
 										</span>
 									)}
 								</div>
 								<h3 className="text-sm sm:text-base font-bold text-theme-primary mb-1.5">
-									{item.title[lang]}
+									{itemTitle}
 								</h3>
-								{item.description && (
+								{itemDesc && (
 									<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal">
-										{item.description[lang]}
+										{itemDesc}
 									</p>
 								)}
 								{item.url && (
@@ -707,7 +712,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											onClick={() => trackExploreInteraction(item.id)}
 											className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-700 transition-colors"
 										>
-											<span>{lang === "id" ? "Buka Tautan" : "Open Link"}</span>
+											<span>{TRANSLATIONS[lang].public.openLink}</span>
 											<ExternalLinkIcon className="w-3.5 h-3.5" />
 										</a>
 									</div>
@@ -723,12 +728,10 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 							<CompassIcon className="w-5 h-5" />
 						</div>
 						<h3 className="text-sm sm:text-base font-bold text-theme-primary mb-1">
-							{lang === "id" ? "Belum ada konten pada kategori ini" : "No items in this category yet"}
+							{TRANSLATIONS[lang].public.filterEmptyTitle}
 						</h3>
 						<p className="text-xs text-theme-muted max-w-sm">
-							{lang === "id"
-								? "Pilih kategori lain di atas untuk melihat konten yang tersedia."
-								: "Select another category above to view available items."}
+							{TRANSLATIONS[lang].public.filterEmptyDesc}
 						</p>
 					</div>
 				)
@@ -739,12 +742,10 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 						<CompassIcon className="w-6 h-6" />
 					</div>
 					<h3 className="text-base sm:text-lg font-bold text-theme-primary mb-1.5">
-						{lang === "id" ? "Eksplorasi Belum Dikonfigurasi" : "No Highlights Configured Yet"}
+						{TRANSLATIONS[lang].public.exploreEmptyTitle}
 					</h3>
 					<p className="text-xs sm:text-sm text-theme-muted max-w-md leading-relaxed">
-						{lang === "id"
-							? "Bagian ini dapat menampilkan proyek pilihan, galeri foto, playlist musik, atau catatan Anda."
-							: "This section showcases your featured projects, photo gallery, music playlists, or notes."}
+						{TRANSLATIONS[lang].public.exploreEmptyDesc}
 					</p>
 				</div>
 			)}
@@ -756,7 +757,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 					onClick={() => setActiveLightboxItem(null)}
 					role="dialog"
 					aria-modal="true"
-					aria-label={activeLightboxItem.title[lang]}
+					aria-label={getLocalizedText(activeLightboxItem.title, lang, "Explore Item")}
 				>
 					<div
 						className="relative max-w-3xl w-full glass-liquid-primary rounded-3xl overflow-hidden p-4 sm:p-6 shadow-2xl border border-[var(--glass-border-specular)] flex flex-col max-h-[92vh]"
@@ -767,7 +768,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-2">
 									<h3 className="text-base sm:text-lg font-bold text-theme-primary truncate">
-										{activeLightboxItem.title[lang]}
+										{getLocalizedText(activeLightboxItem.title, lang, "Explore Item")}
 									</h3>
 									{slides.length > 1 && (
 										<span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--accent-subtle)] text-[var(--accent-color)] border border-[var(--accent-border)] shrink-0">
@@ -777,7 +778,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 								</div>
 								{activeLightboxItem.subtitle && (
 									<p className="text-xs text-[var(--accent-color)] font-medium truncate mt-0.5">
-										{activeLightboxItem.subtitle[lang]}
+										{getLocalizedText(activeLightboxItem.subtitle, lang)}
 									</p>
 								)}
 							</div>
@@ -785,7 +786,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 							<button
 								type="button"
 								onClick={() => setActiveLightboxItem(null)}
-								aria-label="Tutup"
+								aria-label={TRANSLATIONS[lang].public.close}
 								className="w-9 h-9 rounded-full bg-[var(--glass-surface-primary)] border border-[var(--glass-border-specular)] text-theme-primary hover:bg-[var(--glass-surface-hover)] flex items-center justify-center shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] shrink-0 cursor-pointer"
 							>
 								<CloseIcon className="w-5 h-5" />
@@ -811,7 +812,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 							<img
 								key={slides[currentSlideIndex]?.url}
 								src={slides[currentSlideIndex]?.url}
-								alt={slides[currentSlideIndex]?.caption || activeLightboxItem.title[lang]}
+								alt={slides[currentSlideIndex]?.caption || getLocalizedText(activeLightboxItem.title, lang, "Explore Photo")}
 								className="w-full h-full object-contain animate-in fade-in duration-200"
 							/>
 
@@ -823,7 +824,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										e.stopPropagation();
 										goToPrevSlide();
 									}}
-									aria-label="Foto Sebelumnya"
+									aria-label={TRANSLATIONS[lang].public.prevPhoto}
 									className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-950/60 hover:bg-slate-950/85 text-white border border-white/20 flex items-center justify-center backdrop-blur-md transition-all shadow-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] opacity-80 group-hover:opacity-100"
 								>
 									<ChevronLeftIcon className="w-6 h-6 -ml-0.5" />
@@ -838,7 +839,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										e.stopPropagation();
 										goToNextSlide();
 									}}
-									aria-label="Foto Selanjutnya"
+									aria-label={TRANSLATIONS[lang].public.nextPhoto}
 									className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-950/60 hover:bg-slate-950/85 text-white border border-white/20 flex items-center justify-center backdrop-blur-md transition-all shadow-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] opacity-80 group-hover:opacity-100"
 								>
 									<ChevronRightIcon className="w-6 h-6 -mr-0.5" />
@@ -855,7 +856,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 							) : (
 								activeLightboxItem.description && (
 									<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal">
-										{activeLightboxItem.description[lang]}
+										{getLocalizedText(activeLightboxItem.description, lang)}
 									</p>
 								)
 							)}
@@ -868,7 +869,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											key={idx}
 											type="button"
 											onClick={() => setCurrentSlideIndex(idx)}
-											aria-label={`Lihat foto ${idx + 1}`}
+											aria-label={`${TRANSLATIONS[lang].public.viewPhoto} ${idx + 1}`}
 											className={`relative w-12 h-12 rounded-lg overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
 												idx === currentSlideIndex
 													? "border-[var(--accent-color)] ring-2 ring-[var(--accent-ring)] scale-105 opacity-100"
@@ -877,7 +878,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 										>
 											<img
 												src={slide.url}
-												alt={`Miniatur ${idx + 1}`}
+												alt={`${TRANSLATIONS[lang].public.thumbnail} ${idx + 1}`}
 												className="w-full h-full object-cover"
 											/>
 										</button>

@@ -1,5 +1,6 @@
 import React from "react";
 import type { VerticalLink, Language } from "../data/profile";
+import { getLocalizedText, TRANSLATIONS } from "../lib/i18n";
 import { ExternalLinkIcon, SparklesIcon } from "./Icons";
 import { LinkIconRenderer } from "./IconLibrary";
 import type { LinkArrangement } from "../lib/layouts";
@@ -31,7 +32,7 @@ export function VerticalLinkList({
 	if (activeLinks.length === 0) {
 		return (
 			<section
-				aria-label={lang === "id" ? "Status Tautan" : "Links Status"}
+				aria-label={TRANSLATIONS[lang].public.linksStatusAria}
 				className="w-full my-6 text-center"
 			>
 				<div className="glass-liquid-card rounded-2xl p-6 sm:p-8 flex flex-col items-center">
@@ -39,12 +40,10 @@ export function VerticalLinkList({
 						<SparklesIcon className="w-5 h-5" />
 					</div>
 					<h2 className="text-sm sm:text-base font-semibold text-theme-primary mb-1">
-						{lang === "id" ? "Tautan Belum Dikonfigurasi" : "No Links Configured Yet"}
+						{TRANSLATIONS[lang].public.noLinksTitle}
 					</h2>
 					<p className="text-xs sm:text-sm text-theme-muted max-w-sm leading-relaxed">
-						{lang === "id"
-							? "Tautan pribadi Anda akan muncul otomatis di sini setelah ditambahkan."
-							: "Your personal links will appear automatically here once added."}
+						{TRANSLATIONS[lang].public.noLinksDesc}
 					</p>
 				</div>
 			</section>
@@ -63,7 +62,7 @@ export function VerticalLinkList({
 
 	return (
 		<nav
-			aria-label={lang === "id" ? "Daftar Tautan" : "Links List"}
+			aria-label={TRANSLATIONS[lang].public.linksListAria}
 			className="w-full my-6 sm:my-8"
 		>
 			<div className={containerClass}>
@@ -84,6 +83,9 @@ export function VerticalLinkList({
 						cardStyleClass = "glass-liquid-card rounded-2xl px-5 py-4.5 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-transform";
 					}
 
+					const localizedTitle = getLocalizedText(link.title, lang, "Link");
+					const localizedDesc = getLocalizedText(link.description, lang);
+
 					return (
 						<a
 							key={link.id}
@@ -100,11 +102,11 @@ export function VerticalLinkList({
 							{/* Center: Title & Optional Description */}
 							<div className="min-w-0 flex-1 text-left">
 								<h2 className="text-sm sm:text-base font-semibold text-theme-primary group-hover:text-[var(--accent-color)] transition-colors leading-snug break-words">
-									{link.title[lang]}
+									{localizedTitle}
 								</h2>
-								{link.description && link.description[lang]?.trim() && (
+								{localizedDesc && (
 									<p className="text-xs sm:text-sm text-theme-secondary leading-relaxed font-normal mt-0.5 break-words">
-										{link.description[lang]}
+										{localizedDesc}
 									</p>
 								)}
 							</div>

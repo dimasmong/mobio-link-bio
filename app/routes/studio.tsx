@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import type { Route } from "./+types/studio";
 import { authenticateAdmin } from "../lib/auth.server";
 import {
@@ -38,6 +38,14 @@ import {
 import { LAYOUT_THEMES } from "../lib/layouts";
 import { PROFILE_CARD_STYLES, CARD_SIZES, type CardSize } from "../lib/profileCard";
 import { FONT_PRESETS, FONT_CATEGORIES } from "../lib/typography";
+import {
+	type Language,
+	DEFAULT_LANGUAGE,
+	parseLanguageCookie,
+	setLanguagePreference,
+	getLocalizedText,
+	TRANSLATIONS,
+} from "../lib/i18n";
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -49,6 +57,7 @@ export function meta({}: Route.MetaArgs) {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const env = context.cloudflare?.env;
+	const initialLang = parseLanguageCookie(request.headers.get("Cookie"));
 
 	// Check authentication server-side
 	const auth = await authenticateAdmin(request, env);
@@ -57,7 +66,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		return {
 			isAuthenticated: false,
 			user: null,
-			error: auth.error || "Autentikasi Cloudflare Access diperlukan untuk mengakses Studio.",
+			error: auth.error || (initialLang === "id" ? "Autentikasi Cloudflare Access diperlukan untuk mengakses Studio." : "Cloudflare Access authentication is required to access Studio."),
 			reason: auth.reason,
 			database: null as DatabaseStatus | null,
 			draftProfile: null as ProfileRecord | null,
@@ -70,6 +79,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			publishMetadata: null as PublishMetadataRecord | null,
 			initialAnalytics: null as StudioAnalyticsSummary | null,
 			envMode: import.meta.env.MODE,
+			initialLang,
 		};
 	}
 
@@ -102,6 +112,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		publishMetadata,
 		initialAnalytics,
 		envMode: import.meta.env.MODE,
+		initialLang,
 	};
 }
 
@@ -121,17 +132,6 @@ interface NavTab {
 	badge?: string;
 	badgeColor?: string;
 }
-
-const navTabs: NavTab[] = [
-	{ id: "overview", label: "Overview" },
-	{ id: "profile", label: "Profile", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
-	{ id: "links", label: "Links", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
-	{ id: "contact", label: "Contact", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
-	{ id: "appearance", label: "Appearance", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
-	{ id: "explore", label: "Explore", badge: "Editor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
-	{ id: "clicks", label: "Click Monitor", badge: "Monitor", badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
-	{ id: "settings", label: "Settings", badge: "System", badgeColor: "bg-slate-800 text-slate-300 border-slate-700" },
-];
 
 const defaultAppearanceFallback: AppearanceRecord = {
 	id: "draft",
@@ -170,6 +170,47 @@ const defaultAppearanceFallback: AppearanceRecord = {
 };
 
 export default function Studio({ loaderData }: Route.ComponentProps) {
+	const [studioLang, setStudioLangState] = useState<Language>(loaderData.initialLang || DEFAULT_LANGUAGE);
+	const setStudioLang = useCallback((newLang: Language) => {
+		setStudioLangState(newLang);
+		setLanguagePreference(newLang);
+	}, []);
+
+	// Synchronize client-side preference from localStorage if available
+	useEffect(() => {
+		if (typeof window !== "undefined") {
+			try {
+				const saved = localStorage.getItem("mobio_lang");
+				if (saved && (saved === "en" || saved === "id") && saved !== studioLang) {
+					setStudioLangState(saved as Language);
+				}
+			} catch {
+				// silent fallback
+			}
+		}
+	}, []);
+
+	// Synchronize document.documentElement.lang with studio language
+	useEffect(() => {
+		if (typeof document !== "undefined") {
+			document.documentElement.lang = studioLang;
+		}
+	}, [studioLang]);
+
+	const t = TRANSLATIONS[studioLang].studio;
+	const tc = TRANSLATIONS[studioLang].studio.common;
+
+	const navTabs: NavTab[] = useMemo(() => [
+		{ id: "overview", label: t.sidebar.overview },
+		{ id: "profile", label: t.sidebar.profile, badge: t.sidebar.badgeEditor, badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
+		{ id: "links", label: t.sidebar.links, badge: t.sidebar.badgeEditor, badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
+		{ id: "contact", label: t.sidebar.contact, badge: t.sidebar.badgeEditor, badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
+		{ id: "appearance", label: t.sidebar.appearance, badge: t.sidebar.badgeEditor, badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
+		{ id: "explore", label: t.sidebar.explore, badge: t.sidebar.badgeEditor, badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
+		{ id: "clicks", label: t.sidebar.clicks, badge: t.sidebar.badgeMonitor, badgeColor: "bg-emerald-950 text-emerald-300 border-emerald-800" },
+		{ id: "settings", label: t.sidebar.settings, badge: t.sidebar.badgeSystem, badgeColor: "bg-slate-800 text-slate-300 border-slate-700" },
+	], [t]);
+
 	const [activeSection, setActiveSection] = useState<StudioSection>("overview");
 
 	// Initial data states
@@ -207,7 +248,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 	// Modals
 	const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-	const [previewLang, setPreviewLang] = useState<"id" | "en">("id");
+	const [previewLang, setPreviewLang] = useState<"id" | "en">(loaderData.initialLang || DEFAULT_LANGUAGE);
 	const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
 	const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
 	const [presetFilter, setPresetFilter] = useState<"all" | "light" | "dark">("all");
@@ -1725,9 +1766,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						<button
 							type="button"
 							onClick={() => setToast(null)}
-							className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded-lg"
+							className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded-lg cursor-pointer"
 						>
-							Tutup
+							{tc.close}
 						</button>
 					</div>
 				</div>
@@ -1743,11 +1784,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						<div>
 							<div className="flex items-center gap-2">
 								<h1 className="text-sm sm:text-base font-bold text-white tracking-tight">
-									MOBIO Studio
+									{t.header.title}
 								</h1>
 							</div>
 							<p className="text-[11px] text-slate-400 hidden sm:block">
-								Profile, Links & Contact Management
+								{t.header.subtitle}
 							</p>
 						</div>
 					</div>
@@ -1757,13 +1798,37 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						href="/"
 						className="sm:hidden px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"
 					>
-						<span>Web</span>
+						<span>{t.header.mobileWeb}</span>
 						<span>↗</span>
 					</a>
 				</div>
 
-				{/* Publish Bar Controls */}
+				{/* Publish Bar Controls & Language Switcher */}
 				<div className="flex items-center gap-2 overflow-x-auto sm:overflow-visible py-1 sm:py-0">
+					{/* Real Studio Language Switcher (EN / ID) */}
+					<div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs font-bold shrink-0">
+						<button
+							type="button"
+							onClick={() => setStudioLang("en")}
+							className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+								studioLang === "en" ? "bg-violet-600 text-white shadow-xs font-extrabold" : "text-slate-400 hover:text-white"
+							}`}
+							title="Switch Studio Language to English"
+						>
+							EN
+						</button>
+						<button
+							type="button"
+							onClick={() => setStudioLang("id")}
+							className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+								studioLang === "id" ? "bg-violet-600 text-white shadow-xs font-extrabold" : "text-slate-400 hover:text-white"
+							}`}
+							title="Ganti Bahasa Studio ke Bahasa Indonesia"
+						>
+							ID
+						</button>
+					</div>
+
 					{/* Status Tag */}
 					<div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs">
 						<span
@@ -1772,7 +1837,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							}`}
 						/>
 						<span className="text-slate-300 text-[11px] font-medium">
-							{hasUnpublished ? "Ada perubahan draft" : "Telah Terbit"}
+							{hasUnpublished ? t.header.statusDraft : t.header.statusPublished}
 						</span>
 					</div>
 
@@ -1782,9 +1847,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						target="_blank"
 						rel="noopener noreferrer"
 						className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center gap-1.5 border border-slate-700 cursor-pointer shrink-0"
-						title="Buka Pratinjau Draft Real Website di tab baru"
+						title={studioLang === "id" ? "Buka Pratinjau Draft Real Website di tab baru" : "Open Real Website Draft Preview in new tab"}
 					>
-						<span>👁 Preview Draft</span>
+						<span>👁 {t.header.previewDraft}</span>
 						<span className="text-[10px] text-slate-400">↗</span>
 					</a>
 
@@ -1794,9 +1859,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							type="button"
 							onClick={() => setIsDiscardModalOpen(true)}
 							className="px-3 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-semibold transition-colors flex items-center gap-1.5 border border-rose-800/60 cursor-pointer shrink-0"
-							title="Batalkan perubahan draft dan kembalikan ke published"
+							title={studioLang === "id" ? "Batalkan perubahan draft dan kembalikan ke published" : "Discard draft changes and revert to published state"}
 						>
-							<span>Batalkan</span>
+							<span>{t.header.discard}</span>
 						</button>
 					)}
 
@@ -1810,9 +1875,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950 cursor-pointer animate-pulse"
 								: "bg-slate-800/80 text-slate-500 border border-slate-700/50 cursor-not-allowed"
 						}`}
-						title={hasUnpublished ? "Terbitkan perubahan ke website publik" : "Tidak ada perubahan draft baru"}
+						title={hasUnpublished ? (studioLang === "id" ? "Terbitkan perubahan ke website publik" : "Publish changes to live public website") : (studioLang === "id" ? "Tidak ada perubahan draft baru" : "No unpublished draft changes")}
 					>
-						<span>🚀 Terbitkan Perubahan</span>
+						<span>🚀 {t.header.publishChanges}</span>
 					</button>
 
 					{/* Desktop Public Web Link */}
@@ -1820,7 +1885,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						href="/"
 						className="hidden sm:flex px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors items-center gap-1.5 border border-slate-700 shrink-0"
 					>
-						<span>Lihat Website</span>
+						<span>{t.header.viewWebsite}</span>
 						<span aria-hidden="true">↗</span>
 					</a>
 				</div>
@@ -1832,7 +1897,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 				<aside className="w-full md:w-64 shrink-0">
 					<nav
 						role="tablist"
-						aria-label="Menu navigasi Studio"
+						aria-label={t.sidebar.overview}
 						className="bg-slate-900 border border-slate-800 rounded-2xl p-2 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-visible"
 					>
 						{navTabs.map((tab) => {
@@ -1872,12 +1937,12 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 					{/* Admin Profile pill in sidebar */}
 					<div className="mt-4 p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800/80 text-xs hidden md:block">
 						<div className="text-[10px] uppercase font-bold tracking-wider text-slate-500 mb-1">
-							Terautentikasi Sebagai
+							{t.sidebar.authenticatedAs}
 						</div>
 						<div className="text-slate-200 font-semibold truncate">{user.email}</div>
 						<div className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1.5">
 							<span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-							<span>Cloudflare D1 Ready</span>
+							<span>{t.sidebar.d1Ready}</span>
 						</div>
 					</div>
 				</aside>
@@ -1891,9 +1956,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						<div className="flex flex-col gap-6">
 							{!isDbReady && (
 								<div className="bg-amber-950/60 border border-amber-800/80 rounded-2xl p-5 text-amber-200">
-									<h3 className="font-bold text-amber-100 mb-1">Setup Database D1 Diperlukan</h3>
+									<h3 className="font-bold text-amber-100 mb-1">
+										{studioLang === "id" ? "Setup Database D1 Diperlukan" : "D1 Database Setup Required"}
+									</h3>
 									<p className="text-xs sm:text-sm text-amber-200/90 leading-relaxed mb-3">
-										{database?.error || "Tabel database belum ditemukan. Jalankan migrasi schema."}
+										{database?.error || (studioLang === "id" ? "Tabel database belum ditemukan. Jalankan migrasi schema." : "Database tables not found. Run schema migrations.")}
 									</p>
 									<div className="bg-slate-950/80 border border-amber-900/50 rounded-xl p-3 font-mono text-[11px] text-amber-300 select-all">
 										npx wrangler d1 migrations apply mobio-studio-db --local
@@ -1906,12 +1973,12 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
 									<div>
 										<div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-											<span>Autentikasi Access</span>
+											<span>{studioLang === "id" ? "Autentikasi Access" : "Access Authentication"}</span>
 											<span className="w-2 h-2 rounded-full bg-emerald-400" />
 										</div>
 										<h3 className="text-base font-bold text-white truncate">{user.email}</h3>
 										<p className="text-xs text-slate-400 mt-1">
-											Metode: <span className="text-slate-300 font-medium">{user.identityType}</span>
+											{studioLang === "id" ? "Metode:" : "Method:"} <span className="text-slate-300 font-medium">{user.identityType}</span>
 										</p>
 									</div>
 									<div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-emerald-400 font-medium">
@@ -1922,7 +1989,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
 									<div>
 										<div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-											<span>Status Publikasi</span>
+											<span>{studioLang === "id" ? "Status Publikasi" : "Publication Status"}</span>
 											<span
 												className={`w-2 h-2 rounded-full ${
 													hasUnpublished ? "bg-amber-400 animate-pulse" : "bg-emerald-400"
@@ -1930,55 +1997,71 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											/>
 										</div>
 										<h3 className="text-base font-bold text-white">
-											{hasUnpublished ? "Draft Menunggu Terbit" : "Website Aktif & Terbit"}
+											{hasUnpublished
+												? (studioLang === "id" ? "Draft Menunggu Terbit" : "Draft Pending Publication")
+												: (studioLang === "id" ? "Website Aktif & Terbit" : "Website Active & Published")}
 										</h3>
 										<p className="text-xs text-slate-400 mt-1">
-											Perubahan Draft:{" "}
+											{studioLang === "id" ? "Perubahan Draft:" : "Draft Changes:"}{" "}
 											<span className="text-slate-200 font-semibold">
-												{hasUnpublished ? "Ya (Belum dipublikasikan)" : "Tidak ada"}
+												{hasUnpublished
+													? (studioLang === "id" ? "Ya (Belum dipublikasikan)" : "Yes (Unpublished)")
+													: (studioLang === "id" ? "Tidak ada" : "None")}
 											</span>
 										</p>
 									</div>
 									<div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-										Dipublikasikan oleh: {pubMeta?.published_by || "system"}
+										{studioLang === "id" ? "Dipublikasikan oleh:" : "Published by:"} {pubMeta?.published_by || "system"}
 									</div>
 								</div>
 
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between sm:col-span-2 lg:col-span-1">
 									<div>
 										<div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-											<span>Isolasi Draft & Publish</span>
-											<span className="text-emerald-400 font-bold text-[10px]">AKTIF</span>
+											<span>{studioLang === "id" ? "Isolasi Draft & Publish" : "Draft & Publish Isolation"}</span>
+											<span className="text-emerald-400 font-bold text-[10px]">{studioLang === "id" ? "AKTIF" : "ACTIVE"}</span>
 										</div>
-										<h3 className="text-base font-bold text-white">Transaksional</h3>
+										<h3 className="text-base font-bold text-white">
+											{studioLang === "id" ? "Transaksional" : "Transactional"}
+										</h3>
 										<p className="text-xs text-slate-400 mt-1 leading-relaxed">
-											Draft tersimpan aman di tabel draft tanpa mengubah tampilan pengunjung publik sampai diterbitkan.
+											{studioLang === "id"
+												? "Draft tersimpan aman di tabel draft tanpa mengubah tampilan pengunjung publik sampai diterbitkan."
+												: "Drafts are stored securely in draft tables without altering public visitors' view until published."}
 										</p>
 									</div>
 									<div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-										Tersinkronisasi
+										{studioLang === "id" ? "Tersinkronisasi" : "Synchronized"}
 									</div>
 								</div>
 							</div>
 
 							{/* Summary metrics */}
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
-								<h3 className="text-base font-bold text-white mb-1">Ringkasan Konten Aktif</h3>
+								<h3 className="text-base font-bold text-white mb-1">
+									{studioLang === "id" ? "Ringkasan Konten Aktif" : "Active Content Summary"}
+								</h3>
 								<p className="text-xs text-slate-400 mb-4">
-									Data yang sedang aktif dalam ruang kerja draft Anda
+									{studioLang === "id" ? "Data yang sedang aktif dalam ruang kerja draft Anda" : "Data currently active in your draft workspace"}
 								</p>
 								<div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-center">
 									<div className="bg-slate-950/60 border border-slate-800/70 rounded-xl p-4">
 										<div className="text-2xl font-black text-white mb-1">{links.length}</div>
-										<div className="text-xs text-slate-400 font-medium">Tautan Vertikal</div>
+										<div className="text-xs text-slate-400 font-medium">
+											{studioLang === "id" ? "Tautan Vertikal" : "Vertical Links"}
+										</div>
 									</div>
 									<div className="bg-slate-950/60 border border-slate-800/70 rounded-xl p-4">
 										<div className="text-2xl font-black text-white mb-1">{contacts.length}</div>
-										<div className="text-xs text-slate-400 font-medium">Metode Kontak</div>
+										<div className="text-xs text-slate-400 font-medium">
+											{studioLang === "id" ? "Metode Kontak" : "Contact Methods"}
+										</div>
 									</div>
 									<div className="bg-slate-950/60 border border-slate-800/70 rounded-xl p-4 col-span-2 sm:col-span-1">
 										<div className="text-2xl font-black text-emerald-400 mb-1">{profile.name ? "1" : "0"}</div>
-										<div className="text-xs text-slate-400 font-medium">Profil Terkonfigurasi</div>
+										<div className="text-xs text-slate-400 font-medium">
+											{studioLang === "id" ? "Profil Terkonfigurasi" : "Profile Configured"}
+										</div>
 									</div>
 								</div>
 							</div>
@@ -1993,9 +2076,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
 									<div>
-										<h2 className="text-lg font-bold text-white">Editor Profil (Draft)</h2>
+										<h2 className="text-lg font-bold text-white">
+											{studioLang === "id" ? "Editor Profil (Draft)" : "Profile Editor (Draft)"}
+										</h2>
 										<p className="text-xs text-slate-400">
-											Kelola identitas utama, avatar, username, dan bio bilingual Anda.
+											{studioLang === "id"
+												? "Kelola identitas utama, avatar, username, dan bio bilingual Anda."
+												: "Manage your primary identity, avatar, handle, and bilingual bio."}
 										</p>
 									</div>
 									<button
@@ -2004,7 +2091,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										disabled={isSavingProfile}
 										className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-all shadow-md cursor-pointer self-start sm:self-auto"
 									>
-										{isSavingProfile ? "Menyimpan ke D1..." : "Simpan Draft Profil"}
+										{isSavingProfile
+											? (studioLang === "id" ? "Menyimpan ke D1..." : "Saving to D1...")
+											: (studioLang === "id" ? "Simpan Draft Profil" : "Save Profile Draft")}
 									</button>
 								</div>
 
@@ -2015,7 +2104,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										<div>
 											<div className="flex justify-between items-center mb-1">
 												<label htmlFor="p-name" className="text-xs font-semibold text-slate-300">
-													Nama Tampilan (Display Name) <span className="text-rose-400">*</span>
+													{studioLang === "id" ? "Nama Tampilan (Display Name)" : "Display Name"} <span className="text-rose-400">*</span>
 												</label>
 												<span className="text-[10px] text-slate-500">
 													{profile.name.length}/80
@@ -2028,7 +2117,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												required
 												value={profile.name}
 												onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-												placeholder="Your Name"
+												placeholder={studioLang === "id" ? "Nama Anda" : "Your Name"}
 												className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none transition-colors"
 											/>
 										</div>
@@ -2037,7 +2126,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										<div>
 											<div className="flex justify-between items-center mb-1">
 												<label htmlFor="p-handle" className="text-xs font-semibold text-slate-300">
-													Username / Handle <span className="text-rose-400">*</span>
+													{studioLang === "id" ? "Username / Handle" : "Username / Handle"} <span className="text-rose-400">*</span>
 												</label>
 												<span className="text-[10px] text-slate-500">
 													{profile.handle.length}/40
@@ -2062,7 +2151,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{/* Avatar */}
 										<div>
 											<label htmlFor="p-avatar" className="block text-xs font-semibold text-slate-300 mb-1">
-												Foto Avatar
+												{studioLang === "id" ? "Foto Avatar" : "Profile Avatar"}
 											</label>
 											<div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-2">
 												<button
@@ -2070,7 +2159,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													onClick={() => handleOpenMediaLibrary("avatar")}
 													className="px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
 												>
-													<span>🖼️ Pilih dari Media Library</span>
+													<span>🖼️ {studioLang === "id" ? "Pilih dari Media Library" : "Choose from Media Library"}</span>
 												</button>
 												{profile.avatar_url && (
 													<button
@@ -2078,7 +2167,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														onClick={() => handleRemoveMedia("avatar")}
 														className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 													>
-														Gunakan Monogram Inisial
+														{studioLang === "id" ? "Gunakan Monogram Inisial" : "Use Monogram Initials"}
 													</button>
 												)}
 											</div>
@@ -2087,11 +2176,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												type="text"
 												value={profile.avatar_url}
 												onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })}
-												placeholder="/api/studio/media/... atau https://..."
+												placeholder="/api/studio/media/... or https://..."
 												className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none transition-colors"
 											/>
 											<p className="text-[11px] text-slate-500 mt-1">
-												Gunakan Media Library R2 (rekomendasi) atau tautkan URL gambar publik eksternal.
+												{studioLang === "id"
+													? "Gunakan Media Library R2 (rekomendasi) atau tautkan URL gambar publik eksternal."
+													: "Use R2 Media Library (recommended) or link an external public image URL."}
 											</p>
 										</div>
 
@@ -2099,7 +2190,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 											<div>
 												<label htmlFor="p-loc-id" className="block text-xs font-semibold text-slate-300 mb-1">
-													Lokasi (Indonesia)
+													{studioLang === "id" ? "Lokasi (Indonesia)" : "Location (Indonesian)"}
 												</label>
 												<input
 													id="p-loc-id"
@@ -2112,7 +2203,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											</div>
 											<div>
 												<label htmlFor="p-loc-en" className="block text-xs font-semibold text-slate-300 mb-1">
-													Location (English)
+													{studioLang === "id" ? "Lokasi (Inggris)" : "Location (English)"}
 												</label>
 												<input
 													id="p-loc-en"
@@ -2128,14 +2219,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{/* Bio ID */}
 										<div>
 											<label htmlFor="p-bio-id" className="block text-xs font-semibold text-slate-300 mb-1">
-												Bio Profil (Bahasa Indonesia)
+												{studioLang === "id" ? "Bio Profil (Bahasa Indonesia)" : "Profile Bio (Indonesian)"}
 											</label>
 											<textarea
 												id="p-bio-id"
 												rows={3}
 												value={profile.bio_id}
 												onChange={(e) => setProfile({ ...profile, bio_id: e.target.value })}
-												placeholder="Kosongkan jika ingin menyembunyikan bio..."
+												placeholder={studioLang === "id" ? "Kosongkan jika ingin menyembunyikan bio..." : "Leave blank to hide bio..."}
 												className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none transition-colors resize-y"
 											/>
 										</div>
@@ -2143,14 +2234,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{/* Bio EN */}
 										<div>
 											<label htmlFor="p-bio-en" className="block text-xs font-semibold text-slate-300 mb-1">
-												Profile Bio (English)
+												{studioLang === "id" ? "Bio Profil (Bahasa Inggris)" : "Profile Bio (English)"}
 											</label>
 											<textarea
 												id="p-bio-en"
 												rows={3}
 												value={profile.bio_en}
 												onChange={(e) => setProfile({ ...profile, bio_en: e.target.value })}
-												placeholder="Leave empty to hide bio..."
+												placeholder={studioLang === "id" ? "Kosongkan jika ingin menyembunyikan bio..." : "Leave empty to hide bio..."}
 												className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none transition-colors resize-y"
 											/>
 										</div>
@@ -2188,29 +2279,29 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 												{/* Name & Handle */}
 												<h3 className="text-lg font-bold text-white tracking-tight">
-													{profile.name || "Nama Pengguna"}
+													{profile.name || (studioLang === "id" ? "Nama Pengguna" : "User Name")}
 												</h3>
 												<p className="text-xs font-medium text-violet-400 mb-2">
 													{profile.handle || "@handle"}
 												</p>
 
 												{/* Location Badge (if filled) */}
-												{profile.location_id && (
+												{(studioLang === "id" ? (profile.location_id || profile.location_en) : (profile.location_en || profile.location_id)) && (
 													<div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300 mb-3">
 														<span>📍</span>
-														<span>{profile.location_id}</span>
+														<span>{studioLang === "id" ? (profile.location_id || profile.location_en) : (profile.location_en || profile.location_id)}</span>
 													</div>
 												)}
 
 												{/* Bio (if filled) */}
-												{profile.bio_id && (
+												{(studioLang === "id" ? (profile.bio_id || profile.bio_en) : (profile.bio_en || profile.bio_id)) && (
 													<p className="text-xs text-slate-300 leading-relaxed mt-1 line-clamp-3">
-														{profile.bio_id}
+														{studioLang === "id" ? (profile.bio_id || profile.bio_en) : (profile.bio_en || profile.bio_id)}
 													</p>
 												)}
 
 												<div className="mt-4 pt-3 border-t border-slate-800/80 w-full text-[10px] text-slate-500">
-													Tampilan kartu identitas di homepage publik
+													{studioLang === "id" ? "Tampilan kartu identitas di homepage publik" : "Identity card preview on public homepage"}
 												</div>
 											</div>
 										</div>
@@ -2228,9 +2319,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
 									<div>
-										<h2 className="text-lg font-bold text-white">Editor Tautan (Draft)</h2>
+										<h2 className="text-lg font-bold text-white">
+											{studioLang === "id" ? "Editor Tautan (Draft)" : "Links Editor (Draft)"}
+										</h2>
 										<p className="text-xs text-slate-400">
-											Atur tautan vertikal, urutan tampilan (Up/Down), dan status aktif/nonaktif.
+											{studioLang === "id"
+												? "Atur tautan vertikal, urutan tampilan (Up/Down), dan status aktif/nonaktif."
+												: "Organize vertical links, display order (Up/Down), and active/inactive status."}
 										</p>
 									</div>
 									<button
@@ -2238,20 +2333,22 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										onClick={handleOpenAddLink}
 										className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs sm:text-sm font-semibold transition-all shadow-md cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
 									>
-										<span>+ Tambah Tautan</span>
+										<span>+ {studioLang === "id" ? "Tambah Tautan" : "Add Link"}</span>
 									</button>
 								</div>
 
 								{/* Links List */}
 								{links.length === 0 ? (
 									<div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl">
-										<p className="text-sm text-slate-400 mb-3">Belum ada tautan di dalam draft.</p>
+										<p className="text-sm text-slate-400 mb-3">
+											{studioLang === "id" ? "Belum ada tautan di dalam draft." : "No links in draft workspace."}
+										</p>
 										<button
 											type="button"
 											onClick={handleOpenAddLink}
 											className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
 										>
-											+ Tambah Tautan Pertama
+											+ {studioLang === "id" ? "Tambah Tautan Pertama" : "Add First Link"}
 										</button>
 									</div>
 								) : (
@@ -2273,7 +2370,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 															disabled={idx === 0}
 															onClick={() => handleMoveLink(idx, "up")}
 															className="w-6 h-6 rounded flex items-center justify-center text-[10px] text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-20 cursor-pointer"
-															title="Pindahkan ke atas"
+															title={studioLang === "id" ? "Pindahkan ke atas" : "Move up"}
 														>
 															▲
 														</button>
@@ -2282,7 +2379,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 															disabled={idx === links.length - 1}
 															onClick={() => handleMoveLink(idx, "down")}
 															className="w-6 h-6 rounded flex items-center justify-center text-[10px] text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-20 cursor-pointer"
-															title="Pindahkan ke bawah"
+															title={studioLang === "id" ? "Pindahkan ke bawah" : "Move down"}
 														>
 															▼
 														</button>
@@ -2297,11 +2394,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													<div className="min-w-0">
 														<div className="flex items-center gap-2">
 															<span className="text-sm font-bold text-white truncate">
-																{link.title_id || link.title_en}
+																{studioLang === "id" ? (link.title_id || link.title_en) : (link.title_en || link.title_id)}
 															</span>
-															{link.title_en && link.title_en !== link.title_id && (
+															{link.title_en && link.title_id && link.title_en !== link.title_id && (
 																<span className="text-[11px] text-slate-400 truncate hidden md:inline">
-																	({link.title_en})
+																	({studioLang === "id" ? link.title_en : link.title_id})
 																</span>
 															)}
 														</div>
@@ -2323,7 +2420,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																: "bg-slate-800 text-slate-400 border border-slate-700"
 														}`}
 													>
-														{link.is_enabled ? "Aktif" : "Nonaktif"}
+														{link.is_enabled ? (studioLang === "id" ? "Aktif" : "Active") : (studioLang === "id" ? "Nonaktif" : "Disabled")}
 													</button>
 
 													{/* Edit */}
@@ -2332,7 +2429,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														onClick={() => handleOpenEditLink(link)}
 														className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
 													>
-														Edit
+														{studioLang === "id" ? "Edit" : "Edit"}
 													</button>
 
 													{/* Delete */}
@@ -2344,7 +2441,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														}}
 														className="px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-semibold transition-colors cursor-pointer border border-rose-800/60"
 													>
-														Hapus
+														{studioLang === "id" ? "Hapus" : "Delete"}
 													</button>
 												</div>
 											</div>
@@ -2363,9 +2460,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
 									<div>
-										<h2 className="text-lg font-bold text-white">Editor Kontak (Draft)</h2>
+										<h2 className="text-lg font-bold text-white">
+											{studioLang === "id" ? "Editor Kontak (Draft)" : "Contact Editor (Draft)"}
+										</h2>
 										<p className="text-xs text-slate-400">
-											Kelola kartu komunikasi langsung: WhatsApp, Telegram, Email, dan Instagram.
+											{studioLang === "id"
+												? "Kelola kartu komunikasi langsung: WhatsApp, Telegram, Email, dan Instagram."
+												: "Manage direct communication channels: WhatsApp, Telegram, Email, and Instagram."}
 										</p>
 									</div>
 									<button
@@ -2373,20 +2474,22 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										onClick={handleOpenAddContact}
 										className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs sm:text-sm font-semibold transition-all shadow-md cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
 									>
-										<span>+ Tambah Kontak</span>
+										<span>+ {studioLang === "id" ? "Tambah Kontak" : "Add Contact"}</span>
 									</button>
 								</div>
 
 								{/* Contact List */}
 								{contacts.length === 0 ? (
 									<div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl">
-										<p className="text-sm text-slate-400 mb-3">Belum ada metode kontak di dalam draft.</p>
+										<p className="text-sm text-slate-400 mb-3">
+											{studioLang === "id" ? "Belum ada metode kontak di dalam draft." : "No contact channels in draft workspace."}
+										</p>
 										<button
 											type="button"
 											onClick={handleOpenAddContact}
 											className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
 										>
-											+ Tambah Metode Kontak Pertama
+											+ {studioLang === "id" ? "Tambah Metode Kontak Pertama" : "Add First Contact Channel"}
 										</button>
 									</div>
 								) : (
@@ -2408,7 +2511,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 															disabled={idx === 0}
 															onClick={() => handleMoveContact(idx, "up")}
 															className="w-6 h-6 rounded flex items-center justify-center text-[10px] text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-20 cursor-pointer"
-															title="Pindahkan ke atas"
+															title={studioLang === "id" ? "Pindahkan ke atas" : "Move up"}
 														>
 															▲
 														</button>
@@ -2417,7 +2520,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 															disabled={idx === contacts.length - 1}
 															onClick={() => handleMoveContact(idx, "down")}
 															className="w-6 h-6 rounded flex items-center justify-center text-[10px] text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-20 cursor-pointer"
-															title="Pindahkan ke bawah"
+															title={studioLang === "id" ? "Pindahkan ke bawah" : "Move down"}
 														>
 															▼
 														</button>
@@ -2432,7 +2535,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													<div className="min-w-0">
 														<div className="flex items-center gap-2">
 															<span className="text-sm font-bold text-white truncate">
-																{contact.label_id || contact.label_en}
+																{studioLang === "id" ? (contact.label_id || contact.label_en) : (contact.label_en || contact.label_id)}
 															</span>
 															<span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
 																{contact.platform}
@@ -2456,7 +2559,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																: "bg-slate-800 text-slate-400 border border-slate-700"
 														}`}
 													>
-														{contact.is_enabled ? "Aktif" : "Nonaktif"}
+														{contact.is_enabled ? (studioLang === "id" ? "Aktif" : "Active") : (studioLang === "id" ? "Nonaktif" : "Disabled")}
 													</button>
 
 													{/* Edit */}
@@ -2465,7 +2568,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														onClick={() => handleOpenEditContact(contact)}
 														className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
 													>
-														Edit
+														{studioLang === "id" ? "Edit" : "Edit"}
 													</button>
 
 													{/* Delete */}
@@ -2477,7 +2580,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														}}
 														className="px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-semibold transition-colors cursor-pointer border border-rose-800/60"
 													>
-														Hapus
+														{studioLang === "id" ? "Hapus" : "Delete"}
 													</button>
 												</div>
 											</div>
@@ -2498,7 +2601,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div>
 									<h2 className="text-lg font-bold text-white">Appearance Studio (Draft)</h2>
 									<p className="text-xs text-slate-400">
-										Sesuaikan tema visual, gambar/video latar belakang, cover banner, foto avatar, dan efek Liquid Glass.
+										{studioLang === "id"
+											? "Sesuaikan tema visual, gambar/video latar belakang, cover banner, foto avatar, dan efek Liquid Glass."
+											: "Customize visual themes, background images/videos, cover banner, profile avatar, and Liquid Glass optics."}
 									</p>
 								</div>
 								<div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
@@ -2518,19 +2623,24 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											setAppearance(resetApp);
 											markUnpublished();
 											saveDraftAppearanceDirectly(resetApp);
-											showToast(`Karakteristik visual dikembalikan ke default ${currentPreset.name.id}.`, "info");
+											showToast(
+												studioLang === "id"
+													? `Karakteristik visual dikembalikan ke default ${currentPreset.name.id}.`
+													: `Visual characteristics reset to ${currentPreset.name.en} defaults.`,
+												"info"
+											);
 										}}
 										className="px-3.5 py-2 rounded-xl bg-violet-950/60 hover:bg-violet-900/60 text-violet-300 text-xs font-semibold transition-colors cursor-pointer border border-violet-800/60"
-										title="Reset penyesuaian aksen, blur, dan kaca kembali ke nilai asli preset ini"
+										title={studioLang === "id" ? "Reset penyesuaian aksen, blur, dan kaca kembali ke nilai asli preset ini" : "Reset accent, blur, and glass adjustments back to this preset's original values"}
 									>
-										↺ Reset ke Nilai Preset
+										↺ {studioLang === "id" ? "Reset ke Nilai Preset" : "Reset to Preset Values"}
 									</button>
 									<button
 										type="button"
 										onClick={() => setIsResetAppearanceOpen(true)}
 										className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
 									>
-										Reset Default Pabrik
+										{studioLang === "id" ? "Reset Default Pabrik" : "Reset to Factory Defaults"}
 									</button>
 									<button
 										type="button"
@@ -2538,7 +2648,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										disabled={isSavingAppearance}
 										className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-all shadow-md cursor-pointer"
 									>
-										{isSavingAppearance ? "Menyimpan..." : "Simpan Tampilan (Draft)"}
+										{isSavingAppearance
+											? (studioLang === "id" ? "Menyimpan..." : "Saving...")
+											: (studioLang === "id" ? "Simpan Tampilan (Draft)" : "Save Appearance (Draft)")}
 									</button>
 								</div>
 							</div>
@@ -2546,12 +2658,12 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							{/* Subtab Navigation (V4 Customization Engine) */}
 							<div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-800 no-scrollbar">
 								{[
-									{ id: "themes", label: "🎨 Tema Warna (30)" },
-									{ id: "layouts", label: "📐 Tata Letak (20)" },
-									{ id: "card", label: "🪪 Kartu Profil (10)" },
-									{ id: "typography", label: "✍️ Tipografi (24)" },
-									{ id: "media", label: "🖼️ Latar Belakang & Media" },
-									{ id: "glass", label: "🧊 Efek Liquid Glass" },
+									{ id: "themes", label: studioLang === "id" ? "🎨 Tema Warna (30)" : "🎨 Color Themes (30)" },
+									{ id: "layouts", label: studioLang === "id" ? "📐 Tata Letak (20)" : "📐 Page Layouts (20)" },
+									{ id: "card", label: studioLang === "id" ? "🪪 Kartu Profil (10)" : "🪪 Profile Card (10)" },
+									{ id: "typography", label: studioLang === "id" ? "✍️ Tipografi (24)" : "✍️ Typography (24)" },
+									{ id: "media", label: studioLang === "id" ? "🖼️ Latar Belakang & Media" : "🖼️ Background & Media" },
+									{ id: "glass", label: studioLang === "id" ? "🧊 Efek Liquid Glass" : "🧊 Liquid Glass Optics" },
 								].map((tab) => (
 									<button
 										key={tab.id}
@@ -2573,9 +2685,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
 									<div>
-										<h3 className="text-sm font-bold text-white mb-1">Preset Tema Visual (30 Koleksi)</h3>
+										<h3 className="text-sm font-bold text-white mb-1">
+											{studioLang === "id" ? "Preset Tema Visual (30 Koleksi)" : "Visual Theme Presets (30 Collections)"}
+										</h3>
 										<p className="text-xs text-slate-400">
-											Pilih salah satu dari 30 preset premium teruji (15 Light Mode & 15 Dark Mode) untuk menerapkan karakteristik tema dan warna aksen secara instan.
+											{studioLang === "id"
+												? "Pilih salah satu dari 30 preset premium teruji (15 Light Mode & 15 Dark Mode) untuk menerapkan karakteristik tema dan warna aksen secara instan."
+												: "Select one of 30 tested premium presets (15 Light Mode & 15 Dark Mode) to apply theme characteristics and accent colors instantly."}
 										</p>
 									</div>
 									{/* Filter Tabs */}
@@ -2587,7 +2703,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												presetFilter === "all" ? "bg-violet-600 text-white shadow-xs" : "text-slate-400 hover:text-white"
 											}`}
 										>
-											Semua Tema (30)
+											{studioLang === "id" ? "Semua Tema (30)" : "All Themes (30)"}
 										</button>
 										<button
 											type="button"
@@ -2637,7 +2753,12 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													setAppearance(updatedAppearance);
 													markUnpublished();
 													saveDraftAppearanceDirectly(updatedAppearance);
-													showToast(`Preset ${preset.name.id} diterapkan & disimpan ke draft.`, "info");
+													showToast(
+														studioLang === "id"
+															? `Preset ${preset.name.id} diterapkan & disimpan ke draft.`
+															: `Preset ${preset.name.en} applied & saved to draft.`,
+														"info"
+													);
 												}}
 												className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
 													isSelected
@@ -2654,7 +2775,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																: "border-slate-700/50 text-white"
 														}`}
 													>
-														<span className="truncate">{preset.name.id}</span>
+														<span className="truncate">{preset.name[studioLang]}</span>
 														<span
 															className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
 																preset.mode === "light"
@@ -2667,16 +2788,16 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													</div>
 													<div className="flex items-center justify-between gap-1">
 														<span className="text-xs font-bold text-white truncate">
-															{preset.name.id}
+															{preset.name[studioLang]}
 														</span>
 														{isSelected && (
 															<span className="text-[10px] text-violet-400 font-bold shrink-0">
-																✓ Aktif
+																✓ {studioLang === "id" ? "Aktif" : "Active"}
 															</span>
 														)}
 													</div>
 													<p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-														{preset.description.id}
+														{preset.description[studioLang]}
 													</p>
 												</div>
 
@@ -2687,7 +2808,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														style={{ backgroundColor: preset.tokens.defaultAccent }}
 														title={`Default Accent: ${preset.tokens.defaultAccent}`}
 													/>
-													<span className="truncate">Aksen: {preset.tokens.defaultAccent}</span>
+													<span className="truncate">
+														{studioLang === "id" ? "Aksen:" : "Accent:"} {preset.tokens.defaultAccent}
+													</span>
 												</div>
 											</button>
 										);
@@ -2700,9 +2823,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							{appearanceSubTab === "layouts" && (
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 									<div className="mb-4">
-										<h3 className="text-sm font-bold text-white mb-1">Pilihan Tata Letak Halaman (20 Koleksi)</h3>
+										<h3 className="text-sm font-bold text-white mb-1">
+											{studioLang === "id" ? "Pilihan Tata Letak Halaman (20 Koleksi)" : "Page Layout Options (20 Presets)"}
+										</h3>
 										<p className="text-xs text-slate-400">
-											Pilih komposisi struktural halaman publik. Mengatur lebar kolom, perataan, tata letak kartu tautan (vertikal tunggal, kisi 2 kolom, atau split desktop), dan kepadatan spasial.
+											{studioLang === "id"
+												? "Pilih komposisi struktural halaman publik. Mengatur lebar kolom, perataan, tata letak kartu tautan (vertikal tunggal, kisi 2 kolom, atau split desktop), dan kepadatan spasial."
+												: "Choose the structural composition for public pages. Configures column width, alignment, link card layout (vertical stack, 2-column grid, or split desktop), and spatial density."}
 										</p>
 									</div>
 									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
@@ -2720,7 +2847,10 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														setAppearance(updated);
 														markUnpublished();
 														saveDraftAppearanceDirectly(updated);
-														showToast(`Tata letak diubah ke ${layout.name.id}`, "info");
+														showToast(
+															studioLang === "id" ? `Tata letak diubah ke ${layout.name.id}` : `Layout changed to ${layout.name.en}`,
+															"info"
+														);
 													}}
 													className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-3 ${
 														isSelected
@@ -2730,16 +2860,16 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												>
 													<div>
 														<div className="flex items-center justify-between mb-1.5">
-															<h4 className="text-xs font-bold text-white">{layout.name.id}</h4>
+															<h4 className="text-xs font-bold text-white">{layout.name[studioLang]}</h4>
 															{isSelected && (
 																<span className="w-4 h-4 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px]">
 																	✓
 																</span>
 															)}
 														</div>
-														<div className="text-[11px] font-medium text-violet-300 mb-1">{layout.tagline.id}</div>
+														<div className="text-[11px] font-medium text-violet-300 mb-1">{layout.tagline[studioLang]}</div>
 														<p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-															{layout.description.id}
+															{layout.description[studioLang]}
 														</p>
 													</div>
 													<div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-800/80 text-[10px] text-slate-400">
@@ -2768,9 +2898,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									{/* Card Size Engine */}
 									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 										<div className="mb-4">
-											<h3 className="text-sm font-bold text-white mb-1">Ukuran Kartu Profil (Card Size Engine)</h3>
+											<h3 className="text-sm font-bold text-white mb-1">
+												{studioLang === "id" ? "Ukuran Kartu Profil (Card Size Engine)" : "Profile Card Size (Card Size Engine)"}
+											</h3>
 											<p className="text-xs text-slate-400">
-												Pilih skala dimensi kartu profil. Format bawaan Sedang (Medium) dioptimalkan agar lebih ringkas, proporsional, dan nyaman dilihat tanpa memakan layar.
+												{studioLang === "id"
+													? "Pilih skala dimensi kartu profil. Format bawaan Sedang (Medium) dioptimalkan agar lebih ringkas, proporsional, dan nyaman dilihat tanpa memakan layar."
+													: "Select profile card dimensions scale. Default Medium format is optimized to be compact, proportional, and balanced on all screen sizes."}
 											</p>
 										</div>
 										<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2788,7 +2922,10 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 															setAppearance(updated);
 															markUnpublished();
 															saveDraftAppearanceDirectly(updated);
-															showToast(`Ukuran kartu diubah ke ${sizeOpt.name.id}`, "info");
+															showToast(
+																studioLang === "id" ? `Ukuran kartu diubah ke ${sizeOpt.name.id}` : `Card size changed to ${sizeOpt.name.en}`,
+																"info"
+															);
 														}}
 														className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
 															isSelected
@@ -2797,18 +2934,18 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														}`}
 													>
 														<div className="flex items-center justify-between">
-															<span className="text-xs font-bold text-white">{sizeOpt.name.id}</span>
+															<span className="text-xs font-bold text-white">{sizeOpt.name[studioLang]}</span>
 															{isSelected && (
 																<span className="w-4 h-4 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px]">
 																	✓
 																</span>
 															)}
 														</div>
-														<span className="text-[11px] text-violet-300 font-medium">{sizeOpt.tagline.id}</span>
+														<span className="text-[11px] text-violet-300 font-medium">{sizeOpt.tagline[studioLang]}</span>
 														<div className="flex items-center gap-2 text-[10px] text-slate-400 mt-1">
 															<span>Avatar: {sizeOpt.avatarPx}px</span>
 															<span>•</span>
-															<span>Batas: {sizeOpt.maxWidthClass}</span>
+															<span>{studioLang === "id" ? "Batas:" : "Max:"} {sizeOpt.maxWidthClass}</span>
 														</div>
 													</button>
 												);
@@ -2819,9 +2956,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									{/* 10 Profile Card Styles */}
 									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 										<div className="mb-4">
-											<h3 className="text-sm font-bold text-white mb-1">Gaya Kartu Profil (10 Koleksi)</h3>
+											<h3 className="text-sm font-bold text-white mb-1">
+												{studioLang === "id" ? "Gaya Kartu Profil (10 Koleksi)" : "Profile Card Styles (10 Presets)"}
+											</h3>
 											<p className="text-xs text-slate-400">
-												Pilih komposisi kartu profil. Geometri cover, overlap avatar, dan perataan identitas disesuaikan secara otomatis berdasarkan gaya yang dipilih.
+												{studioLang === "id"
+													? "Pilih komposisi kartu profil. Geometri cover, overlap avatar, dan perataan identitas disesuaikan secara otomatis berdasarkan gaya yang dipilih."
+													: "Choose profile card composition. Cover geometry, avatar overlap, and identity alignment are adjusted automatically based on chosen style."}
 											</p>
 										</div>
 										<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
@@ -2839,7 +2980,10 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 															setAppearance(updated);
 															markUnpublished();
 															saveDraftAppearanceDirectly(updated);
-															showToast(`Gaya profil diubah ke ${styleOpt.name.id}`, "info");
+															showToast(
+																studioLang === "id" ? `Gaya profil diubah ke ${styleOpt.name.id}` : `Profile style changed to ${styleOpt.name.en}`,
+																"info"
+															);
 														}}
 														className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-3 ${
 															isSelected
@@ -2849,16 +2993,16 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													>
 														<div>
 															<div className="flex items-center justify-between mb-1.5">
-																<h4 className="text-xs font-bold text-white">{styleOpt.name.id}</h4>
+																<h4 className="text-xs font-bold text-white">{styleOpt.name[studioLang]}</h4>
 																{isSelected && (
 																	<span className="w-4 h-4 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px]">
 																		✓
 																	</span>
 																)}
 															</div>
-															<div className="text-[11px] font-medium text-violet-300 mb-1">{styleOpt.tagline.id}</div>
+															<div className="text-[11px] font-medium text-violet-300 mb-1">{styleOpt.tagline[studioLang]}</div>
 															<p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-																{styleOpt.description.id}
+																{styleOpt.description[studioLang]}
 															</p>
 														</div>
 														<div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-400 flex items-center justify-between">
@@ -2879,9 +3023,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 									<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
 										<div>
-											<h3 className="text-sm font-bold text-white mb-1">Tipografi & Koleksi Font (24 Pilihan)</h3>
+											<h3 className="text-sm font-bold text-white mb-1">
+												{studioLang === "id" ? "Tipografi & Koleksi Font (24 Pilihan)" : "Typography & Font Library (24 Presets)"}
+											</h3>
 											<p className="text-xs text-slate-400">
-												Pilih jenis font Google Fonts premium untuk nama, bio, tautan, dan seluruh antarmuka. Hanya font yang aktif yang akan dimuat di halaman publik.
+												{studioLang === "id"
+													? "Pilih jenis font Google Fonts premium untuk nama, bio, tautan, dan seluruh antarmuka. Hanya font yang aktif yang akan dimuat di halaman publik."
+													: "Select a curated Google Font for display name, bio, links, and public interface. Only the active font is loaded on public pages."}
 											</p>
 										</div>
 										<button
@@ -2894,11 +3042,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												setAppearance(updated);
 												markUnpublished();
 												saveDraftAppearanceDirectly(updated);
-												showToast("Font direset ke Inter", "info");
+												showToast(studioLang === "id" ? "Font direset ke Inter" : "Font reset to Inter", "info");
 											}}
 											className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold self-start sm:self-auto transition-colors cursor-pointer border border-slate-700"
 										>
-											↺ Reset ke Inter
+											↺ {studioLang === "id" ? "Reset ke Inter" : "Reset to Inter"}
 										</button>
 									</div>
 
@@ -2909,7 +3057,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												type="text"
 												value={fontSearch}
 												onChange={(e) => setFontSearch(e.target.value)}
-												placeholder="Cari nama font..."
+												placeholder={studioLang === "id" ? "Cari nama font..." : "Search font name..."}
 												className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-violet-500"
 											/>
 										</div>
@@ -2921,7 +3069,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													fontCategoryFilter === "all" ? "bg-violet-600 text-white" : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
 												}`}
 											>
-												Semua (24)
+												{studioLang === "id" ? "Semua (24)" : "All (24)"}
 											</button>
 											{FONT_CATEGORIES.map((cat) => (
 												<button
@@ -2932,7 +3080,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														fontCategoryFilter === cat.id ? "bg-violet-600 text-white" : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
 													}`}
 												>
-													{cat.name.id}
+													{cat.name[studioLang]}
 												</button>
 											))}
 										</div>
@@ -2958,7 +3106,10 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														setAppearance(updated);
 														markUnpublished();
 														saveDraftAppearanceDirectly(updated);
-														showToast(`Font diubah ke ${font.name}`, "info");
+														showToast(
+															studioLang === "id" ? `Font diubah ke ${font.name}` : `Font changed to ${font.name}`,
+															"info"
+														);
 													}}
 													className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-3 ${
 														isSelected
@@ -2997,9 +3148,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div className="flex flex-col gap-6">
 							{/* 2. Fullscreen Background Panel */}
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
-								<h3 className="text-sm font-bold text-white mb-1">Latar Belakang Layar Penuh (Fixed Background)</h3>
+								<h3 className="text-sm font-bold text-white mb-1">
+									{studioLang === "id" ? "Latar Belakang Layar Penuh (Fixed Background)" : "Fullscreen Background (Fixed Background)"}
+								</h3>
 								<p className="text-xs text-slate-400 mb-4">
-									Pilih antara gradient mesh aurora beranimasi, gambar statis, atau video berulang (muted, loop, playsInline).
+									{studioLang === "id"
+										? "Pilih antara gradient mesh aurora beranimasi, gambar statis, atau video berulang (muted, loop, playsInline)."
+										: "Choose between animated aurora gradient mesh, static image, or looping video (muted, loop, playsInline)."}
 								</p>
 
 								{/* Background Type Switcher */}
@@ -3018,7 +3173,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													: "text-slate-400 hover:text-slate-200"
 											}`}
 										>
-											{type === "gradient" ? "Gradient Mesh" : type === "image" ? "Gambar Kustom" : "Video Kustom"}
+											{type === "gradient"
+												? (studioLang === "id" ? "Gradient Mesh" : "Gradient Mesh")
+												: type === "image"
+												? (studioLang === "id" ? "Gambar Kustom" : "Custom Image")
+												: (studioLang === "id" ? "Video Kustom" : "Custom Video")}
 										</button>
 									))}
 								</div>
@@ -3027,9 +3186,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								{appearance.background_type === "gradient" && (
 									<div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between mb-4">
 										<div>
-											<div className="text-xs font-bold text-white">Animasi Aurora Mesh</div>
+											<div className="text-xs font-bold text-white">
+												{studioLang === "id" ? "Animasi Aurora Mesh" : "Aurora Mesh Animation"}
+											</div>
 											<div className="text-[11px] text-slate-400">
-												Menggerakkan lapisan gradien warna secara perlahan di latar belakang.
+												{studioLang === "id"
+													? "Menggerakkan lapisan gradien warna secara perlahan di latar belakang."
+													: "Slowly animates color gradient layers across the background."}
 											</div>
 										</div>
 										<button
@@ -3047,7 +3210,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													: "bg-slate-800 text-slate-400 border border-slate-700"
 											}`}
 										>
-											{appearance.background_animation ? "Aktif" : "Nonaktif"}
+											{appearance.background_animation
+												? (studioLang === "id" ? "Aktif" : "Active")
+												: (studioLang === "id" ? "Nonaktif" : "Disabled")}
 										</button>
 									</div>
 								)}
@@ -3059,19 +3224,23 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											{appearance.background_src ? (
 												<img
 													src={appearance.background_src}
-													alt="Latar belakang"
+													alt={studioLang === "id" ? "Latar belakang" : "Background"}
 													className="w-16 h-12 rounded-lg object-cover border border-slate-700"
 												/>
 											) : (
 												<div className="w-16 h-12 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-xs text-slate-500">
-													Kosong
+													{studioLang === "id" ? "Kosong" : "Empty"}
 												</div>
 											)}
 											<div>
 												<div className="text-xs font-bold text-white">
-													{appearance.background_src ? "Gambar Latar Terpilih" : "Belum Ada Gambar Terpilih"}
+													{appearance.background_src
+														? (studioLang === "id" ? "Gambar Latar Terpilih" : "Active Background Image")
+														: (studioLang === "id" ? "Belum Ada Gambar Terpilih" : "No Background Image Selected")}
 												</div>
-												<div className="text-[11px] text-slate-400">Mendukung JPEG, PNG, WebP, AVIF hingga 15 MiB.</div>
+												<div className="text-[11px] text-slate-400">
+													{studioLang === "id" ? "Mendukung JPEG, PNG, WebP, AVIF hingga 15 MiB." : "Supports JPEG, PNG, WebP, AVIF up to 15 MiB."}
+												</div>
 											</div>
 										</div>
 										<div className="flex items-center gap-2">
@@ -3080,7 +3249,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												onClick={() => handleOpenMediaLibrary("background")}
 												className="px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 											>
-												Pilih dari R2
+												{studioLang === "id" ? "Pilih dari R2" : "Choose from R2"}
 											</button>
 											{appearance.background_src && (
 												<button
@@ -3088,7 +3257,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													onClick={() => handleRemoveMedia("background")}
 													className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
 												>
-													Hapus
+													{studioLang === "id" ? "Hapus" : "Remove"}
 												</button>
 											)}
 										</div>
@@ -3113,9 +3282,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												)}
 												<div>
 													<div className="text-xs font-bold text-white">
-														{appearance.background_src ? "Video Latar Terpilih" : "Belum Ada Video Terpilih"}
+														{appearance.background_src
+															? (studioLang === "id" ? "Video Latar Terpilih" : "Active Background Video")
+															: (studioLang === "id" ? "Belum Ada Video Terpilih" : "No Background Video Selected")}
 													</div>
-													<div className="text-[11px] text-slate-400">Mendukung MP4 dan WebM hingga 50 MiB.</div>
+													<div className="text-[11px] text-slate-400">
+														{studioLang === "id" ? "Mendukung MP4 dan WebM hingga 50 MiB." : "Supports MP4 and WebM up to 50 MiB."}
+													</div>
 												</div>
 											</div>
 											<div className="flex items-center gap-2">
@@ -3124,7 +3297,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													onClick={() => handleOpenMediaLibrary("background")}
 													className="px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 												>
-													Pilih Video R2
+													{studioLang === "id" ? "Pilih Video R2" : "Choose Video from R2"}
 												</button>
 												{appearance.background_src && (
 													<button
@@ -3132,7 +3305,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														onClick={() => handleRemoveMedia("background")}
 														className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
 													>
-														Hapus
+														{studioLang === "id" ? "Hapus" : "Remove"}
 													</button>
 												)}
 											</div>
@@ -3141,9 +3314,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{/* Poster Fallback Image */}
 										<div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
 											<div>
-												<div className="text-xs font-semibold text-slate-300">Poster Fallback Video (Opsional)</div>
+												<div className="text-xs font-semibold text-slate-300">
+													{studioLang === "id" ? "Poster Fallback Video (Opsional)" : "Video Fallback Poster (Optional)"}
+												</div>
 												<div className="text-[11px] text-slate-400">
-													Ditampilkan sebelum video dimuat atau di perangkat dengan mode hemat daya.
+													{studioLang === "id"
+														? "Ditampilkan sebelum video dimuat atau di perangkat dengan mode hemat daya."
+														: "Displayed before video loads or on power-saving devices."}
 												</div>
 											</div>
 											<div className="flex items-center gap-2">
@@ -3152,7 +3329,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													onClick={() => handleOpenMediaLibrary("background_poster")}
 													className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
 												>
-													{appearance.background_poster ? "Ganti Poster" : "Pilih Poster"}
+													{appearance.background_poster
+														? (studioLang === "id" ? "Ganti Poster" : "Change Poster")
+														: (studioLang === "id" ? "Pilih Poster" : "Select Poster")}
 												</button>
 												{appearance.background_poster && (
 													<button
@@ -3172,7 +3351,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-slate-800">
 									<div>
 										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
-											<span>Posisi X</span>
+											<span>{studioLang === "id" ? "Posisi X" : "Position X"}</span>
 											<span className="font-mono text-slate-400">{Math.round(appearance.background_position_x ?? 50)}%</span>
 										</label>
 										<input
@@ -3190,7 +3369,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 									<div>
 										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
-											<span>Posisi Y</span>
+											<span>{studioLang === "id" ? "Posisi Y" : "Position Y"}</span>
 											<span className="font-mono text-slate-400">{Math.round(appearance.background_position_y ?? 50)}%</span>
 										</label>
 										<input
@@ -3208,7 +3387,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 									<div>
 										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
-											<span>Skala / Zoom</span>
+											<span>{studioLang === "id" ? "Skala / Zoom" : "Scale / Zoom"}</span>
 											<span className="font-mono text-slate-400">{(appearance.background_scale ?? 1.0).toFixed(1)}x</span>
 										</label>
 										<input
@@ -3227,7 +3406,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 									<div>
 										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
-											<span>Kecerahan Latar</span>
+											<span>{studioLang === "id" ? "Kecerahan Latar" : "Background Brightness"}</span>
 											<span className="font-mono text-slate-400">{(appearance.background_brightness ?? 1.0).toFixed(1)}x</span>
 										</label>
 										<input
@@ -3246,7 +3425,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 									<div className="sm:col-span-2">
 										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
-											<span>Opasitas Overlay Pelindung Keterbacaan</span>
+											<span>{studioLang === "id" ? "Opasitas Overlay Pelindung Keterbacaan" : "Readability Shield Overlay Opacity"}</span>
 											<span className="font-mono text-slate-400">{Math.round((appearance.background_overlay_opacity ?? 0.45) * 100)}%</span>
 										</label>
 										<input
@@ -3269,9 +3448,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 								<div className="flex items-center justify-between mb-4">
 									<div>
-										<h3 className="text-sm font-bold text-white">Banner Cover</h3>
+										<h3 className="text-sm font-bold text-white">
+											{studioLang === "id" ? "Banner Cover" : "Cover Banner"}
+										</h3>
 										<p className="text-xs text-slate-400">
-											Banner panoramik yang melayang anggun di atas kartu profil Liquid Glass.
+											{studioLang === "id"
+												? "Banner panoramik yang melayang anggun di atas kartu profil Liquid Glass."
+												: "Panoramic banner floating elegantly above the Liquid Glass profile card."}
 										</p>
 									</div>
 									<button
@@ -3289,7 +3472,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												: "bg-slate-800 text-slate-400 border border-slate-700"
 										}`}
 									>
-										{appearance.cover_enabled ? "Aktif" : "Nonaktif"}
+										{appearance.cover_enabled ? (studioLang === "id" ? "Aktif" : "Active") : (studioLang === "id" ? "Nonaktif" : "Disabled")}
 									</button>
 								</div>
 
@@ -3302,22 +3485,42 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											</div>
 											<div className="text-xs text-slate-300 leading-relaxed">
 												<div className="font-semibold text-white mb-0.5">
-													Geometri Cover Otomatis (Style-Driven)
+													{studioLang === "id" ? "Geometri Cover Otomatis (Style-Driven)" : "Automatic Cover Geometry (Style-Driven)"}
 												</div>
 												<p className="text-slate-400">
-													Proporsi dan tinggi banner cover dikendalikan secara otomatis oleh{" "}
-													<button
-														type="button"
-														onClick={() => setAppearanceSubTab("card")}
-														className="text-violet-400 hover:text-violet-300 underline font-semibold cursor-pointer"
-													>
-														Gaya Kartu Profil
-													</button>
-													{" "}yang dipilih pada tab Kartu Profil (saat ini:{" "}
-													<span className="text-violet-200 font-mono font-medium">
-														{PROFILE_CARD_STYLES.find((s) => s.id === (appearance.profile_card_style_id || "immersive-fade"))?.name.id || appearance.profile_card_style_id || "Immersive Fade"}
-													</span>
-													).
+													{studioLang === "id" ? (
+														<>
+															Proporsi dan tinggi banner cover dikendalikan secara otomatis oleh{" "}
+															<button
+																type="button"
+																onClick={() => setAppearanceSubTab("card")}
+																className="text-violet-400 hover:text-violet-300 underline font-semibold cursor-pointer"
+															>
+																Gaya Kartu Profil
+															</button>
+															{" "}yang dipilih pada tab Kartu Profil (saat ini:{" "}
+															<span className="text-violet-200 font-mono font-medium">
+																{PROFILE_CARD_STYLES.find((s) => s.id === (appearance.profile_card_style_id || "immersive-fade"))?.name.id || appearance.profile_card_style_id || "Immersive Fade"}
+															</span>
+															).
+														</>
+													) : (
+														<>
+															Banner proportions and height are controlled automatically by the{" "}
+															<button
+																type="button"
+																onClick={() => setAppearanceSubTab("card")}
+																className="text-violet-400 hover:text-violet-300 underline font-semibold cursor-pointer"
+															>
+																Profile Card Style
+															</button>
+															{" "}selected on the Profile Card tab (currently:{" "}
+															<span className="text-violet-200 font-mono font-medium">
+																{PROFILE_CARD_STYLES.find((s) => s.id === (appearance.profile_card_style_id || "immersive-fade"))?.name.en || appearance.profile_card_style_id || "Immersive Fade"}
+															</span>
+															).
+														</>
+													)}
 												</p>
 											</div>
 										</div>
@@ -3328,7 +3531,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												{appearance.cover_url ? (
 													<img
 														src={appearance.cover_url}
-														alt="Banner cover"
+														alt={studioLang === "id" ? "Banner cover" : "Cover banner"}
 														className="w-20 h-10 rounded-lg object-cover border border-slate-700"
 													/>
 												) : (
@@ -3338,12 +3541,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												)}
 												<div>
 													<div className="text-xs font-bold text-white">
-														{appearance.cover_url ? "Cover Gambar Kustom" : "Liquid Aurora Fallback (Bawaan)"}
+														{appearance.cover_url
+															? (studioLang === "id" ? "Cover Gambar Kustom" : "Custom Cover Image")
+															: (studioLang === "id" ? "Liquid Aurora Fallback (Bawaan)" : "Liquid Aurora Fallback (Default)")}
 													</div>
 													<div className="text-[11px] text-slate-400">
 														{appearance.cover_url
-															? "Gambar cover kustom dari Cloudflare R2"
-															: "Efek kilau aurora specular tanpa perlu upload file"}
+															? (studioLang === "id" ? "Gambar cover kustom dari Cloudflare R2" : "Custom cover image from Cloudflare R2")
+															: (studioLang === "id" ? "Efek kilau aurora specular tanpa perlu upload file" : "Specular aurora glow effect without uploading files")}
 													</div>
 												</div>
 											</div>
@@ -3353,7 +3558,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													onClick={() => handleOpenMediaLibrary("cover")}
 													className="px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 												>
-													Pilih dari R2
+													{studioLang === "id" ? "Pilih dari R2" : "Choose from R2"}
 												</button>
 												{appearance.cover_url && (
 													<button
@@ -3361,7 +3566,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														onClick={() => handleRemoveMedia("cover")}
 														className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
 													>
-														Gunakan Fallback
+														{studioLang === "id" ? "Gunakan Fallback" : "Use Fallback"}
 													</button>
 												)}
 											</div>
@@ -3372,9 +3577,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 							{/* 4. Avatar Media Panel */}
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
-								<h3 className="text-sm font-bold text-white mb-1">Foto Avatar</h3>
+								<h3 className="text-sm font-bold text-white mb-1">
+									{studioLang === "id" ? "Foto Avatar" : "Profile Avatar"}
+								</h3>
 								<p className="text-xs text-slate-400 mb-4">
-									Gunakan foto profil kustom berbingkai kaca cair atau biarkan monogram inisial nama Anda tampil secara minimalis.
+									{studioLang === "id"
+										? "Gunakan foto profil kustom berbingkai kaca cair atau biarkan monogram inisial nama Anda tampil secara minimalis."
+										: "Use a custom liquid-framed profile photo or let your name's monogram initials display seamlessly."}
 								</p>
 
 								<div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -3392,10 +3601,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										)}
 										<div>
 											<div className="text-xs font-bold text-white">
-												{profile.avatar_url ? "Foto Profil Kustom" : "Monogram Inisial Otomatis"}
+												{profile.avatar_url
+													? (studioLang === "id" ? "Foto Profil Kustom" : "Custom Profile Photo")
+													: (studioLang === "id" ? "Monogram Inisial Otomatis" : "Automatic Monogram Initials")}
 											</div>
 											<div className="text-[11px] text-slate-400">
-												Mendukung format JPEG, PNG, WebP, AVIF hingga batas 5 MiB.
+												{studioLang === "id"
+													? "Mendukung format JPEG, PNG, WebP, AVIF hingga batas 5 MiB."
+													: "Supports JPEG, PNG, WebP, AVIF formats up to 5 MiB."}
 											</div>
 										</div>
 									</div>
@@ -3405,7 +3618,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											onClick={() => handleOpenMediaLibrary("avatar")}
 											className="px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 										>
-											Pilih dari R2
+											{studioLang === "id" ? "Pilih dari R2" : "Choose from R2"}
 										</button>
 										{profile.avatar_url && (
 											<button
@@ -3413,7 +3626,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												onClick={() => handleRemoveMedia("avatar")}
 												className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
 											>
-												Gunakan Monogram
+												{studioLang === "id" ? "Gunakan Monogram" : "Use Monogram"}
 											</button>
 										)}
 									</div>
@@ -3425,9 +3638,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							{/* 6. Liquid Glass Subtab */}
 							{appearanceSubTab === "glass" && (
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
-								<h3 className="text-sm font-bold text-white mb-1">Kontrol Material Liquid Glass</h3>
+								<h3 className="text-sm font-bold text-white mb-1">
+									{studioLang === "id" ? "Kontrol Material Liquid Glass" : "Liquid Glass Material Controls"}
+								</h3>
 								<p className="text-xs text-slate-400 mb-4">
-									Kendalikan intensitas blur optik, tingkat transparansi, garis tepi specular, dan warna aksen tombol.
+									{studioLang === "id"
+										? "Kendalikan intensitas blur optik, tingkat transparansi, garis tepi specular, dan warna aksen tombol."
+										: "Fine-tune optical blur intensity, transparency levels, specular borders, and accent highlights."}
 								</p>
 
 								{/* Accent Color Picker & 16 Presets Engine */}
@@ -3435,10 +3652,12 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
 										<div>
 											<label className="block text-xs font-semibold text-slate-300">
-												Warna Aksen Antarmuka (Interface Accent Color)
+												{studioLang === "id" ? "Warna Aksen Antarmuka (Interface Accent Color)" : "Interface Accent Color"}
 											</label>
 											<p className="text-[11px] text-slate-400">
-												Mengatur warna navigasi aktif, badge, tombol aksi utama, ring fokus aksesibilitas, dan indikator interaktif.
+												{studioLang === "id"
+													? "Mengatur warna navigasi aktif, badge, tombol aksi utama, ring fokus aksesibilitas, dan indikator interaktif."
+													: "Controls active navigation color, badges, primary action buttons, accessibility focus rings, and interactive indicators."}
 											</p>
 										</div>
 										{/* Reset Accent to Preset Default */}
@@ -3457,11 +3676,16 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 															accent_color: currentPreset.tokens.defaultAccent,
 														}));
 														markUnpublished();
-														showToast(`Aksen dikembalikan ke default preset: ${currentPreset.tokens.defaultAccent}`, "info");
+														showToast(
+															studioLang === "id"
+																? `Aksen dikembalikan ke default preset: ${currentPreset.tokens.defaultAccent}`
+																: `Accent reset to preset default: ${currentPreset.tokens.defaultAccent}`,
+															"info"
+														);
 													}}
 													className="text-[11px] text-violet-400 hover:text-violet-300 font-semibold flex items-center gap-1 self-start sm:self-auto cursor-pointer"
 												>
-													↺ Reset ke Default Preset ({currentPreset.tokens.defaultAccent})
+													↺ {studioLang === "id" ? "Reset ke Default Preset" : "Reset to Preset Default"} ({currentPreset.tokens.defaultAccent})
 												</button>
 											);
 										})()}
@@ -3506,7 +3730,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													}}
 												>
 													<span className="font-extrabold text-sm">Aa</span>
-													<span>Teks Kontras Otomatis ({fg === "#ffffff" ? "Putih" : "Gelap"})</span>
+													<span>
+														{studioLang === "id"
+															? `Teks Kontras Otomatis (${fg === "#ffffff" ? "Putih" : "Gelap"})`
+															: `Auto Contrast Text (${fg === "#ffffff" ? "White" : "Dark"})`}
+													</span>
 													<span className="text-[10px] uppercase font-bold opacity-80 border-l border-current/30 pl-1.5">
 														WCAG AA
 													</span>
@@ -3518,7 +3746,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									{/* 16 Accent Color Chips */}
 									<div>
 										<span className="block text-[11px] font-semibold text-slate-400 mb-2">
-											Pilihan Cepat Palet Aksen (16 Warna Terkurasi):
+											{studioLang === "id" ? "Pilihan Cepat Palet Aksen (16 Warna Terkurasi):" : "Quick Accent Palette (16 Curated Colors):"}
 										</span>
 										<div className="flex flex-wrap gap-2">
 											{ACCENT_PRESETS.map((accent) => {
@@ -3538,7 +3766,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																: "border-white/20 hover:scale-110 hover:border-white/50 opacity-90 hover:opacity-100"
 														}`}
 														style={{ backgroundColor: accent.hex }}
-														title={`${accent.name.id} (${accent.hex})`}
+														title={`${accent.name[studioLang]} (${accent.hex})`}
 													>
 														{isSelected && (
 															<span
@@ -3557,7 +3785,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
 									<div>
 										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
-											<span>Blur Optik Kaca</span>
+											<span>{studioLang === "id" ? "Blur Optik Kaca" : "Optical Glass Blur"}</span>
 											<span className="font-mono text-slate-400">{appearance.glass_blur || "16px"}</span>
 										</label>
 										<input
@@ -3575,7 +3803,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 									<div>
 										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
-											<span>Opasitas Kaca Cair</span>
+											<span>{studioLang === "id" ? "Opasitas Kaca Cair" : "Liquid Glass Opacity"}</span>
 											<span className="font-mono text-slate-400">{Math.round((appearance.glass_opacity ?? 0.70) * 100)}%</span>
 										</label>
 										<input
@@ -3594,7 +3822,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 									<div>
 										<label className="flex justify-between text-xs text-slate-300 font-medium mb-1">
-											<span>Opasitas Border Specular</span>
+											<span>{studioLang === "id" ? "Opasitas Border Specular" : "Specular Border Opacity"}</span>
 											<span className="font-mono text-slate-400">{Math.round((appearance.glass_border_opacity ?? 0.30) * 100)}%</span>
 										</label>
 										<input
@@ -3624,9 +3852,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
 									<div>
-										<h2 className="text-lg font-bold text-white">Editor Explore Showcase (Draft)</h2>
+										<h2 className="text-lg font-bold text-white">
+											{studioLang === "id" ? "Editor Explore Showcase (Draft)" : "Explore Showcase Editor (Draft)"}
+										</h2>
 										<p className="text-xs text-slate-400">
-											Kelola item konten modular (Galeri, Foto, Video, Musik, Game, Review, Portofolio Proyek, Catatan, Tautan, dan Blok Kustom).
+											{studioLang === "id"
+												? "Kelola item konten modular (Galeri, Foto, Video, Musik, Game, Review, Portofolio Proyek, Catatan, Tautan, dan Blok Kustom)."
+												: "Manage modular showcase items (Gallery, Photo, Video, Music, Game, Review, Project Portfolio, Note, Link, and Custom Block)."}
 										</p>
 									</div>
 									<div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
@@ -3639,7 +3871,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											}}
 											className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold transition-all border border-slate-700 cursor-pointer flex items-center gap-1.5"
 										>
-											<span>📁 Kelola Kategori</span>
+											<span>{studioLang === "id" ? "📁 Kelola Kategori" : "📁 Manage Categories"}</span>
 											<span className="px-1.5 py-0.2 rounded-full bg-slate-700 text-[10px] text-slate-300">
 												{categories.length}
 											</span>
@@ -3649,7 +3881,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											onClick={handleOpenAddExplore}
 											className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs sm:text-sm font-semibold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
 										>
-											<span>+ Tambah Item Explore</span>
+											<span>{studioLang === "id" ? "+ Tambah Item Explore" : "+ Add Explore Item"}</span>
 										</button>
 									</div>
 								</div>
@@ -3659,7 +3891,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<div className="flex-1 relative">
 										<input
 											type="text"
-											placeholder="Cari item explore berdasarkan judul atau deskripsi..."
+											placeholder={studioLang === "id" ? "Cari item explore berdasarkan judul atau deskripsi..." : "Search explore items by title or description..."}
 											value={exploreSearchQuery}
 											onChange={(e) => setExploreSearchQuery(e.target.value)}
 											className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500"
@@ -3667,8 +3899,8 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									</div>
 									<div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs">
 										{[
-											{ id: "all", label: "Semua" },
-											...categories.map((c) => ({ id: c.id, label: c.name_id })),
+											{ id: "all", label: studioLang === "id" ? "Semua" : "All" },
+											...categories.map((c) => ({ id: c.id, label: studioLang === "id" ? c.name_id : (c.name_en || c.name_id) })),
 										].map((cat) => (
 											<button
 												key={cat.id}
@@ -3707,12 +3939,18 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													</svg>
 												</div>
 												<p className="text-sm font-semibold text-slate-300 mb-1">
-													{exploreItems.length === 0 ? "Belum ada item Explore di draft." : "Tidak ada item Explore yang cocok dengan filter."}
+													{exploreItems.length === 0
+														? (studioLang === "id" ? "Belum ada item Explore di draft." : "No Explore items in draft yet.")
+														: (studioLang === "id" ? "Tidak ada item Explore yang cocok dengan filter." : "No Explore items match the filter.")}
 												</p>
 												<p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
 													{exploreItems.length === 0
-														? "Tambahkan portofolio, foto galeri, video, atau musik untuk memperkaya profil publik Anda."
-														: "Coba ubah kata kunci pencarian atau pilih kategori Semua."}
+														? (studioLang === "id"
+															? "Tambahkan portofolio, foto galeri, video, atau musik untuk memperkaya profil publik Anda."
+															: "Add portfolios, photo galleries, videos, or music to enrich your public profile.")
+														: (studioLang === "id"
+															? "Coba ubah kata kunci pencarian atau pilih kategori Semua."
+															: "Try changing your search query or select the All category.")}
 												</p>
 												{exploreItems.length === 0 && (
 													<button
@@ -3720,7 +3958,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														onClick={handleOpenAddExplore}
 														className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 													>
-														+ Tambah Item Explore Pertama
+														{studioLang === "id" ? "+ Tambah Item Explore Pertama" : "+ Add First Explore Item"}
 													</button>
 												)}
 											</div>
@@ -3749,7 +3987,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																	disabled={realIndex === 0}
 																	onClick={() => handleMoveExplore(realIndex, "up")}
 																	className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-																	title="Pindahkan ke atas"
+																	title={studioLang === "id" ? "Pindahkan ke atas" : "Move up"}
 																>
 																	<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 																		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
@@ -3760,7 +3998,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																	disabled={realIndex === exploreItems.length - 1}
 																	onClick={() => handleMoveExplore(realIndex, "down")}
 																	className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-																	title="Pindahkan ke bawah"
+																	title={studioLang === "id" ? "Pindahkan ke bawah" : "Move down"}
 																>
 																	<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 																		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -3790,23 +4028,23 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																	<span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-violet-950 text-violet-300 border border-violet-800">
 																		{item.type}
 																	</span>
-																	{item.badge_id && (
+																	{(studioLang === "id" ? item.badge_id : (item.badge_en || item.badge_id)) && (
 																		<span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300">
-																			{item.badge_id}
+																			{studioLang === "id" ? item.badge_id : (item.badge_en || item.badge_id)}
 																		</span>
 																	)}
 																	{!item.is_enabled && (
 																		<span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-950 text-rose-300 border border-rose-800">
-																			Nonaktif
+																			{studioLang === "id" ? "Nonaktif" : "Disabled"}
 																		</span>
 																	)}
 																</div>
 																<h3 className="text-sm font-bold text-white truncate">
-																	{item.title_id}
+																	{studioLang === "id" ? item.title_id : (item.title_en || item.title_id)}
 																</h3>
-																{item.subtitle_id && (
+																{(studioLang === "id" ? item.subtitle_id : (item.subtitle_en || item.subtitle_id)) && (
 																	<p className="text-xs text-slate-400 truncate">
-																		{item.subtitle_id}
+																		{studioLang === "id" ? item.subtitle_id : (item.subtitle_en || item.subtitle_id)}
 																	</p>
 																)}
 																{item.url && (
@@ -3832,15 +4070,15 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																		? "bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800"
 																		: "bg-slate-800 hover:bg-slate-700 text-slate-400"
 																}`}
-																title={item.is_enabled ? "Klik untuk menonaktifkan" : "Klik untuk mengaktifkan"}
+																title={item.is_enabled ? (studioLang === "id" ? "Klik untuk menonaktifkan" : "Click to disable") : (studioLang === "id" ? "Klik untuk mengaktifkan" : "Click to enable")}
 															>
-																{item.is_enabled ? "Aktif" : "Nonaktif"}
+																{item.is_enabled ? (studioLang === "id" ? "Aktif" : "Active") : (studioLang === "id" ? "Nonaktif" : "Inactive")}
 															</button>
 															<button
 																type="button"
 																onClick={() => handleDuplicateExplore(item)}
 																className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-colors cursor-pointer"
-																title="Duplikasi item ini"
+																title={studioLang === "id" ? "Duplikasi item ini" : "Duplicate this item"}
 															>
 																<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -3850,7 +4088,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																type="button"
 																onClick={() => handleOpenEditExplore(item)}
 																className="p-1.5 rounded-lg bg-slate-800 hover:bg-violet-600 hover:text-white text-slate-300 text-xs transition-colors cursor-pointer"
-																title="Edit item ini"
+																title={studioLang === "id" ? "Edit item ini" : "Edit this item"}
 															>
 																<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -3863,7 +4101,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																	setIsDeleteExploreOpen(true);
 																}}
 																className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-400 text-xs transition-colors cursor-pointer"
-																title="Hapus item ini"
+																title={studioLang === "id" ? "Hapus item ini" : "Delete this item"}
 															>
 																<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -3891,11 +4129,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<div className="flex items-center gap-2 mb-1">
 										<span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
 										<h2 className="text-lg sm:text-xl font-bold text-white">
-											Click Monitor & Website Visitor Analytics
+											{studioLang === "id" ? "Monitor Klik & Analitik Pengunjung" : "Click Monitor & Website Visitor Analytics"}
 										</h2>
 									</div>
 									<p className="text-xs sm:text-sm text-slate-400">
-										Telemetri real-time terdistribusi Cloudflare D1. Privasi terjamin tanpa pelacakan cookie, tanpa IP, dan penyaringan bot otomatis.
+										{studioLang === "id"
+											? "Telemetri real-time terdistribusi Cloudflare D1. Privasi terjamin tanpa pelacakan cookie, tanpa IP, dan penyaringan bot otomatis."
+											: "Real-time distributed Cloudflare D1 telemetry. Privacy guaranteed with no cookie tracking, no raw IP, and automated bot filtering."}
 									</p>
 								</div>
 
@@ -3904,10 +4144,10 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<div className="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800 text-xs font-semibold">
 										{(
 											[
-												{ id: "today", label: "Hari Ini" },
-												{ id: "7d", label: "7 Hari" },
-												{ id: "30d", label: "30 Hari" },
-												{ id: "all", label: "Semua" },
+												{ id: "today", label: studioLang === "id" ? "Hari Ini" : "Today" },
+												{ id: "7d", label: studioLang === "id" ? "7 Hari" : "7 Days" },
+												{ id: "30d", label: studioLang === "id" ? "30 Hari" : "30 Days" },
+												{ id: "all", label: studioLang === "id" ? "Semua" : "All Time" },
 											] as const
 										).map((r) => (
 											<button
@@ -3931,7 +4171,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										type="button"
 										onClick={() => fetchAnalytics(analyticsRange)}
 										disabled={isLoadingAnalytics}
-										title="Muat Ulang Analitik"
+										title={studioLang === "id" ? "Muat Ulang Analitik" : "Reload Analytics"}
 										className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer disabled:opacity-50"
 									>
 										<svg
@@ -3955,7 +4195,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										onClick={() => setIsResetAnalyticsOpen(true)}
 										className="px-3 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800 text-rose-300 hover:text-rose-100 text-xs font-semibold transition-colors cursor-pointer"
 									>
-										Reset Klik
+										{studioLang === "id" ? "Reset Klik" : "Reset Telemetry"}
 									</button>
 								</div>
 							</div>
@@ -3973,11 +4213,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											</svg>
 										</span>
 										<h3 className="text-sm font-bold text-white uppercase tracking-wider">
-											Statistik Kunjungan Website (Visitor Telemetry)
+											{studioLang === "id" ? "Statistik Kunjungan Website (Visitor Telemetry)" : "Website Visitor Statistics (Visitor Telemetry)"}
 										</h3>
 									</div>
 									<span className="text-xs text-slate-400 font-mono">
-										Total Sepanjang Waktu: <strong className="text-indigo-300">{analyticsData?.visitors?.totalPageViewsAllTime ?? 0}</strong>
+										{studioLang === "id" ? "Total Sepanjang Waktu:" : "Total All Time:"} <strong className="text-indigo-300">{analyticsData?.visitors?.totalPageViewsAllTime ?? 0}</strong>
 									</span>
 								</div>
 
@@ -3985,7 +4225,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 										<div className="flex items-center justify-between text-slate-400 mb-2">
-											<span className="text-xs font-semibold uppercase tracking-wider">Kunjungan ({analyticsRange})</span>
+											<span className="text-xs font-semibold uppercase tracking-wider">
+												{studioLang === "id" ? `Kunjungan (${analyticsRange})` : `Visits (${analyticsRange})`}
+											</span>
 											<span className="p-1.5 rounded-lg bg-indigo-950/60 text-indigo-400">
 												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -3996,13 +4238,15 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											{analyticsData?.visitors?.totalPageViewsPeriod ?? 0}
 										</div>
 										<div className="text-[11px] text-slate-500 mt-2">
-											Total Page Views dalam periode
+											{studioLang === "id" ? "Total Page Views dalam periode" : "Total Page Views in selected period"}
 										</div>
 									</div>
 
 									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 										<div className="flex items-center justify-between text-slate-400 mb-2">
-											<span className="text-xs font-semibold uppercase tracking-wider">Kunjungan Hari Ini</span>
+											<span className="text-xs font-semibold uppercase tracking-wider">
+												{studioLang === "id" ? "Kunjungan Hari Ini" : "Today's Visits"}
+											</span>
 											<span className="p-1.5 rounded-lg bg-emerald-950/60 text-emerald-400">
 												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -4013,13 +4257,15 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											{analyticsData?.visitors?.todayPageViews ?? 0}
 										</div>
 										<div className="text-[11px] text-slate-500 mt-2">
-											Sejak pukul 00:00 UTC hari ini
+											{studioLang === "id" ? "Sejak pukul 00:00 UTC hari ini" : "Since 00:00 UTC today"}
 										</div>
 									</div>
 
 									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 										<div className="flex items-center justify-between text-slate-400 mb-2">
-											<span className="text-xs font-semibold uppercase tracking-wider">Pengunjung Unik (Est.)</span>
+											<span className="text-xs font-semibold uppercase tracking-wider">
+												{studioLang === "id" ? "Pengunjung Unik (Est.)" : "Unique Visitors (Est.)"}
+											</span>
 											<span className="p-1.5 rounded-lg bg-cyan-950/60 text-cyan-400">
 												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -4030,13 +4276,15 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											{analyticsData?.visitors?.uniqueVisitorSessions ?? 0}
 										</div>
 										<div className="text-[11px] text-slate-500 mt-2">
-											Sesi browser unik aman privasi
+											{studioLang === "id" ? "Sesi browser unik aman privasi" : "Privacy-safe unique browser sessions"}
 										</div>
 									</div>
 
 									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 										<div className="flex items-center justify-between text-slate-400 mb-2">
-											<span className="text-xs font-semibold uppercase tracking-wider">7 Hari Terakhir</span>
+											<span className="text-xs font-semibold uppercase tracking-wider">
+												{studioLang === "id" ? "7 Hari Terakhir" : "Last 7 Days"}
+											</span>
 											<span className="p-1.5 rounded-lg bg-purple-950/60 text-purple-400">
 												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -4047,7 +4295,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											{analyticsData?.visitors?.last7DaysPageViews ?? 0}
 										</div>
 										<div className="text-[11px] text-slate-500 mt-2">
-											30 hari: {analyticsData?.visitors?.last30DaysPageViews ?? 0} kunjungan
+											{studioLang === "id"
+												? `30 hari: ${analyticsData?.visitors?.last30DaysPageViews ?? 0} kunjungan`
+												: `30 days: ${analyticsData?.visitors?.last30DaysPageViews ?? 0} visits`}
 										</div>
 									</div>
 								</div>
@@ -4058,8 +4308,12 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
 										<div className="flex items-center justify-between mb-4">
 											<div>
-												<h4 className="text-sm font-bold text-white">Rincian Kunjungan Halaman</h4>
-												<p className="text-xs text-slate-400">Distribusi penayangan per rute halaman</p>
+												<h4 className="text-sm font-bold text-white">
+													{studioLang === "id" ? "Rincian Kunjungan Halaman" : "Page Views Breakdown"}
+												</h4>
+												<p className="text-xs text-slate-400">
+													{studioLang === "id" ? "Distribusi penayangan per rute halaman" : "View distribution per route"}
+												</p>
 											</div>
 											<span className="text-xs text-slate-400 font-mono">
 												{analyticsData?.visitors?.totalPageViewsPeriod ?? 0} Views
@@ -4069,15 +4323,30 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{(() => {
 											const breakdown = analyticsData?.visitors?.pageBreakdown || [];
 											const pageLabels: Record<string, { label: string; icon: string; color: string; barColor: string }> = {
-												home: { label: "Beranda (Home & Bio)", icon: "🏠", color: "text-emerald-400", barColor: "bg-emerald-500" },
-												explore: { label: "Eksplorasi (Showcase)", icon: "✨", color: "text-violet-400", barColor: "bg-violet-500" },
-												contact: { label: "Kontak (Contact)", icon: "💬", color: "text-amber-400", barColor: "bg-amber-500" },
+												home: {
+													label: studioLang === "id" ? "Beranda (Home & Bio)" : "Home (Home & Bio)",
+													icon: "🏠",
+													color: "text-emerald-400",
+													barColor: "bg-emerald-500",
+												},
+												explore: {
+													label: studioLang === "id" ? "Eksplorasi (Showcase)" : "Explore (Showcase)",
+													icon: "✨",
+													color: "text-violet-400",
+													barColor: "bg-violet-500",
+												},
+												contact: {
+													label: studioLang === "id" ? "Kontak (Contact)" : "Contact (Contact)",
+													icon: "💬",
+													color: "text-amber-400",
+													barColor: "bg-amber-500",
+												},
 											};
 
 											if (breakdown.length === 0) {
 												return (
 													<div className="h-36 flex items-center justify-center text-xs text-slate-500 italic border border-slate-800 rounded-2xl">
-														Belum ada penayangan halaman pada periode ini.
+														{studioLang === "id" ? "Belum ada penayangan halaman pada periode ini." : "No page views recorded in this period."}
 													</div>
 												);
 											}
@@ -4120,8 +4389,12 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
 										<div className="flex items-center justify-between mb-4">
 											<div>
-												<h4 className="text-sm font-bold text-white">Tren Kunjungan Harian</h4>
-												<p className="text-xs text-slate-400">Frekuensi page views harian</p>
+												<h4 className="text-sm font-bold text-white">
+													{studioLang === "id" ? "Tren Kunjungan Harian" : "Daily Visitor Trend"}
+												</h4>
+												<p className="text-xs text-slate-400">
+													{studioLang === "id" ? "Frekuensi page views harian" : "Daily page views frequency"}
+												</p>
 											</div>
 											<div className="text-xs text-slate-400 font-mono">
 												{analyticsData?.visitors?.timeSeries?.reduce((acc, curr) => acc + curr.clicks, 0) ?? 0} Views
@@ -4135,7 +4408,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											if (series.length === 0) {
 												return (
 													<div className="h-36 flex items-center justify-center text-xs text-slate-500 italic border border-slate-800 rounded-2xl">
-														Belum ada data kunjungan harian untuk ditampilkan.
+														{studioLang === "id" ? "Belum ada data kunjungan harian untuk ditampilkan." : "No daily visitor data to display."}
 													</div>
 												);
 											}
@@ -4163,7 +4436,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																		}}
 																	>
 																		<div className="absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg">
-																			{item.clicks} kunjungan
+																			{item.clicks} {studioLang === "id" ? "kunjungan" : "visits"}
 																		</div>
 																	</div>
 																	<span className="text-[10px] text-slate-500 whitespace-nowrap">
@@ -4191,11 +4464,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										</svg>
 									</span>
 									<h3 className="text-sm font-bold text-white uppercase tracking-wider">
-										Interaksi & Klik Terpadu (Click Monitor V4.1)
+										{studioLang === "id" ? "Interaksi & Klik Terpadu (Click Monitor V4.1)" : "Unified Interactions & Clicks (Click Monitor V4.1)"}
 									</h3>
 								</div>
 								<span className="text-xs text-slate-400 font-mono">
-									Total Sepanjang Waktu: <strong className="text-violet-300">{analyticsData?.totalInteractionsAllTime ?? (analyticsData?.totalAllTime ?? 0)}</strong>
+									{studioLang === "id" ? "Total Sepanjang Waktu:" : "Total All Time:"} <strong className="text-violet-300">{analyticsData?.totalInteractionsAllTime ?? (analyticsData?.totalAllTime ?? 0)}</strong>
 								</span>
 							</div>
 
@@ -4204,7 +4477,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								{/* 1. Total Interaksi */}
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 									<div className="flex items-center justify-between text-slate-400 mb-2">
-										<span className="text-xs font-semibold uppercase tracking-wider">Total Interaksi ({analyticsRange})</span>
+										<span className="text-xs font-semibold uppercase tracking-wider">
+											{studioLang === "id" ? `Total Interaksi (${analyticsRange})` : `Total Interactions (${analyticsRange})`}
+										</span>
 										<span className="p-1.5 rounded-lg bg-violet-950/60 text-violet-400">
 											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -4215,14 +4490,16 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{analyticsData?.totalInteractionsPeriod ?? 0}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
-										Akumulasi klik Link, Explore & Contact
+										{studioLang === "id" ? "Akumulasi klik Link, Explore & Contact" : "Accumulated Link, Explore & Contact clicks"}
 									</div>
 								</div>
 
 								{/* 2. Klik Tautan */}
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 									<div className="flex items-center justify-between text-slate-400 mb-2">
-										<span className="text-xs font-semibold uppercase tracking-wider">Klik Tautan (Links)</span>
+										<span className="text-xs font-semibold uppercase tracking-wider">
+											{studioLang === "id" ? "Klik Tautan (Links)" : "Link Clicks (Links)"}
+										</span>
 										<span className="p-1.5 rounded-lg bg-blue-950/60 text-blue-400">
 											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -4233,14 +4510,18 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{analyticsData?.linkClicksPeriod ?? 0}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
-										{analyticsData?.activeLinksCount ?? 0} tautan aktif di bio
+										{studioLang === "id"
+											? `${analyticsData?.activeLinksCount ?? 0} tautan aktif di bio`
+											: `${analyticsData?.activeLinksCount ?? 0} active links in bio`}
 									</div>
 								</div>
 
 								{/* 3. Klik Navigasi Explore */}
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 									<div className="flex items-center justify-between text-slate-400 mb-2">
-										<span className="text-xs font-semibold uppercase tracking-wider">Klik Eksplorasi (Explore)</span>
+										<span className="text-xs font-semibold uppercase tracking-wider">
+											{studioLang === "id" ? "Klik Eksplorasi (Explore)" : "Explore Clicks (Explore)"}
+										</span>
 										<span className="p-1.5 rounded-lg bg-pink-950/60 text-pink-400">
 											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -4251,14 +4532,16 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{analyticsData?.exploreClicksPeriod ?? 0}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
-										Interaksi aktual pada kartu & karya Explore
+										{studioLang === "id" ? "Interaksi aktual pada kartu & karya Explore" : "Actual clicks on Explore items & cards"}
 									</div>
 								</div>
 
 								{/* 4. Klik Navigasi Contact */}
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 									<div className="flex items-center justify-between text-slate-400 mb-2">
-										<span className="text-xs font-semibold uppercase tracking-wider">Klik Kontak (Contact)</span>
+										<span className="text-xs font-semibold uppercase tracking-wider">
+											{studioLang === "id" ? "Klik Kontak (Contact)" : "Contact Clicks (Contact)"}
+										</span>
 										<span className="p-1.5 rounded-lg bg-emerald-950/60 text-emerald-400">
 											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -4269,7 +4552,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{analyticsData?.contactClicksPeriod ?? 0}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
-										Klik aktual pada kartu metode kontak
+										{studioLang === "id" ? "Klik aktual pada kartu metode kontak" : "Actual clicks on Contact method cards"}
 									</div>
 								</div>
 							</div>
@@ -4278,11 +4561,17 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
 								<div className="flex items-center justify-between mb-4">
 									<div>
-										<h3 className="text-sm font-bold text-white">Aktivitas Tren Interaksi Harian</h3>
-										<p className="text-xs text-slate-400">Frekuensi klik tautan dan eksplorasi pengunjung per hari</p>
+										<h3 className="text-sm font-bold text-white">
+											{studioLang === "id" ? "Aktivitas Tren Interaksi Harian" : "Daily Interaction Activity"}
+										</h3>
+										<p className="text-xs text-slate-400">
+											{studioLang === "id"
+												? "Frekuensi klik tautan dan eksplorasi pengunjung per hari"
+												: "Frequency of visitor link clicks and explore interactions per day"}
+										</p>
 									</div>
 									<div className="text-xs text-slate-400 font-mono">
-										Total {analyticsData?.timeSeries?.reduce((acc, curr) => acc + curr.clicks, 0) ?? 0} interaksi
+										Total {analyticsData?.timeSeries?.reduce((acc, curr) => acc + curr.clicks, 0) ?? 0} {studioLang === "id" ? "interaksi" : "interactions"}
 									</div>
 								</div>
 
@@ -4293,7 +4582,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									if (series.length === 0) {
 										return (
 											<div className="h-40 flex items-center justify-center text-xs text-slate-500 italic">
-												Belum ada data tren harian untuk ditampilkan.
+												{studioLang === "id" ? "Belum ada data tren harian untuk ditampilkan." : "No daily trend data to display."}
 											</div>
 										);
 									}
@@ -4321,7 +4610,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																}}
 															>
 																<div className="absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg">
-																	{item.clicks} interaksi
+																	{item.clicks} {studioLang === "id" ? "interaksi" : "interactions"}
 																</div>
 															</div>
 															<span className="text-[10px] text-slate-500 whitespace-nowrap">
@@ -4340,19 +4629,23 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
 								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
 									<div>
-										<h3 className="text-sm font-bold text-white">Peringkat & Performa Tautan</h3>
+										<h3 className="text-sm font-bold text-white">
+											{studioLang === "id" ? "Peringkat & Performa Tautan" : "Link Performance & Ranking"}
+										</h3>
 										<p className="text-xs text-slate-400">
-											Rincian klik dan tautan first-party redirect (<code className="text-violet-400">/go/:linkId</code>)
+											{studioLang === "id"
+												? "Rincian klik dan tautan first-party redirect (/go/:linkId)"
+												: "Click breakdown and first-party redirect URLs (/go/:linkId)"}
 										</p>
 									</div>
 									<span className="text-xs text-slate-500">
-										{analyticsData?.linkBreakdown?.length ?? 0} tautan terdaftar
+										{analyticsData?.linkBreakdown?.length ?? 0} {studioLang === "id" ? "tautan terdaftar" : "links registered"}
 									</span>
 								</div>
 
 								{(!analyticsData?.linkBreakdown || analyticsData.linkBreakdown.length === 0) ? (
 									<div className="p-8 text-center text-xs text-slate-500 italic border border-slate-800 rounded-2xl">
-										Belum ada data tautan aktif di database.
+										{studioLang === "id" ? "Belum ada data tautan aktif di database." : "No active links data in database."}
 									</div>
 								) : (
 									<div className="space-y-3">
@@ -4373,7 +4666,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														<div className="min-w-0 flex-1">
 															<div className="flex items-center gap-2 mb-0.5">
 																<h4 className="text-xs sm:text-sm font-bold text-white truncate">
-																	{item.titleId || item.titleEn}
+																	{studioLang === "id" ? item.titleId || item.titleEn : item.titleEn || item.titleId}
 																</h4>
 																{item.platform && (
 																	<span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-violet-950/60 text-violet-300 border border-violet-800/50">
@@ -4401,18 +4694,18 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													<div className="flex items-center gap-4 shrink-0">
 														<button
 															type="button"
-															onClick={() => copyToClipboard(redirectUrl, "URL Pengalihan")}
+															onClick={() => copyToClipboard(redirectUrl, studioLang === "id" ? "URL Pengalihan" : "Redirect URL")}
 															className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium border border-slate-700 transition-colors cursor-pointer flex items-center gap-1.5"
 														>
 															<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 																<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
 															</svg>
-															<span>Salin /go</span>
+															<span>{studioLang === "id" ? "Salin /go" : "Copy /go"}</span>
 														</button>
 
 														<div className="text-right min-w-[5rem]">
 															<div className="text-sm font-extrabold text-white">
-																{item.clicks} <span className="text-xs font-normal text-slate-400">klik</span>
+																{item.clicks} <span className="text-xs font-normal text-slate-400">{studioLang === "id" ? "klik" : "clicks"}</span>
 															</div>
 															<div className="text-[11px] text-slate-500 font-mono">
 																{item.percentage}%
@@ -4428,14 +4721,18 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 							{/* Top Referrers */}
 							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
-								<h3 className="text-sm font-bold text-white mb-1">Sumber Lalu Lintas (Top Referrers)</h3>
+								<h3 className="text-sm font-bold text-white mb-1">
+									{studioLang === "id" ? "Sumber Lalu Lintas (Top Referrers)" : "Traffic Sources (Top Referrers)"}
+								</h3>
 								<p className="text-xs text-slate-400 mb-4">
-									Domain asal klik teratas yang telah disanitasi demi privasi pengunjung.
+									{studioLang === "id"
+										? "Domain asal klik teratas yang telah disanitasi demi privasi pengunjung."
+										: "Top origin domains sanitized for visitor privacy."}
 								</p>
 
 								{(!analyticsData?.topReferrers || analyticsData.topReferrers.length === 0) ? (
 									<div className="p-6 text-center text-xs text-slate-500 italic border border-slate-800 rounded-2xl">
-										Belum ada sumber lalu lintas rujukan tercatat.
+										{studioLang === "id" ? "Belum ada sumber lalu lintas rujukan tercatat." : "No referral traffic sources recorded yet."}
 									</div>
 								) : (
 									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -4452,7 +4749,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												</div>
 												<div className="text-right shrink-0">
 													<span className="text-xs font-bold text-violet-300">
-														{ref.clicks} klik
+														{ref.clicks} {studioLang === "id" ? "klik" : "clicks"}
 													</span>
 													<span className="text-[10px] text-slate-500 ml-1">
 														({ref.percentage}%)
@@ -4476,11 +4773,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div className="flex items-center gap-2 mb-1">
 									<span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
 									<h2 className="text-lg sm:text-xl font-bold text-white">
-										Pengaturan & Status Sistem
+										{studioLang === "id" ? "Pengaturan & Status Sistem" : "Settings & System Status"}
 									</h2>
 								</div>
 								<p className="text-xs sm:text-sm text-slate-400">
-									Informasi runtime server, konektivitas database Cloudflare D1, penyimpanan aset R2, dan versi publikasi.
+									{studioLang === "id"
+										? "Informasi runtime server, konektivitas database Cloudflare D1, penyimpanan aset R2, dan versi publikasi."
+										: "Server runtime details, Cloudflare D1 connectivity, R2 asset storage, and publication status."}
 								</p>
 							</div>
 
@@ -4488,20 +4787,20 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
 									<div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-										Database D1
+										{studioLang === "id" ? "Database D1" : "D1 Database"}
 									</div>
 									<div className="text-lg font-bold text-white flex items-center gap-2">
 										<span className={`w-2.5 h-2.5 rounded-full ${isDbReady ? "bg-emerald-500" : "bg-rose-500"}`} />
-										<span>{isDbReady ? "Siap / Terhubung" : "Tidak Terhubung"}</span>
+										<span>{isDbReady ? (studioLang === "id" ? "Siap / Terhubung" : "Ready / Connected") : (studioLang === "id" ? "Tidak Terhubung" : "Disconnected")}</span>
 									</div>
 									<div className="text-xs text-slate-500 mt-2">
-										{database?.tablesCount ?? 0} tabel terdaftar
+										{database?.tablesCount ?? 0} {studioLang === "id" ? "tabel terdaftar" : "tables registered"}
 									</div>
 								</div>
 
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
 									<div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-										Lingkungan Runtime
+										{studioLang === "id" ? "Lingkungan Runtime" : "Runtime Environment"}
 									</div>
 									<div className="text-lg font-bold text-white uppercase font-mono">
 										{loaderData.envMode || "production"}
@@ -4513,34 +4812,38 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
 									<div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-										Status Publikasi
+										{studioLang === "id" ? "Status Publikasi" : "Publication Status"}
 									</div>
 									<div className="text-lg font-bold text-emerald-400 font-mono">
-										Aktif
+										{studioLang === "id" ? "Aktif" : "Active"}
 									</div>
 									<div className="text-xs text-slate-500 mt-2">
-										{hasUnpublished ? "Draft belum diterbitkan" : "Sinkron dengan publik"}
+										{hasUnpublished ? (studioLang === "id" ? "Draft belum diterbitkan" : "Unpublished draft changes") : (studioLang === "id" ? "Sinkron dengan publik" : "Synced with public")}
 									</div>
 								</div>
 
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
 									<div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-										Admin Terautentikasi
+										{studioLang === "id" ? "Admin Terautentikasi" : "Authenticated Admin"}
 									</div>
 									<div className="text-sm font-bold text-white truncate" title={user.email}>
 										{user.email}
 									</div>
 									<div className="text-xs text-slate-500 mt-2">
-										Metode: {user.identityType}
+										{studioLang === "id" ? `Metode: ${user.identityType}` : `Method: ${user.identityType}`}
 									</div>
 								</div>
 							</div>
 
 							{/* D1 Tables & Row Counts */}
 							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
-								<h3 className="text-sm font-bold text-white mb-1">Tabel Database Cloudflare D1</h3>
+								<h3 className="text-sm font-bold text-white mb-1">
+									{studioLang === "id" ? "Tabel Database Cloudflare D1" : "Cloudflare D1 Database Tables"}
+								</h3>
 								<p className="text-xs text-slate-400 mb-4">
-									Daftar tabel relasional schema D1 beserta jumlah record yang tersimpan.
+									{studioLang === "id"
+										? "Daftar tabel relasional schema D1 beserta jumlah record yang tersimpan."
+										: "List of relational schema D1 tables and stored record counts."}
 								</p>
 
 								<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -4556,7 +4859,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												</span>
 											</div>
 											<span className="text-xs font-bold font-mono text-violet-300">
-												{tbl.rows} baris
+												{tbl.rows} {studioLang === "id" ? "baris" : "rows"}
 											</span>
 										</div>
 									))}
@@ -4565,27 +4868,35 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 							{/* Self-Hosted Architecture & Security Audit Info */}
 							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4">
-								<h3 className="text-sm font-bold text-white">Panduan Arsitektur & Keamanan Self-Hosted</h3>
+								<h3 className="text-sm font-bold text-white">
+									{studioLang === "id" ? "Panduan Arsitektur & Keamanan Self-Hosted" : "Self-Hosted Architecture & Security Guide"}
+								</h3>
 
 								<div className="space-y-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
 									<div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
 										<div className="font-semibold text-white mb-1">🔐 Cloudflare Access Email OTP Guard</div>
 										<p className="text-xs text-slate-400">
-											Rute administrasi <code className="text-violet-400">/studio</code> dan seluruh API mutasi (<code className="text-violet-400">/api/studio/*</code>) dilindungi secara server-side oleh header <code className="text-slate-300">Cf-Access-Jwt-Assertion</code> dengan fail-closed gate.
+											{studioLang === "id"
+												? <>Rute administrasi <code className="text-violet-400">/studio</code> dan seluruh API mutasi (<code className="text-violet-400">/api/studio/*</code>) dilindungi secara server-side oleh header <code className="text-slate-300">Cf-Access-Jwt-Assertion</code> dengan fail-closed gate.</>
+												: <>Administration route <code className="text-violet-400">/studio</code> and all mutation APIs (<code className="text-violet-400">/api/studio/*</code>) are guarded server-side by <code className="text-slate-300">Cf-Access-Jwt-Assertion</code> header with fail-closed gate.</>}
 										</p>
 									</div>
 
 									<div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
 										<div className="font-semibold text-white mb-1">🛡️ Anti-Open-Redirect & CSRF Protection</div>
 										<p className="text-xs text-slate-400">
-											Sistem first-party redirect <code className="text-violet-400">/go/:linkId</code> memvalidasi skema protokol secara ketat (hanya http/https/mailto/tel) dan menolak skema berbahaya (javascript:, data:).
+											{studioLang === "id"
+												? <>Sistem first-party redirect <code className="text-violet-400">/go/:linkId</code> memvalidasi skema protokol secara ketat (hanya http/https/mailto/tel) dan menolak skema berbahaya (javascript:, data:).</>
+												: <>First-party redirect system <code className="text-violet-400">/go/:linkId</code> strictly validates protocol schemes (http/https/mailto/tel only) and rejects malicious schemes (javascript:, data:).</>}
 										</p>
 									</div>
 
 									<div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
 										<div className="font-semibold text-white mb-1">✨ Static Fallback Zero-Downtime</div>
 										<p className="text-xs text-slate-400">
-											Website publik secara otomatis menggunakan fallback data TypeScript netral (<code className="text-slate-300">app/data/profile.ts</code>) apabila koneksi D1 mengalami gangguan jaringan atau saat pertama kali di-fork.
+											{studioLang === "id"
+												? <>Website publik secara otomatis menggunakan fallback data TypeScript netral (<code className="text-slate-300">app/data/profile.ts</code>) apabila koneksi D1 mengalami gangguan jaringan atau saat pertama kali di-fork.</>
+												: <>Public website automatically uses neutral TypeScript static fallback (<code className="text-slate-300">app/data/profile.ts</code>) if D1 connectivity encounters network interruption or during initial fork.</>}
 										</p>
 									</div>
 								</div>
@@ -4603,7 +4914,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 					<div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl my-8">
 						<div className="flex items-center justify-between mb-4">
 							<h3 className="text-base font-bold text-white">
-								{isAddLinkOpen ? "Tambah Tautan Baru" : "Edit Tautan"}
+								{isAddLinkOpen ? (studioLang === "id" ? "Tambah Tautan Baru" : "Add New Link") : (studioLang === "id" ? "Edit Tautan" : "Edit Link")}
 							</h3>
 							<button
 								type="button"
@@ -4621,7 +4932,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								<div>
 									<label htmlFor="lf-title-id" className="block text-xs font-semibold text-slate-300 mb-1">
-										Judul (Indonesia) <span className="text-rose-400">*</span>
+										{studioLang === "id" ? "Judul (Indonesia)" : "Title (Indonesian)"} <span className="text-rose-400">*</span>
 									</label>
 									<input
 										id="lf-title-id"
@@ -4635,7 +4946,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</div>
 								<div>
 									<label htmlFor="lf-title-en" className="block text-xs font-semibold text-slate-300 mb-1">
-										Title (English) <span className="text-rose-400">*</span>
+										{studioLang === "id" ? "Judul (Inggris)" : "Title (English)"} <span className="text-rose-400">*</span>
 									</label>
 									<input
 										id="lf-title-en"
@@ -4651,7 +4962,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 							<div>
 								<label htmlFor="lf-url" className="block text-xs font-semibold text-slate-300 mb-1">
-									URL Tujuan <span className="text-rose-400">*</span>
+									{studioLang === "id" ? "URL Tujuan" : "Destination URL"} <span className="text-rose-400">*</span>
 								</label>
 								<input
 									id="lf-url"
@@ -4663,14 +4974,16 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none font-mono"
 								/>
 								<p className="text-[11px] text-slate-500 mt-1">
-									Hanya protokol <code>https:</code>, <code>http:</code>, <code>mailto:</code>, atau <code>tel:</code> yang diizinkan demi keamanan.
+									{studioLang === "id"
+										? "Hanya protokol https:, http:, mailto:, atau tel: yang diizinkan demi keamanan."
+										: "Only https:, http:, mailto:, or tel: protocols are permitted for security."}
 								</p>
 							</div>
 
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								<div>
 									<label htmlFor="lf-desc-id" className="block text-xs font-semibold text-slate-300 mb-1">
-										Deskripsi (ID, opsional)
+										{studioLang === "id" ? "Deskripsi (ID, opsional)" : "Description (ID, optional)"}
 									</label>
 									<input
 										id="lf-desc-id"
@@ -4683,7 +4996,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</div>
 								<div>
 									<label htmlFor="lf-desc-en" className="block text-xs font-semibold text-slate-300 mb-1">
-										Description (EN, optional)
+										{studioLang === "id" ? "Deskripsi (EN, opsional)" : "Description (EN, optional)"}
 									</label>
 									<input
 										id="lf-desc-en"
@@ -4699,7 +5012,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="grid grid-cols-1 gap-4">
 								<div>
 									<label htmlFor="lf-platform" className="block text-xs font-semibold text-slate-300 mb-1">
-										Platform / Tipe Layanan
+										{studioLang === "id" ? "Platform / Tipe Layanan" : "Platform / Service Type"}
 									</label>
 									<select
 										id="lf-platform"
@@ -4731,16 +5044,16 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										<option value="whatsapp">WhatsApp</option>
 										<option value="telegram">Telegram</option>
 										<option value="email">Email</option>
-										<option value="phone">Telepon</option>
+										<option value="phone">{studioLang === "id" ? "Telepon" : "Phone"}</option>
 										<option value="spotify">Spotify / Audio</option>
-										<option value="custom">Lainnya / Custom</option>
+										<option value="custom">{studioLang === "id" ? "Lainnya / Custom" : "Other / Custom"}</option>
 									</select>
 								</div>
 
 								{/* Custom Icon System */}
 								<div>
 									<label className="block text-xs font-semibold text-slate-300 mb-1.5">
-										Ikon Tautan (Preset Library, Upload R2, atau URL Eksternal)
+										{studioLang === "id" ? "Ikon Tautan (Preset Library, Upload R2, atau URL Eksternal)" : "Link Icon (Preset Library, R2 Upload, or External URL)"}
 									</label>
 									<IconPicker
 										platform={linkForm.platform}
@@ -4755,6 +5068,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											}))
 										}
 										onError={(msg) => showToast(msg, "error")}
+										lang={studioLang}
 									/>
 								</div>
 							</div>
@@ -4768,7 +5082,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									className="w-4 h-4 rounded text-violet-600 focus:ring-0 focus:outline-none bg-slate-950 border-slate-700"
 								/>
 								<label htmlFor="lf-enabled" className="text-xs text-slate-300 font-medium cursor-pointer">
-									Aktifkan tautan ini secara langsung di draft
+									{studioLang === "id" ? "Aktifkan tautan ini secara langsung di draft" : "Enable this link directly in draft"}
 								</label>
 							</div>
 
@@ -4781,13 +5095,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									}}
 									className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 								>
-									Batal
+									{studioLang === "id" ? "Batal" : "Cancel"}
 								</button>
 								<button
 									type="submit"
 									className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 								>
-									{isAddLinkOpen ? "Simpan ke Draft" : "Perbarui Draft"}
+									{isAddLinkOpen ? (studioLang === "id" ? "Simpan ke Draft" : "Save to Draft") : (studioLang === "id" ? "Perbarui Draft" : "Update Draft")}
 								</button>
 							</div>
 						</form>
@@ -4801,9 +5115,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			{isDeleteLinkOpen && deletingLink && (
 				<div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
 					<div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
-						<h3 className="text-base font-bold text-white mb-2">Hapus Tautan?</h3>
+						<h3 className="text-base font-bold text-white mb-2">
+							{studioLang === "id" ? "Hapus Tautan?" : "Delete Link?"}
+						</h3>
 						<p className="text-xs sm:text-sm text-slate-400 mb-4 leading-relaxed">
-							Anda yakin ingin menghapus tautan <strong className="text-white">"{deletingLink.title_id || deletingLink.title_en}"</strong> dari draft? Tindakan ini akan dicatat sebagai perubahan belum terbit.
+							{studioLang === "id"
+								? `Anda yakin ingin menghapus tautan "${deletingLink.title_id || deletingLink.title_en}" dari draft? Tindakan ini akan dicatat sebagai perubahan belum terbit.`
+								: `Are you sure you want to delete link "${deletingLink.title_en || deletingLink.title_id}" from draft? This will be recorded as an unpublished change.`}
 						</p>
 						<div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
 							<button
@@ -4814,14 +5132,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								}}
 								className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 							>
-								Batal
+								{studioLang === "id" ? "Batal" : "Cancel"}
 							</button>
 							<button
 								type="button"
 								onClick={handleConfirmDeleteLink}
 								className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 							>
-								Ya, Hapus Tautan
+								{studioLang === "id" ? "Ya, Hapus Tautan" : "Yes, Delete Link"}
 							</button>
 						</div>
 					</div>
@@ -4836,7 +5154,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 					<div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl my-8">
 						<div className="flex items-center justify-between mb-4">
 							<h3 className="text-base font-bold text-white">
-								{isAddContactOpen ? "Tambah Metode Kontak Baru" : "Edit Metode Kontak"}
+								{isAddContactOpen
+									? (studioLang === "id" ? "Tambah Metode Kontak Baru" : "Add Contact Channel")
+									: (studioLang === "id" ? "Edit Metode Kontak" : "Edit Contact Channel")}
 							</h3>
 							<button
 								type="button"
@@ -4853,7 +5173,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						<form onSubmit={isAddContactOpen ? handleSaveNewContact : handleSaveEditContact} className="flex flex-col gap-4">
 							<div>
 								<label htmlFor="cf-platform" className="block text-xs font-semibold text-slate-300 mb-1">
-									Platform Kontak <span className="text-rose-400">*</span>
+									{studioLang === "id" ? "Platform Kontak" : "Contact Platform"} <span className="text-rose-400">*</span>
 								</label>
 								<select
 									id="cf-platform"
@@ -4865,14 +5185,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<option value="telegram">Telegram</option>
 									<option value="email">Email</option>
 									<option value="instagram">Instagram Direct</option>
-									<option value="custom">Custom / Lainnya</option>
+									<option value="custom">{studioLang === "id" ? "Custom / Lainnya" : "Custom / Other"}</option>
 								</select>
 							</div>
 
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								<div>
 									<label htmlFor="cf-label-id" className="block text-xs font-semibold text-slate-300 mb-1">
-										Label (Indonesia) <span className="text-rose-400">*</span>
+										{studioLang === "id" ? "Label (Indonesia)" : "Label (Indonesian)"} <span className="text-rose-400">*</span>
 									</label>
 									<input
 										id="cf-label-id"
@@ -4886,7 +5206,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</div>
 								<div>
 									<label htmlFor="cf-label-en" className="block text-xs font-semibold text-slate-300 mb-1">
-										Label (English) <span className="text-rose-400">*</span>
+										{studioLang === "id" ? "Label (Inggris)" : "Label (English)"} <span className="text-rose-400">*</span>
 									</label>
 									<input
 										id="cf-label-en"
@@ -4902,7 +5222,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 							<div>
 								<label htmlFor="cf-value" className="block text-xs font-semibold text-slate-300 mb-1">
-									Nilai Kontak / Handle / Nomor <span className="text-rose-400">*</span>
+									{studioLang === "id" ? "Nilai Kontak / Handle / Nomor" : "Contact Value / Handle / Number"} <span className="text-rose-400">*</span>
 								</label>
 								<input
 									id="cf-value"
@@ -4923,7 +5243,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 							<div>
 								<label htmlFor="cf-url" className="block text-xs font-semibold text-slate-300 mb-1">
-									URL Target Klik (Auto-generate / Manual) <span className="text-rose-400">*</span>
+									{studioLang === "id" ? "URL Target Klik (Auto-generate / Manual)" : "Click Target URL (Auto-generate / Manual)"} <span className="text-rose-400">*</span>
 								</label>
 								<input
 									id="cf-url"
@@ -4945,7 +5265,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									className="w-4 h-4 rounded text-violet-600 focus:ring-0 focus:outline-none bg-slate-950 border-slate-700"
 								/>
 								<label htmlFor="cf-enabled" className="text-xs text-slate-300 font-medium cursor-pointer">
-									Aktifkan metode kontak ini di draft
+									{studioLang === "id" ? "Aktifkan metode kontak ini di draft" : "Enable this contact method in draft"}
 								</label>
 							</div>
 
@@ -4958,13 +5278,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									}}
 									className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 								>
-									Batal
+									{studioLang === "id" ? "Batal" : "Cancel"}
 								</button>
 								<button
 									type="submit"
 									className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 								>
-									{isAddContactOpen ? "Simpan ke Draft" : "Perbarui Draft"}
+									{isAddContactOpen ? (studioLang === "id" ? "Simpan ke Draft" : "Save to Draft") : (studioLang === "id" ? "Perbarui Draft" : "Update Draft")}
 								</button>
 							</div>
 						</form>
@@ -4978,9 +5298,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			{isDeleteContactOpen && deletingContact && (
 				<div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
 					<div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
-						<h3 className="text-base font-bold text-white mb-2">Hapus Metode Kontak?</h3>
+						<h3 className="text-base font-bold text-white mb-2">
+							{studioLang === "id" ? "Hapus Metode Kontak?" : "Delete Contact Channel?"}
+						</h3>
 						<p className="text-xs sm:text-sm text-slate-400 mb-4 leading-relaxed">
-							Anda yakin ingin menghapus <strong className="text-white">"{deletingContact.label_id || deletingContact.platform}"</strong> ({deletingContact.value}) dari draft? Tindakan ini akan dicatat sebagai perubahan belum terbit.
+							{studioLang === "id"
+								? `Anda yakin ingin menghapus "${deletingContact.label_id || deletingContact.platform}" (${deletingContact.value}) dari draft? Tindakan ini akan dicatat sebagai perubahan belum terbit.`
+								: `Are you sure you want to delete "${deletingContact.label_en || deletingContact.label_id || deletingContact.platform}" (${deletingContact.value}) from draft? This will be recorded as an unpublished change.`}
 						</p>
 						<div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
 							<button
@@ -4991,14 +5315,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								}}
 								className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 							>
-								Batal
+								{studioLang === "id" ? "Batal" : "Cancel"}
 							</button>
 							<button
 								type="button"
 								onClick={handleConfirmDeleteContact}
 								className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 							>
-								Ya, Hapus Kontak
+								{studioLang === "id" ? "Ya, Hapus Kontak" : "Yes, Delete Contact"}
 							</button>
 						</div>
 					</div>
@@ -5013,7 +5337,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 					<div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl my-8">
 						<div className="flex items-center justify-between mb-4">
 							<h3 className="text-base font-bold text-white">
-								{isAddExploreOpen ? "Tambah Item Explore Baru" : "Edit Item Explore"}
+								{isAddExploreOpen
+									? (studioLang === "id" ? "Tambah Item Explore Baru" : "Add New Explore Item")
+									: (studioLang === "id" ? "Edit Item Explore" : "Edit Explore Item")}
 							</h3>
 							<button
 								type="button"
@@ -5032,7 +5358,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							{/* 1. Content Type Selector */}
 							<div>
 								<label htmlFor="ef-type" className="block text-xs font-semibold text-slate-300 mb-1">
-									Tipe Konten Modular <span className="text-rose-400">*</span>
+									{studioLang === "id" ? "Tipe Konten Modular" : "Modular Content Type"} <span className="text-rose-400">*</span>
 								</label>
 								<select
 									id="ef-type"
@@ -5040,16 +5366,16 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									onChange={(e) => setExploreForm({ ...exploreForm, type: e.target.value as ExploreBlockType })}
 									className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
 								>
-									<option value="project">Proyek (Portfolio Project)</option>
-									<option value="gallery">Galeri Multi-Foto (Multi-Photo Showcase)</option>
-									<option value="image">Foto Tunggal (Single Artwork)</option>
-									<option value="video">Video (Video Player / Embed)</option>
-									<option value="music">Musik (Audio Track / Playlist)</option>
-									<option value="game">Game (Interactive Demo / Game)</option>
-									<option value="review">Review (Media Review / Book)</option>
-									<option value="note">Catatan (Announcement / Note)</option>
-									<option value="link">Tautan (External Feature Link)</option>
-									<option value="custom">Kustom (Custom Flexible Block)</option>
+									<option value="project">{studioLang === "id" ? "Proyek (Portfolio Project)" : "Project (Portfolio Project)"}</option>
+									<option value="gallery">{studioLang === "id" ? "Galeri Multi-Foto (Multi-Photo Showcase)" : "Gallery (Multi-Photo Showcase)"}</option>
+									<option value="image">{studioLang === "id" ? "Foto Tunggal (Single Artwork)" : "Image (Single Artwork)"}</option>
+									<option value="video">{studioLang === "id" ? "Video (Video Player / Embed)" : "Video (Video Player / Embed)"}</option>
+									<option value="music">{studioLang === "id" ? "Musik (Audio Track / Playlist)" : "Music (Audio Track / Playlist)"}</option>
+									<option value="game">{studioLang === "id" ? "Game (Interactive Demo / Game)" : "Game (Interactive Demo / Game)"}</option>
+									<option value="review">{studioLang === "id" ? "Review (Media Review / Book)" : "Review (Media Review / Book)"}</option>
+									<option value="note">{studioLang === "id" ? "Catatan (Announcement / Note)" : "Note (Announcement / Note)"}</option>
+									<option value="link">{studioLang === "id" ? "Tautan (External Feature Link)" : "Link (External Feature Link)"}</option>
+									<option value="custom">{studioLang === "id" ? "Kustom (Custom Flexible Block)" : "Custom (Custom Flexible Block)"}</option>
 								</select>
 							</div>
 
@@ -5058,7 +5384,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div>
 									<div className="flex items-center justify-between mb-1">
 										<label htmlFor="ef-category" className="block text-xs font-semibold text-slate-300">
-											Kategori
+											{studioLang === "id" ? "Kategori" : "Category"}
 										</label>
 										<button
 											type="button"
@@ -5069,7 +5395,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											}}
 											className="text-[10px] text-violet-400 hover:text-violet-300 font-semibold cursor-pointer"
 										>
-											+ Kelola Kategori
+											{studioLang === "id" ? "+ Kelola Kategori" : "+ Manage Categories"}
 										</button>
 									</div>
 									<select
@@ -5078,10 +5404,10 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										onChange={(e) => setExploreForm({ ...exploreForm, category: e.target.value, subcategory_id: "" })}
 										className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-violet-500 focus:outline-none"
 									>
-										<option value="all">Semua / Umum (General)</option>
+										<option value="all">{studioLang === "id" ? "Semua / Umum (General)" : "All / General"}</option>
 										{categories.map((cat) => (
 											<option key={cat.id} value={cat.id}>
-												{cat.name_id} ({cat.name_en})
+												{studioLang === "id" ? cat.name_id : (cat.name_en || cat.name_id)}
 											</option>
 										))}
 									</select>
@@ -5122,7 +5448,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								<div>
 									<label htmlFor="ef-subtitle-id" className="block text-xs font-semibold text-slate-300 mb-1">
-										Subjudul / Keterangan Singkat (ID)
+										{studioLang === "id" ? "Subjudul / Keterangan Singkat (ID)" : "Subtitle (ID)"}
 									</label>
 									<input
 										id="ef-subtitle-id"
@@ -5135,7 +5461,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</div>
 								<div>
 									<label htmlFor="ef-subtitle-en" className="block text-xs font-semibold text-slate-300 mb-1">
-										Subtitle (EN)
+										{studioLang === "id" ? "Subjudul (EN)" : "Subtitle (EN)"}
 									</label>
 									<input
 										id="ef-subtitle-en"
@@ -5152,27 +5478,27 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								<div>
 									<label htmlFor="ef-desc-id" className="block text-xs font-semibold text-slate-300 mb-1">
-										Deskripsi Lengkap (ID)
+										{studioLang === "id" ? "Deskripsi Lengkap (ID)" : "Full Description (ID)"}
 									</label>
 									<textarea
 										id="ef-desc-id"
 										rows={2}
 										value={exploreForm.description_id}
 										onChange={(e) => setExploreForm({ ...exploreForm, description_id: e.target.value })}
-										placeholder="Ringkasan proyek atau konten..."
+										placeholder={studioLang === "id" ? "Ringkasan proyek atau konten..." : "Project or content summary..."}
 										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
 									/>
 								</div>
 								<div>
 									<label htmlFor="ef-desc-en" className="block text-xs font-semibold text-slate-300 mb-1">
-										Description (EN)
+										{studioLang === "id" ? "Deskripsi Lengkap (EN)" : "Full Description (EN)"}
 									</label>
 									<textarea
 										id="ef-desc-en"
 										rows={2}
 										value={exploreForm.description_en}
 										onChange={(e) => setExploreForm({ ...exploreForm, description_en: e.target.value })}
-										placeholder="Project or content summary..."
+										placeholder={studioLang === "id" ? "Ringkasan proyek atau konten (EN)..." : "Project or content summary (EN)..."}
 										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
 									/>
 								</div>
@@ -5182,7 +5508,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col gap-3">
 								<div>
 									<label htmlFor="ef-cover" className="block text-xs font-semibold text-slate-300 mb-1">
-										Gambar Sampul Utama (Cover Image)
+										{studioLang === "id" ? "Gambar Sampul Utama (Cover Image)" : "Main Cover Image"}
 									</label>
 									<div className="flex gap-2">
 										<input
@@ -5198,7 +5524,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											onClick={() => handleOpenMediaLibrary("explore_cover")}
 											className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold whitespace-nowrap cursor-pointer shadow-sm"
 										>
-											Pilih Media R2
+											{studioLang === "id" ? "Pilih Media R2" : "Select R2 Media"}
 										</button>
 									</div>
 									{exploreForm.cover_image && (
@@ -5210,7 +5536,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													className="w-full h-full object-cover"
 												/>
 											</div>
-											<span className="text-[11px] text-slate-400">Sampul aktif saat ini</span>
+											<span className="text-[11px] text-slate-400">
+												{studioLang === "id" ? "Sampul aktif saat ini" : "Active cover image"}
+											</span>
 										</div>
 									)}
 								</div>
@@ -5221,10 +5549,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										<div className="flex items-center justify-between mb-2">
 											<div>
 												<span className="text-xs font-bold text-pink-400 uppercase tracking-wider block">
-													Koleksi Foto Galeri ({exploreForm.photos?.length || 0} Foto)
+													{studioLang === "id"
+														? `Koleksi Foto Galeri (${exploreForm.photos?.length || 0} Foto)`
+														: `Gallery Photos Collection (${exploreForm.photos?.length || 0} Photos)`}
 												</span>
 												<p className="text-[11px] text-slate-400">
-													Foto-foto ini akan tampil di galeri geser (slideshow lightbox) publik.
+													{studioLang === "id"
+														? "Foto-foto ini akan tampil di galeri geser (slideshow lightbox) publik."
+														: "These photos will appear in public lightbox slideshow."}
 												</p>
 											</div>
 											<button
@@ -5232,7 +5564,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												onClick={() => handleOpenMediaLibrary("gallery_photo")}
 												className="px-2.5 py-1.5 rounded-lg bg-pink-950/70 border border-pink-700/60 hover:bg-pink-900 text-pink-200 text-xs font-semibold cursor-pointer flex items-center gap-1 shadow-sm"
 											>
-												<span>+ Tambah Foto</span>
+												<span>{studioLang === "id" ? "+ Tambah Foto" : "+ Add Photo"}</span>
 											</button>
 										</div>
 
@@ -5269,7 +5601,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																			),
 																		}));
 																	}}
-																	placeholder="Keterangan foto (opsional)..."
+																	placeholder={studioLang === "id" ? "Keterangan foto (opsional)..." : "Photo caption (optional)..."}
 																	className="w-full px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-pink-500"
 																/>
 															</div>
@@ -5278,18 +5610,18 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 															<div className="flex items-center gap-1 shrink-0">
 																{isCover ? (
 																	<span className="text-[10px] font-bold text-violet-300 bg-violet-950 px-2 py-0.5 rounded border border-violet-800">
-																		Sampul
+																		{studioLang === "id" ? "Sampul" : "Cover"}
 																	</span>
 																) : (
 																	<button
 																		type="button"
 																		onClick={() => {
 																			setExploreForm((prev) => ({ ...prev, cover_image: photo.url }));
-																			showToast("Foto ini dijadikan gambar sampul.", "info");
+																			showToast(studioLang === "id" ? "Foto ini dijadikan gambar sampul." : "Set as cover image.", "info");
 																		}}
 																		className="text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded hover:bg-slate-800 cursor-pointer"
 																	>
-																		Jadikan Sampul
+																		{studioLang === "id" ? "Jadikan Sampul" : "Set as Cover"}
 																	</button>
 																)}
 
@@ -5307,7 +5639,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																		});
 																	}}
 																	className="text-xs text-slate-400 hover:text-white disabled:opacity-30 px-1 cursor-pointer"
-																	title="Geser ke atas"
+																	title={studioLang === "id" ? "Geser ke atas" : "Move up"}
 																>
 																	▲
 																</button>
@@ -5324,7 +5656,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																		});
 																	}}
 																	className="text-xs text-slate-400 hover:text-white disabled:opacity-30 px-1 cursor-pointer"
-																	title="Geser ke bawah"
+																	title={studioLang === "id" ? "Geser ke bawah" : "Move down"}
 																>
 																	▼
 																</button>
@@ -5339,7 +5671,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																		}));
 																	}}
 																	className="text-xs text-rose-400 hover:text-rose-300 px-1.5 py-0.5 rounded hover:bg-rose-950/50 cursor-pointer"
-																	title="Hapus foto dari galeri"
+																	title={studioLang === "id" ? "Hapus foto dari galeri" : "Remove photo from gallery"}
 																>
 																	✕
 																</button>
@@ -5350,7 +5682,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											</div>
 										) : (
 											<p className="text-xs text-slate-500 italic mt-1">
-												Belum ada foto dalam galeri ini. Klik "+ Tambah Foto" untuk memilih dari R2.
+												{studioLang === "id"
+													? "Belum ada foto dalam galeri ini. Klik '+ Tambah Foto' untuk memilih dari R2."
+													: "No photos in this gallery yet. Click '+ Add Photo' to choose from R2."}
 											</p>
 										)}
 									</div>
@@ -5360,7 +5694,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							{/* 5. Tautan Tujuan (URL) */}
 							<div>
 								<label htmlFor="ef-url" className="block text-xs font-semibold text-slate-300 mb-1">
-									Tautan Tujuan (URL Eksternal / Demo / Unduhan)
+									{studioLang === "id" ? "Tautan Tujuan (URL Eksternal / Demo / Unduhan)" : "Destination URL (External / Demo / Download)"}
 								</label>
 								<input
 									id="ef-url"
@@ -5375,14 +5709,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							{/* 6. Type-Specific Dynamic Fields & Badges */}
 							<div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col gap-3">
 								<span className="text-[11px] font-semibold uppercase tracking-wider text-violet-400">
-									Pengaturan Tambahan ({exploreForm.type})
+									{studioLang === "id" ? `Pengaturan Tambahan (${exploreForm.type})` : `Additional Settings (${exploreForm.type})`}
 								</span>
 
 								{(exploreForm.type === "project" || exploreForm.type === "game") && (
 									<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 										<div>
 											<label htmlFor="ef-tags" className="block text-xs text-slate-400 mb-1">
-												Tags (Pisahkan dengan koma)
+												{studioLang === "id" ? "Tags (Pisahkan dengan koma)" : "Tags (Comma-separated)"}
 											</label>
 											<input
 												id="ef-tags"
@@ -5395,7 +5729,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										</div>
 										<div>
 											<label htmlFor="ef-year" className="block text-xs text-slate-400 mb-1">
-												Tahun Rilis / Versi
+												{studioLang === "id" ? "Tahun Rilis / Versi" : "Release Year / Version"}
 											</label>
 											<input
 												id="ef-year"
@@ -5413,7 +5747,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 										<div>
 											<label htmlFor="ef-rating" className="block text-xs text-slate-400 mb-1">
-												Skor / Rating (e.g. 4.9/5 atau 9.5)
+												{studioLang === "id" ? "Skor / Rating (e.g. 4.9/5 atau 9.5)" : "Score / Rating (e.g. 4.9/5 or 9.5)"}
 											</label>
 											<input
 												id="ef-rating"
@@ -5426,7 +5760,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										</div>
 										<div>
 											<label htmlFor="ef-author" className="block text-xs text-slate-400 mb-1">
-												Pencipta / Penulis
+												{studioLang === "id" ? "Pencipta / Penulis" : "Author / Creator"}
 											</label>
 											<input
 												id="ef-author"
@@ -5443,7 +5777,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								{exploreForm.type === "music" && (
 									<div>
 										<label htmlFor="ef-artist" className="block text-xs text-slate-400 mb-1">
-											Artis / Musisi
+											{studioLang === "id" ? "Artis / Musisi" : "Artist / Musician"}
 										</label>
 										<input
 											id="ef-artist"
@@ -5459,7 +5793,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 									<div>
 										<label htmlFor="ef-badge-id" className="block text-xs text-slate-400 mb-1">
-											Teks Badge ID (Opsional)
+											{studioLang === "id" ? "Teks Badge ID (Opsional)" : "Badge Text ID (Optional)"}
 										</label>
 										<input
 											id="ef-badge-id"
@@ -5472,7 +5806,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									</div>
 									<div>
 										<label htmlFor="ef-badge-en" className="block text-xs text-slate-400 mb-1">
-											Badge Text EN
+											{studioLang === "id" ? "Teks Badge EN" : "Badge Text EN"}
 										</label>
 										<input
 											id="ef-badge-en"
@@ -5495,7 +5829,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									className="w-4 h-4 rounded accent-violet-600 bg-slate-950 border-slate-800"
 								/>
 								<span className="text-xs font-semibold text-slate-300">
-									Tampilkan item ini di halaman Explore publik (Aktif)
+									{studioLang === "id"
+										? "Tampilkan item ini di halaman Explore publik (Aktif)"
+										: "Display this item on public Explore page (Active)"}
 								</span>
 							</label>
 
@@ -5510,14 +5846,18 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									}}
 									className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 								>
-									Batal
+									{studioLang === "id" ? "Batal" : "Cancel"}
 								</button>
 								<button
 									type="submit"
 									disabled={isSubmittingExplore}
 									className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors cursor-pointer"
 								>
-									{isSubmittingExplore ? "Menyimpan..." : isAddExploreOpen ? "Simpan ke Draft" : "Perbarui Draft"}
+									{isSubmittingExplore
+										? (studioLang === "id" ? "Menyimpan..." : "Saving...")
+										: isAddExploreOpen
+										? (studioLang === "id" ? "Simpan ke Draft" : "Save to Draft")
+										: (studioLang === "id" ? "Perbarui Draft" : "Update Draft")}
 								</button>
 							</div>
 						</form>
@@ -5536,9 +5876,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
 							</svg>
 						</div>
-						<h3 className="text-lg font-bold text-white mb-2">Hapus Item Explore?</h3>
+						<h3 className="text-lg font-bold text-white mb-2">
+							{studioLang === "id" ? "Hapus Item Explore?" : "Delete Explore Item?"}
+						</h3>
 						<p className="text-xs sm:text-sm text-slate-400 mb-4 leading-relaxed">
-							Anda yakin ingin menghapus <strong className="text-white">"{deletingExplore.title_id}"</strong> ({deletingExplore.type}) dari draft Explore? Tindakan ini akan dicatat sebagai perubahan belum terbit.
+							{studioLang === "id"
+								? `Anda yakin ingin menghapus "${deletingExplore.title_id}" (${deletingExplore.type}) dari draft Explore? Tindakan ini akan dicatat sebagai perubahan belum terbit.`
+								: `Are you sure you want to delete "${deletingExplore.title_en || deletingExplore.title_id}" (${deletingExplore.type}) from draft Explore? This will be recorded as an unpublished change.`}
 						</p>
 						<div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
 							<button
@@ -5549,14 +5893,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								}}
 								className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 							>
-								Batal
+								{studioLang === "id" ? "Batal" : "Cancel"}
 							</button>
 							<button
 								type="button"
 								onClick={() => handleDeleteExplore(deletingExplore.id)}
 								className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer"
 							>
-								Ya, Hapus Item
+								{studioLang === "id" ? "Ya, Hapus Item" : "Yes, Delete Item"}
 							</button>
 						</div>
 					</div>
@@ -5571,8 +5915,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 					<div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl my-8">
 						<div className="flex items-center justify-between mb-4">
 							<div>
-								<h3 className="text-base font-bold text-white">Kelola Kategori Explore</h3>
-								<p className="text-xs text-slate-400">Atur kategori satu tingkat untuk menyusun konten Explore. Menghapus kategori akan mengalihkan item ke 'Semua'.</p>
+								<h3 className="text-base font-bold text-white">
+									{studioLang === "id" ? "Kelola Kategori Explore" : "Manage Explore Categories"}
+								</h3>
+								<p className="text-xs text-slate-400">
+									{studioLang === "id"
+										? "Atur kategori satu tingkat untuk menyusun konten Explore. Menghapus kategori akan mengalihkan item ke 'Semua'."
+										: "Organize single-tier categories to structure Explore content. Deleting a category will reassign items to 'All'."}
+								</p>
 							</div>
 							<button
 								type="button"
@@ -5589,12 +5939,16 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						{/* Form Tambah / Edit */}
 						<form onSubmit={handleSaveCategory} className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 mb-5 flex flex-col gap-3">
 							<span className="text-xs font-bold text-violet-400 uppercase tracking-wider">
-								{editingCategory ? "Edit Kategori" : "+ Tambah Kategori Baru"}
+								{editingCategory
+									? (studioLang === "id" ? "Edit Kategori" : "Edit Category")
+									: (studioLang === "id" ? "+ Tambah Kategori Baru" : "+ Add New Category")}
 							</span>
 
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 								<div>
-									<label className="block text-xs text-slate-400 mb-1">Nama (ID) *</label>
+									<label className="block text-xs text-slate-400 mb-1">
+										{studioLang === "id" ? "Nama (ID) *" : "Name (ID) *"}
+									</label>
 									<input
 										type="text"
 										required
@@ -5605,7 +5959,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									/>
 								</div>
 								<div>
-									<label className="block text-xs text-slate-400 mb-1">Nama (EN)</label>
+									<label className="block text-xs text-slate-400 mb-1">
+										{studioLang === "id" ? "Nama (EN)" : "Name (EN)"}
+									</label>
 									<input
 										type="text"
 										value={categoryForm.name_en}
@@ -5618,33 +5974,37 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 								<div>
-									<label className="block text-xs text-slate-400 mb-1">Ikon Kategori</label>
+									<label className="block text-xs text-slate-400 mb-1">
+										{studioLang === "id" ? "Ikon Kategori" : "Category Icon"}
+									</label>
 									<select
 										value={categoryForm.icon}
 										onChange={(e) => setCategoryForm({ ...categoryForm, icon: e.target.value })}
 										className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white focus:border-violet-500 focus:outline-none"
 									>
-										<option value="folder">📁 Folder / Umum</option>
-										<option value="spark">✨ Spark / Unggulan</option>
-										<option value="image">🖼 Gambar / Galeri</option>
-										<option value="video">🎬 Video</option>
-										<option value="music">🎵 Musik</option>
-										<option value="gamepad">🎮 Game</option>
-										<option value="star">⭐ Ulasan / Review</option>
-										<option value="code">💻 Portofolio / Kode</option>
-										<option value="bookmark">🔖 Bookmark</option>
-										<option value="globe">🌐 Web / Link</option>
-										<option value="palette">🎨 Kreatif</option>
+										<option value="folder">{studioLang === "id" ? "📁 Folder / Umum" : "📁 Folder / General"}</option>
+										<option value="spark">{studioLang === "id" ? "✨ Spark / Unggulan" : "✨ Spark / Featured"}</option>
+										<option value="image">{studioLang === "id" ? "🖼 Gambar / Galeri" : "🖼 Image / Gallery"}</option>
+										<option value="video">{studioLang === "id" ? "🎬 Video" : "🎬 Video"}</option>
+										<option value="music">{studioLang === "id" ? "🎵 Musik" : "🎵 Music"}</option>
+										<option value="gamepad">{studioLang === "id" ? "🎮 Game" : "🎮 Game"}</option>
+										<option value="star">{studioLang === "id" ? "⭐ Ulasan / Review" : "⭐ Review"}</option>
+										<option value="code">{studioLang === "id" ? "💻 Portofolio / Kode" : "💻 Portfolio / Code"}</option>
+										<option value="bookmark">{studioLang === "id" ? "🔖 Bookmark" : "🔖 Bookmark"}</option>
+										<option value="globe">{studioLang === "id" ? "🌐 Web / Link" : "🌐 Web / Link"}</option>
+										<option value="palette">{studioLang === "id" ? "🎨 Kreatif" : "🎨 Creative"}</option>
 									</select>
 								</div>
 								<div>
-									<label className="block text-xs text-slate-400 mb-1">ID Kategori (Slug)</label>
+									<label className="block text-xs text-slate-400 mb-1">
+										{studioLang === "id" ? "ID Kategori (Slug)" : "Category ID (Slug)"}
+									</label>
 									<input
 										type="text"
 										value={categoryForm.id}
 										disabled={!!editingCategory}
 										onChange={(e) => setCategoryForm({ ...categoryForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "") })}
-										placeholder="Otomatis jika kosong"
+										placeholder={studioLang === "id" ? "Otomatis jika kosong" : "Auto-generated if empty"}
 										className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200 disabled:opacity-50 focus:border-violet-500 focus:outline-none"
 									/>
 								</div>
@@ -5653,7 +6013,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="flex items-center justify-between gap-3 pt-1">
 								<div className="flex items-center gap-3">
 									<div className="flex items-center gap-1.5">
-										<label className="text-xs text-slate-400">Warna:</label>
+										<label className="text-xs text-slate-400">
+											{studioLang === "id" ? "Warna:" : "Color:"}
+										</label>
 										<input
 											type="color"
 											value={categoryForm.color || "#8b5cf6"}
@@ -5668,7 +6030,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											onChange={(e) => setCategoryForm({ ...categoryForm, is_enabled: e.target.checked })}
 											className="w-4 h-4 rounded text-violet-600 bg-slate-900 border-slate-700"
 										/>
-										<span>Aktif</span>
+										<span>{studioLang === "id" ? "Aktif" : "Active"}</span>
 									</label>
 								</div>
 
@@ -5682,7 +6044,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											}}
 											className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
 										>
-											Batal Edit
+											{studioLang === "id" ? "Batal Edit" : "Cancel Edit"}
 										</button>
 									)}
 									<button
@@ -5690,7 +6052,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										disabled={isSubmittingCategory}
 										className="px-4 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
 									>
-										{isSubmittingCategory ? "Menyimpan..." : editingCategory ? "Perbarui" : "Tambah"}
+										{isSubmittingCategory
+											? (studioLang === "id" ? "Menyimpan..." : "Saving...")
+											: editingCategory
+											? (studioLang === "id" ? "Perbarui" : "Update")
+											: (studioLang === "id" ? "Tambah" : "Add")}
 									</button>
 								</div>
 							</div>
@@ -5699,11 +6065,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						{/* Daftar Kategori */}
 						<div>
 							<h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-								Daftar Kategori ({categories.length})
+								{studioLang === "id" ? `Daftar Kategori (${categories.length})` : `Category List (${categories.length})`}
 							</h4>
 							{categories.length === 0 ? (
 								<p className="text-xs text-slate-500 italic py-4 text-center">
-									Belum ada kategori. Tambahkan kategori pertama di atas.
+									{studioLang === "id" ? "Belum ada kategori. Tambahkan kategori pertama di atas." : "No categories yet. Add the first category above."}
 								</p>
 							) : (
 								<div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
@@ -5719,7 +6085,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														disabled={idx === 0}
 														onClick={() => handleReorderCategory(idx, "up")}
 														className="text-[10px] text-slate-500 hover:text-slate-200 disabled:opacity-20 cursor-pointer"
-														title="Pindah ke Atas"
+														title={studioLang === "id" ? "Pindah ke Atas" : "Move Up"}
 													>
 														▲
 													</button>
@@ -5728,7 +6094,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														disabled={idx === categories.length - 1}
 														onClick={() => handleReorderCategory(idx, "down")}
 														className="text-[10px] text-slate-500 hover:text-slate-200 disabled:opacity-20 cursor-pointer"
-														title="Pindah ke Bawah"
+														title={studioLang === "id" ? "Pindah ke Bawah" : "Move Down"}
 													>
 														▼
 													</button>
@@ -5744,7 +6110,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 															<span className="text-slate-400 font-normal">({cat.name_en})</span>
 														)}
 														{cat.is_enabled === 0 && (
-															<span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-slate-400">Nonaktif</span>
+															<span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-slate-400">
+																{studioLang === "id" ? "Nonaktif" : "Inactive"}
+															</span>
 														)}
 													</div>
 													<span className="text-[10px] text-violet-400 font-mono">
@@ -5769,14 +6137,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 													}}
 													className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold cursor-pointer"
 												>
-													Edit
+													{studioLang === "id" ? "Edit" : "Edit"}
 												</button>
 												<button
 													type="button"
 													onClick={() => handleDeleteCategory(cat.id)}
 													className="px-2 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 text-[11px] font-semibold cursor-pointer"
 												>
-													Hapus
+													{studioLang === "id" ? "Hapus" : "Delete"}
 												</button>
 											</div>
 										</div>
@@ -5797,9 +6165,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						<div className="w-12 h-12 rounded-2xl bg-emerald-950/80 border border-emerald-800/60 text-emerald-400 flex items-center justify-center mb-4">
 							<span className="text-xl">🚀</span>
 						</div>
-						<h3 className="text-lg font-bold text-white mb-2">Terbitkan Seluruh Perubahan?</h3>
+						<h3 className="text-lg font-bold text-white mb-2">
+							{studioLang === "id" ? "Terbitkan Seluruh Perubahan?" : "Publish All Changes to Production?"}
+						</h3>
 						<p className="text-xs sm:text-sm text-slate-300 mb-5 leading-relaxed">
-							Semua perubahan pada profil, tema visual, tata letak, tautan, kontak, dan karya yang tersimpan di ruang kerja draft akan langsung dipromosikan ke pengunjung publik secara atomik.
+							{studioLang === "id"
+								? "Semua perubahan pada profil, tema visual, tata letak, tautan, kontak, dan karya yang tersimpan di ruang kerja draft akan langsung dipromosikan ke pengunjung publik secara atomik."
+								: "All changes to profile, visual theme, layout, links, contact, and explore items saved in the draft workspace will be promoted atomically to public visitors."}
 						</p>
 						<div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
 							<button
@@ -5808,7 +6180,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								onClick={() => setIsPublishModalOpen(false)}
 								className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 							>
-								Batal
+								{studioLang === "id" ? "Batal" : "Cancel"}
 							</button>
 							<button
 								type="button"
@@ -5816,7 +6188,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								onClick={handlePublishChanges}
 								className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
 							>
-								{isPublishing ? "Menerbitkan..." : "Ya, Terbitkan Sekarang"}
+								{isPublishing
+									? (studioLang === "id" ? "Menerbitkan..." : "Publishing...")
+									: (studioLang === "id" ? "Ya, Terbitkan Sekarang" : "Yes, Publish Now")}
 							</button>
 						</div>
 					</div>
@@ -5832,9 +6206,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						<div className="w-12 h-12 rounded-2xl bg-rose-950/80 border border-rose-800/60 text-rose-400 flex items-center justify-center mb-4">
 							<span className="text-xl">⚠️</span>
 						</div>
-						<h3 className="text-lg font-bold text-white mb-2">Batalkan Perubahan Draft?</h3>
+						<h3 className="text-lg font-bold text-white mb-2">
+							{studioLang === "id" ? "Batalkan Perubahan Draft?" : "Discard All Draft Changes?"}
+						</h3>
 						<p className="text-xs sm:text-sm text-slate-300 mb-4 leading-relaxed">
-							Semua perubahan yang Anda buat di draft dan belum diterbitkan akan dihapus dan dikembalikan ke versi publik aktif saat ini.
+							{studioLang === "id"
+								? "Semua perubahan yang Anda buat di draft dan belum diterbitkan akan dihapus dan dikembalikan ke versi publik aktif saat ini."
+								: "This will permanently revert all uncommitted draft edits in profile, appearance, links, contact, and explore back to the current published state."}
 						</p>
 						<div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
 							<button
@@ -5843,7 +6221,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								onClick={() => setIsDiscardModalOpen(false)}
 								className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 							>
-								Jangan Batalkan
+								{studioLang === "id" ? "Jangan Batalkan" : "Keep Editing"}
 							</button>
 							<button
 								type="button"
@@ -5851,7 +6229,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								onClick={handleDiscardChanges}
 								className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold transition-colors cursor-pointer"
 							>
-								{isDiscarding ? "Mereset..." : "Ya, Batalkan Semua Draft"}
+								{isDiscarding
+									? (studioLang === "id" ? "Mereset..." : "Discarding...")
+									: (studioLang === "id" ? "Ya, Batalkan Semua Draft" : "Yes, Discard All Drafts")}
 							</button>
 						</div>
 					</div>
@@ -5867,9 +6247,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						<div className="w-12 h-12 rounded-2xl bg-amber-950/80 border border-amber-800/60 text-amber-400 flex items-center justify-center mb-4">
 							<span className="text-xl">🎨</span>
 						</div>
-						<h3 className="text-lg font-bold text-white mb-2">Reset Pengaturan Tampilan?</h3>
+						<h3 className="text-lg font-bold text-white mb-2">
+							{studioLang === "id" ? "Reset Pengaturan Tampilan?" : "Reset Appearance Settings?"}
+						</h3>
 						<p className="text-xs sm:text-sm text-slate-300 mb-4 leading-relaxed">
-							Tampilan akan dikembalikan ke pengaturan default netral (Frost Aurora, background gradient mesh, Liquid Glass medium). Perubahan ini akan disimpan ke draft.
+							{studioLang === "id"
+								? "Tampilan akan dikembalikan ke pengaturan default netral (Frost Aurora, background gradient mesh, Liquid Glass medium). Perubahan ini akan disimpan ke draft."
+								: "Appearance will be reverted to default settings (Frost Aurora, gradient mesh background, medium Liquid Glass). This change will be saved to draft."}
 						</p>
 						<div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
 							<button
@@ -5877,14 +6261,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								onClick={() => setIsResetAppearanceOpen(false)}
 								className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 							>
-								Batal
+								{studioLang === "id" ? "Batal" : "Cancel"}
 							</button>
 							<button
 								type="button"
 								onClick={handleResetAppearance}
 								className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-colors cursor-pointer"
 							>
-								Ya, Reset ke Default
+								{studioLang === "id" ? "Ya, Reset ke Default" : "Yes, Reset to Default"}
 							</button>
 						</div>
 					</div>
@@ -5908,16 +6292,20 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							</svg>
 						</div>
 
-						<h3 className="text-base font-bold text-white mb-2">Reset Data Analitik?</h3>
+						<h3 className="text-base font-bold text-white mb-2">
+							{studioLang === "id" ? "Reset Data Analitik?" : "Reset Analytics Telemetry?"}
+						</h3>
 						<p className="text-xs sm:text-sm text-slate-400 mb-4 leading-relaxed">
-							Pilih target data yang ingin direset pada tabel Cloudflare D1. Data yang telah dihapus tidak dapat dipulihkan kembali.
+							{studioLang === "id"
+								? "Pilih target data yang ingin direset pada tabel Cloudflare D1. Data yang telah dihapus tidak dapat dipulihkan kembali."
+								: "Choose target telemetry data to reset in Cloudflare D1. Deleted data cannot be recovered."}
 						</p>
 
 						<div className="grid grid-cols-1 gap-2 mb-6 text-xs">
 							{[
-								{ id: "all", label: "Semua Data (Kunjungan & Klik)" },
-								{ id: "visitors", label: "Hanya Data Kunjungan Website (page_views)" },
-								{ id: "clicks", label: "Hanya Data Klik Tautan (click_events)" },
+								{ id: "all", label: studioLang === "id" ? "Semua Data (Kunjungan & Klik)" : "All Data (Page Views & Clicks)" },
+								{ id: "visitors", label: studioLang === "id" ? "Hanya Data Kunjungan Website (page_views)" : "Website Visits Only (page_views)" },
+								{ id: "clicks", label: studioLang === "id" ? "Hanya Data Klik Tautan (click_events)" : "Link Clicks Only (click_events)" },
 							].map((opt) => (
 								<label
 									key={opt.id}
@@ -5947,7 +6335,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								disabled={isResettingAnalytics}
 								className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
 							>
-								Batal
+								{studioLang === "id" ? "Batal" : "Cancel"}
 							</button>
 							<button
 								type="button"
@@ -5955,7 +6343,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								disabled={isResettingAnalytics}
 								className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
 							>
-								{isResettingAnalytics ? "Mereset..." : "Ya, Hapus Semua Klik"}
+								{isResettingAnalytics
+									? (studioLang === "id" ? "Mereset..." : "Resetting...")
+									: (studioLang === "id" ? "Ya, Hapus Semua Klik" : "Yes, Delete Selected Data")}
 							</button>
 						</div>
 					</div>
@@ -5980,7 +6370,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									)}
 								</div>
 								<p className="text-xs text-slate-400 mt-0.5">
-									Pilih file yang sudah ada atau unggah media baru ke penyimpanan R2.
+									{studioLang === "id"
+										? "Pilih file yang sudah ada atau unggah media baru ke penyimpanan R2."
+										: "Select existing files or upload new media to Cloudflare R2 storage."}
 								</p>
 							</div>
 
@@ -5991,7 +6383,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										isUploadingMedia ? "opacity-50 pointer-events-none" : ""
 									}`}
 								>
-									<span>{isUploadingMedia ? "Mengunggah..." : "+ Upload Media"}</span>
+									<span>{isUploadingMedia ? (studioLang === "id" ? "Mengunggah..." : "Uploading...") : "+ Upload Media"}</span>
 									<input
 										type="file"
 										accept={
@@ -6017,7 +6409,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						{/* Category Filter Tabs */}
 						<div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1 text-xs">
 							{[
-								{ id: "all", label: "Semua Kategori" },
+								{ id: "all", label: studioLang === "id" ? "Semua Kategori" : "All Categories" },
 								{ id: "avatar", label: "Avatar" },
 								{ id: "cover", label: "Cover" },
 								{ id: "background", label: "Background" },
@@ -6058,13 +6450,17 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						<div className="flex-1 overflow-y-auto pr-1">
 							{isLoadingMedia ? (
 								<div className="py-16 text-center text-xs text-slate-400">
-									Memuat koleksi media dari Cloudflare R2...
+									{studioLang === "id" ? "Memuat koleksi media dari Cloudflare R2..." : "Loading media collection from Cloudflare R2..."}
 								</div>
 							) : mediaList.length === 0 ? (
 								<div className="py-16 text-center border-2 border-dashed border-slate-800 rounded-2xl">
-									<p className="text-sm text-slate-400 mb-2">Belum ada file media di kategori ini.</p>
+									<p className="text-sm text-slate-400 mb-2">
+										{studioLang === "id" ? "Belum ada file media di kategori ini." : "No media files in this category yet."}
+									</p>
 									<p className="text-xs text-slate-500">
-										Klik tombol <strong>+ Upload Media</strong> di kanan atas untuk mengunggah.
+										{studioLang === "id"
+											? <>Klik tombol <strong>+ Upload Media</strong> di kanan atas untuk mengunggah.</>
+											: <>Click <strong>+ Upload Media</strong> button in top right to upload.</>}
 									</p>
 								</div>
 							) : (
@@ -6110,14 +6506,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														onClick={() => handleSelectMedia(asset)}
 														className="flex-1 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer text-center"
 													>
-														Pilih
+														{studioLang === "id" ? "Pilih" : "Select"}
 													</button>
 													<button
 														type="button"
 														disabled={deletingMediaId === asset.id}
 														onClick={() => handleDeleteMedia(asset)}
 														className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-400 text-xs transition-colors cursor-pointer"
-														title="Hapus media dari R2 & D1"
+														title={studioLang === "id" ? "Hapus media dari R2 & D1" : "Delete media from R2 & D1"}
 													>
 														{deletingMediaId === asset.id ? "..." : "🗑️"}
 													</button>
@@ -6141,21 +6537,23 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						{/* Top bar in modal */}
 						<div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
 							<div className="flex items-center gap-2">
-								<span className="text-xs font-bold text-white uppercase tracking-wider">Preview Draft</span>
+								<span className="text-xs font-bold text-white uppercase tracking-wider">
+									{studioLang === "id" ? "Preview Draft" : "Draft Preview"}
+								</span>
 								<div className="flex rounded-lg bg-slate-950 p-0.5 border border-slate-800 text-[10px]">
-									<button
-										type="button"
-										onClick={() => setPreviewLang("id")}
-										className={`px-2 py-0.5 rounded ${previewLang === "id" ? "bg-violet-600 text-white font-bold" : "text-slate-400"}`}
-									>
-										ID
-									</button>
 									<button
 										type="button"
 										onClick={() => setPreviewLang("en")}
 										className={`px-2 py-0.5 rounded ${previewLang === "en" ? "bg-violet-600 text-white font-bold" : "text-slate-400"}`}
 									>
 										EN
+									</button>
+									<button
+										type="button"
+										onClick={() => setPreviewLang("id")}
+										className={`px-2 py-0.5 rounded ${previewLang === "id" ? "bg-violet-600 text-white font-bold" : "text-slate-400"}`}
+									>
+										ID
 									</button>
 								</div>
 							</div>
@@ -6278,11 +6676,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									{/* Links Preview */}
 									<div className="w-full flex flex-col gap-2 mb-4">
 										<div className="text-[10px] font-bold uppercase tracking-wider text-theme-muted px-1">
-											Tautan ({links.filter((l) => l.is_enabled).length})
+											{previewLang === "id"
+												? `Tautan (${links.filter((l) => l.is_enabled).length})`
+												: `Links (${links.filter((l) => l.is_enabled).length})`}
 										</div>
 										{links.filter((l) => l.is_enabled).length === 0 ? (
 											<div className="glass-liquid-card rounded-xl p-3 text-center text-xs text-theme-muted italic">
-												Tidak ada tautan aktif.
+												{previewLang === "id" ? "Tidak ada tautan aktif." : "No active links."}
 											</div>
 										) : (
 											links
@@ -6309,11 +6709,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									{/* Contacts Preview */}
 									<div className="w-full flex flex-col gap-2">
 										<div className="text-[10px] font-bold uppercase tracking-wider text-theme-muted px-1">
-											Kontak ({contacts.filter((c) => c.is_enabled).length})
+											{previewLang === "id"
+												? `Kontak (${contacts.filter((c) => c.is_enabled).length})`
+												: `Contact (${contacts.filter((c) => c.is_enabled).length})`}
 										</div>
 										{contacts.filter((c) => c.is_enabled).length === 0 ? (
 											<div className="glass-liquid-card rounded-xl p-3 text-center text-xs text-theme-muted italic">
-												Tidak ada metode kontak aktif.
+												{previewLang === "id" ? "Tidak ada metode kontak aktif." : "No active contact channels."}
 											</div>
 										) : (
 											contacts

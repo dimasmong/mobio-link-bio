@@ -31,6 +31,9 @@ async function runV41Verification() {
 		viewport: { width: 1280, height: 800 },
 		userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
 	});
+	await context.addCookies([
+		{ name: "mobio_lang", value: "id", domain: "localhost", path: "/" },
+	]);
 	const page = await context.newPage();
 
 	try {
@@ -179,7 +182,11 @@ async function runV41Verification() {
 		console.log("  ✓ 'Phase 2', 'Versi Aktif v...', and 'Terbit v...' removed from Studio dashboard.");
 
 		// Check Settings tab
-		await page.click("button:has-text('Settings')");
+		if (await page.$("button:has-text('Pengaturan')")) {
+			await page.click("button:has-text('Pengaturan')");
+		} else {
+			await page.click("button:has-text('Settings')");
+		}
 		await page.waitForTimeout(400);
 
 		const settingsHtml = await page.content();
