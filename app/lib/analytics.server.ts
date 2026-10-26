@@ -96,6 +96,36 @@ function sanitizeReferrer(rawReferrer?: string): string {
 }
 
 /**
+ * Records an actual interaction event (Explore card click, Contact card click)
+ * into Cloudflare D1 without storing IP addresses or persistent tracking cookies.
+ */
+export async function recordInteractionEvent(
+	db: D1Database,
+	params: {
+		category: "explore" | "contact";
+		targetId?: string;
+		referrer?: string;
+	}
+): Promise<void> {
+	const id = crypto.randomUUID();
+	const now = new Date().toISOString();
+	const sanitizedRef = sanitizeReferrer(params.referrer);
+	const targetId = params.targetId ? params.targetId.slice(0, 100) : null;
+
+	try {
+		await db
+			.prepare(
+				`INSERT INTO interaction_events (id, category, target_id, clicked_at, referrer)
+				 VALUES (?, ?, ?, ?, ?);`
+			)
+			.bind(id, params.category, targetId, now, sanitizedRef)
+			.run();
+	} catch (err: unknown) {
+		console.warn("Failed to record interaction event:", err);
+	}
+}
+
+/**
  * Records a minimal, privacy-preserving click event into Cloudflare D1.
  * Does NOT collect or store IP addresses, User-Agents, or device fingerprints.
  */
@@ -159,21 +189,30 @@ export async function getClickSummary(
 	const thirtyDaysIso = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
 	try {
-		// 1. Total counts across multiple periods (Links and Navigation Interactions)
+		// 1. Total counts across multiple periods (Actual Link Clicks and Actual Interaction Clicks)
 		const [
 			periodRes, todayRes, sevenDaysRes, thirtyDaysRes, allTimeRes,
-			pvPageCountsRes, todayPvRes, sevenDaysPvRes, thirtyDaysPvRes, allTimePvRes
+			explorePeriodRes, todayExploreRes, sevenDaysExploreRes, thirtyDaysExploreRes, allTimeExploreRes,
+			contactPeriodRes, todayContactRes, sevenDaysContactRes, thirtyDaysContactRes, allTimeContactRes
 		] = await Promise.all([
+			// Link Clicks (click_events)
 			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime(?);").bind(dateBoundary).first<{ count: number }>(),
 			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime('now', 'start of day');").first<{ count: number }>(),
 			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime('now', '-7 days');").first<{ count: number }>(),
 			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime('now', '-30 days');").first<{ count: number }>(),
 			db.prepare("SELECT count(*) as count FROM click_events;").first<{ count: number }>(),
-			db.prepare("SELECT page, count(*) as count FROM page_views WHERE datetime(viewed_at) >= datetime(?) GROUP BY page;").bind(dateBoundary).all<{ page: string; count: number }>(),
-			db.prepare("SELECT count(*) as count FROM page_views WHERE page IN ('explore', 'contact') AND datetime(viewed_at) >= datetime('now', 'start of day');").first<{ count: number }>(),
-			db.prepare("SELECT count(*) as count FROM page_views WHERE page IN ('explore', 'contact') AND datetime(viewed_at) >= datetime('now', '-7 days');").first<{ count: number }>(),
-			db.prepare("SELECT count(*) as count FROM page_views WHERE page IN ('explore', 'contact') AND datetime(viewed_at) >= datetime('now', '-30 days');").first<{ count: number }>(),
-			db.prepare("SELECT count(*) as count FROM page_views WHERE page IN ('explore', 'contact');").first<{ count: number }>(),
+			// Explore Clicks (interaction_events WHERE category = 'explore')
+			db.prepare("SELECT count(*) as count FROM interaction_events WHERE category = 'explore' AND datetime(clicked_at) >= datetime(?);").bind(dateBoundary).first<{ count: number }>().catch(() => ({ count: 0 })),
+			db.prepare("SELECT count(*) as count FROM interaction_events WHERE category = 'explore' AND datetime(clicked_at) >= datetime('now', 'start of day');").first<{ count: number }>().catch(() => ({ count: 0 })),
+			db.prepare("SELECT count(*) as count FROM interaction_events WHERE category = 'explore' AND datetime(clicked_at) >= datetime('now', '-7 days');").first<{ count: number }>().catch(() => ({ count: 0 })),
+			db.prepare("SELECT count(*) as count FROM interaction_events WHERE category = 'explore' AND datetime(clicked_at) >= datetime('now', '-30 days');").first<{ count: number }>().catch(() => ({ count: 0 })),
+			db.prepare("SELECT count(*) as count FROM interaction_events WHERE category = 'explore';").first<{ count: number }>().catch(() => ({ count: 0 })),
+			// Contact Clicks (interaction_events WHERE category = 'contact')
+			db.prepare("SELECT count(*) as count FROM interaction_events WHERE category = 'contact' AND datetime(clicked_at) >= datetime(?);").bind(dateBoundary).first<{ count: number }>().catch(() => ({ count: 0 })),
+			db.prepare("SELECT count(*) as count FROM interaction_events WHERE category = 'contact' AND datetime(clicked_at) >= datetime('now', 'start of day');").first<{ count: number }>().catch(() => ({ count: 0 })),
+			db.prepare("SELECT count(*) as count FROM interaction_events WHERE category = 'contact' AND datetime(clicked_at) >= datetime('now', '-7 days');").first<{ count: number }>().catch(() => ({ count: 0 })),
+			db.prepare("SELECT count(*) as count FROM interaction_events WHERE category = 'contact' AND datetime(clicked_at) >= datetime('now', '-30 days');").first<{ count: number }>().catch(() => ({ count: 0 })),
+			db.prepare("SELECT count(*) as count FROM interaction_events WHERE category = 'contact';").first<{ count: number }>().catch(() => ({ count: 0 })),
 		]);
 
 		const totalClicksPeriod = periodRes?.count ?? 0;
@@ -182,20 +221,15 @@ export async function getClickSummary(
 		const last30DaysClicks = thirtyDaysRes?.count ?? 0;
 		const totalAllTime = allTimeRes?.count ?? 0;
 
-		const pvMap = new Map<string, number>();
-		(pvPageCountsRes.results ?? []).forEach((row) => {
-			if (row.page) pvMap.set(row.page, row.count);
-		});
-
-		const exploreClicksPeriod = pvMap.get("explore") ?? 0;
-		const contactClicksPeriod = pvMap.get("contact") ?? 0;
+		const exploreClicksPeriod = explorePeriodRes?.count ?? 0;
+		const contactClicksPeriod = contactPeriodRes?.count ?? 0;
 		const linkClicksPeriod = totalClicksPeriod;
 		const totalInteractionsPeriod = linkClicksPeriod + exploreClicksPeriod + contactClicksPeriod;
 
-		const todayInteractions = todayClicks + (todayPvRes?.count ?? 0);
-		const last7DaysInteractions = last7DaysClicks + (sevenDaysPvRes?.count ?? 0);
-		const last30DaysInteractions = last30DaysClicks + (thirtyDaysPvRes?.count ?? 0);
-		const totalInteractionsAllTime = totalAllTime + (allTimePvRes?.count ?? 0);
+		const todayInteractions = todayClicks + (todayExploreRes?.count ?? 0) + (todayContactRes?.count ?? 0);
+		const last7DaysInteractions = last7DaysClicks + (sevenDaysExploreRes?.count ?? 0) + (sevenDaysContactRes?.count ?? 0);
+		const last30DaysInteractions = last30DaysClicks + (thirtyDaysExploreRes?.count ?? 0) + (thirtyDaysContactRes?.count ?? 0);
+		const totalInteractionsAllTime = totalAllTime + (allTimeExploreRes?.count ?? 0) + (allTimeContactRes?.count ?? 0);
 
 		// 2. Link breakdown (joins published links with clicks)
 		const linksQuery = range === "all"
@@ -244,17 +278,31 @@ export async function getClickSummary(
 
 		const topLink = linkBreakdown.length > 0 && linkBreakdown[0].clicks > 0 ? linkBreakdown[0] : null;
 
-		// 3. Time Series Daily Trend (Combining Link Clicks and Explore/Contact Navigation)
-		const timeSeriesRes = await db
-			.prepare(
-				`SELECT substr(replace(ts, 'T', ' '), 1, 10) as day, count(*) as count FROM (
-					SELECT clicked_at as ts FROM click_events WHERE datetime(clicked_at) >= datetime(?)
-					UNION ALL
-					SELECT viewed_at as ts FROM page_views WHERE page IN ('explore', 'contact') AND datetime(viewed_at) >= datetime(?)
-				) GROUP BY day ORDER BY day ASC;`
-			)
-			.bind(dateBoundary, dateBoundary)
-			.all<{ day: string; count: number }>();
+		// 3. Time Series Daily Trend (Combining Link Clicks and Actual Explore/Contact Card Interactions)
+		let timeSeriesRes: { results?: { day: string; count: number }[] } = { results: [] };
+		try {
+			timeSeriesRes = await db
+				.prepare(
+					`SELECT substr(replace(ts, 'T', ' '), 1, 10) as day, count(*) as count FROM (
+						SELECT clicked_at as ts FROM click_events WHERE datetime(clicked_at) >= datetime(?)
+						UNION ALL
+						SELECT clicked_at as ts FROM interaction_events WHERE datetime(clicked_at) >= datetime(?)
+					) GROUP BY day ORDER BY day ASC;`
+				)
+				.bind(dateBoundary, dateBoundary)
+				.all<{ day: string; count: number }>();
+		} catch {
+			timeSeriesRes = await db
+				.prepare(
+					`SELECT substr(replace(clicked_at, 'T', ' '), 1, 10) as day, count(*) as count
+					 FROM click_events
+					 WHERE datetime(clicked_at) >= datetime(?)
+					 GROUP BY day
+					 ORDER BY day ASC;`
+				)
+				.bind(dateBoundary)
+				.all<{ day: string; count: number }>();
+		}
 
 		const dayMap = new Map<string, number>();
 		(timeSeriesRes.results ?? []).forEach((row) => {
@@ -353,10 +401,13 @@ export async function getClickSummary(
 }
 
 /**
- * Clears all click telemetry data.
+ * Clears all click telemetry data (link clicks and actual card interaction clicks).
  */
 export async function resetClickEvents(db: D1Database): Promise<void> {
-	await db.prepare("DELETE FROM click_events;").run();
+	await Promise.all([
+		db.prepare("DELETE FROM click_events;").run(),
+		db.prepare("DELETE FROM interaction_events;").run().catch(() => {}),
+	]);
 }
 
 /**

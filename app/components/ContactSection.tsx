@@ -35,6 +35,32 @@ function isValidContactUrl(url?: string): boolean {
 	return trimmed.length > 0 && trimmed !== "#";
 }
 
+const lastContactClickRef = { id: "", time: 0 };
+function trackContactInteraction(targetId?: string) {
+	if (typeof window === "undefined") return;
+	const now = Date.now();
+	if (lastContactClickRef.id === targetId && now - lastContactClickRef.time < 600) {
+		return;
+	}
+	lastContactClickRef.id = targetId || "";
+	lastContactClickRef.time = now;
+
+	try {
+		fetch("/api/public/telemetry", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				type: "interaction",
+				category: "contact",
+				targetId,
+			}),
+			keepalive: true,
+		}).catch(() => {});
+	} catch {
+		// silent fallback
+	}
+}
+
 export function ContactSection({ config, lang }: ContactSectionProps) {
 	if (!config.enabled) return null;
 
@@ -79,16 +105,7 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 								target={isEmail ? undefined : "_blank"}
 								rel={isEmail ? undefined : "noopener noreferrer"}
 								onClick={() => {
-									try {
-										const sessionKey = (typeof window !== "undefined" && window.sessionStorage?.getItem("mobio_session")) || "anonymous";
-										fetch("/api/public/telemetry", {
-											method: "POST",
-											headers: { "Content-Type": "application/json" },
-											body: JSON.stringify({ page: "contact", sessionKey }),
-										}).catch(() => {});
-									} catch {
-										// silent fallback
-									}
+									trackContactInteraction(method.id);
 								}}
 								className="glass-liquid-card rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 							>

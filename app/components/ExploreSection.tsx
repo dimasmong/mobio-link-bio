@@ -221,6 +221,32 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [activeLightboxItem, slides.length]);
 
+	const lastExploreClickRef = React.useRef({ id: "", time: 0 });
+	const trackExploreInteraction = (targetId?: string) => {
+		if (typeof window === "undefined") return;
+		const now = Date.now();
+		if (lastExploreClickRef.current.id === targetId && now - lastExploreClickRef.current.time < 600) {
+			return;
+		}
+		lastExploreClickRef.current.id = targetId || "";
+		lastExploreClickRef.current.time = now;
+
+		try {
+			fetch("/api/public/telemetry", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					type: "interaction",
+					category: "explore",
+					targetId,
+				}),
+				keepalive: true,
+			}).catch(() => {});
+		} catch {
+			// silent fallback
+		}
+	};
+
 	if (!config.enabled) {
 		return null;
 	}
@@ -296,11 +322,13 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 								<div
 									key={item.id}
 									onClick={() => {
+										trackExploreInteraction(item.id);
 										setActiveLightboxItem(item);
 										setCurrentSlideIndex(0);
 									}}
 									onKeyDown={(e) => {
 										if (e.key === "Enter" || e.key === " ") {
+											trackExploreInteraction(item.id);
 											setActiveLightboxItem(item);
 											setCurrentSlideIndex(0);
 										}
@@ -358,6 +386,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 									href={item.url || "#"}
 									target={item.url ? "_blank" : undefined}
 									rel={item.url ? "noopener noreferrer" : undefined}
+									onClick={() => trackExploreInteraction(item.id)}
 									className="glass-liquid-card rounded-2xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left block"
 								>
 									{item.coverImage ? (
@@ -418,6 +447,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 									href={item.url || "#"}
 									target={item.url ? "_blank" : undefined}
 									rel={item.url ? "noopener noreferrer" : undefined}
+									onClick={() => trackExploreInteraction(item.id)}
 									className="glass-liquid-card rounded-2xl p-5 flex flex-col justify-between group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 								>
 									<div>
@@ -506,6 +536,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 												href={item.url}
 												target="_blank"
 												rel="noopener noreferrer"
+												onClick={() => trackExploreInteraction(item.id)}
 												className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-600 hover:text-sky-700 transition-colors"
 											>
 												<span>{lang === "id" ? "Baca Selengkapnya" : "Read More"}</span>
@@ -525,6 +556,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 									href={item.url || "#"}
 									target={item.url ? "_blank" : undefined}
 									rel={item.url ? "noopener noreferrer" : undefined}
+									onClick={() => trackExploreInteraction(item.id)}
 									className="glass-liquid-card rounded-2xl p-5 flex items-center justify-between group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 								>
 									<div className="min-w-0 flex-1 pr-3">
@@ -563,6 +595,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 									href={item.url || "#"}
 									target={item.url ? "_blank" : undefined}
 									rel={item.url ? "noopener noreferrer" : undefined}
+									onClick={() => trackExploreInteraction(item.id)}
 									className="glass-liquid-card rounded-2xl p-5 flex flex-col justify-between group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 								>
 									<div>
@@ -614,6 +647,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 									href={item.url || "#"}
 									target={item.url ? "_blank" : undefined}
 									rel={item.url ? "noopener noreferrer" : undefined}
+									onClick={() => trackExploreInteraction(item.id)}
 									className="glass-liquid-card rounded-2xl p-5 flex items-center gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 								>
 									<div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-400/30 flex items-center justify-center text-emerald-600 shrink-0 border border-emerald-200/50 group-hover:scale-105 transition-transform">
@@ -670,6 +704,7 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 											href={item.url}
 											target="_blank"
 											rel="noopener noreferrer"
+											onClick={() => trackExploreInteraction(item.id)}
 											className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-700 transition-colors"
 										>
 											<span>{lang === "id" ? "Buka Tautan" : "Open Link"}</span>

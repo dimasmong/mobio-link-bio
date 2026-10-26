@@ -4212,10 +4212,10 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										</span>
 									</div>
 									<div className="text-2xl sm:text-3xl font-extrabold text-white">
-										{analyticsData?.totalInteractionsPeriod ?? (analyticsData?.totalClicksPeriod ?? 0)}
+										{analyticsData?.totalInteractionsPeriod ?? 0}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
-										Akumulasi tautan & navigasi seksi
+										Akumulasi klik Link, Explore & Contact
 									</div>
 								</div>
 
@@ -4230,7 +4230,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										</span>
 									</div>
 									<div className="text-2xl sm:text-3xl font-extrabold text-white">
-										{analyticsData?.linkClicksPeriod ?? (analyticsData?.totalClicksPeriod ?? 0)}
+										{analyticsData?.linkClicksPeriod ?? 0}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
 										{analyticsData?.activeLinksCount ?? 0} tautan aktif di bio
@@ -4251,7 +4251,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{analyticsData?.exploreClicksPeriod ?? 0}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
-										Interaksi & kunjungan tab Explore
+										Interaksi aktual pada kartu & karya Explore
 									</div>
 								</div>
 
@@ -4269,7 +4269,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										{analyticsData?.contactClicksPeriod ?? 0}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
-										Interaksi & kunjungan tab Kontak
+										Klik aktual pada kartu metode kontak
 									</div>
 								</div>
 							</div>

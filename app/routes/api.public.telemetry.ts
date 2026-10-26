@@ -1,5 +1,5 @@
 import type { Route } from "./+types/api.public.telemetry";
-import { recordPageView } from "../lib/analytics.server";
+import { recordPageView, recordInteractionEvent } from "../lib/analytics.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
 	if (request.method.toUpperCase() !== "POST") {
@@ -12,22 +12,50 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
-		let body: { page?: string; sessionKey?: string } = {};
+		let body: {
+			type?: "page_view" | "interaction";
+			category?: "explore" | "contact";
+			page?: string;
+			targetId?: string;
+			sessionKey?: string;
+			sessionId?: string;
+		} = {};
+
 		try {
 			body = await request.json();
 		} catch {
 			return Response.json({ error: "Payload JSON tidak valid." }, { status: 400 });
 		}
 
+		const referrer = request.headers.get("referer") || "";
+		const userAgent = request.headers.get("user-agent") || "";
+
+		// 1. Handle actual interaction click (Explore item/card click or Contact method click)
+		if (body.type === "interaction" || body.category === "explore" || body.category === "contact") {
+			const category = body.category === "contact" ? "contact" : "explore";
+			await recordInteractionEvent(env.DB, {
+				category,
+				targetId: body.targetId,
+				referrer,
+			});
+
+			return Response.json(
+				{ status: "ok", type: "interaction", category },
+				{
+					headers: {
+						"Cache-Control": "private, no-store, no-cache, must-revalidate",
+					},
+				}
+			);
+		}
+
+		// 2. Handle website page view (Home, Explore tab visit, Contact tab visit)
 		const page = body.page || "home";
-		const sessionKey = body.sessionKey || (body as { sessionId?: string }).sessionId || "";
+		const sessionKey = body.sessionKey || body.sessionId || "";
 
 		if (!sessionKey || typeof sessionKey !== "string" || sessionKey.length < 8) {
 			return Response.json({ error: "Kunci sesi tidak valid." }, { status: 400 });
 		}
-
-		const referrer = request.headers.get("referer") || "";
-		const userAgent = request.headers.get("user-agent") || "";
 
 		await recordPageView(env.DB, {
 			page,
@@ -37,7 +65,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		});
 
 		return Response.json(
-			{ status: "ok" },
+			{ status: "ok", type: "page_view", page },
 			{
 				headers: {
 					"Cache-Control": "private, no-store, no-cache, must-revalidate",

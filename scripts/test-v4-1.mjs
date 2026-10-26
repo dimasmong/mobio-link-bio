@@ -17,8 +17,8 @@ if (!fs.existsSync(SCREENSHOT_DIR)) {
 
 async function runV41Verification() {
 	console.log("============================================================");
-	console.log("MOBIO LINK BIO — V4.1 UI REFINEMENT & ANALYTICS RESET TEST");
-	console.log("Clean Visual UI • Profile Alignment • Enhanced Click Monitor");
+	console.log("MOBIO LINK BIO — V4.1 UI REFINEMENT & ACTUAL INTERACTION CLICKS");
+	console.log("Strict Click vs Page View Separation • Enhanced Click Monitor");
 	console.log("============================================================\n");
 
 	let browser;
@@ -302,65 +302,123 @@ async function runV41Verification() {
 		await page.waitForTimeout(300);
 
 		// ---------------------------------------------------------------------
-		// TEST 8: ENHANCED CLICK MONITOR & ANALYTICS TELEMETRY
+		// TEST 8: STRICT SEPARATION: PAGE VIEWS VS ACTUAL INTERACTION CLICKS
 		// ---------------------------------------------------------------------
-		console.log("\nTEST 8: Testing Click Monitor & Telemetry Aggregation...");
-		// Simulate public telemetry calls
-		await fetch(`${BASE_URL}/api/public/telemetry`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-			},
-			body: JSON.stringify({ page: "explore", sessionKey: "test-v4-session-1" }),
-		});
-		await fetch(`${BASE_URL}/api/public/telemetry`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-			},
-			body: JSON.stringify({ page: "contact", sessionKey: "test-v4-session-2" }),
-		});
+		console.log("\nTEST 8: Testing Strict Separation of Page Views vs Actual Interaction Clicks...");
 
-		// Check Analytics API
-		const monitoredRes = await fetch(`${BASE_URL}/api/studio/analytics?range=all`, {
+		// Reset first to ensure clean state
+		await fetch(`${BASE_URL}/api/studio/analytics?target=all`, {
+			method: "DELETE",
 			headers: DEV_AUTH_HEADER,
 		});
-		const monitoredJson = await monitoredRes.json();
-		const monitoredData = monitoredJson.analytics;
-		console.log("  Recorded Telemetry Metrics:", {
-			totalInteractionsPeriod: monitoredData.totalInteractionsPeriod,
-			linkClicksPeriod: monitoredData.linkClicksPeriod,
-			exploreClicksPeriod: monitoredData.exploreClicksPeriod,
-			contactClicksPeriod: monitoredData.contactClicksPeriod,
+
+		// 8.1. Public visits / refreshes to Explore and Contact
+		console.log("  8.1 Simulating page visits & refreshes to /#explore and /#contact...");
+		await page.setExtraHTTPHeaders({});
+		await page.goto(`${BASE_URL}/#explore`, { waitUntil: "load" });
+		await page.waitForTimeout(300);
+		await page.reload({ waitUntil: "load" });
+		await page.waitForTimeout(300);
+
+		await page.goto(`${BASE_URL}/#contact`, { waitUntil: "load" });
+		await page.waitForTimeout(300);
+		await page.reload({ waitUntil: "load" });
+		await page.waitForTimeout(300);
+
+		// Check Analytics: Page views should exist, but Clicks MUST BE 0!
+		const pvCheckRes = await fetch(`${BASE_URL}/api/studio/analytics?range=all`, {
+			headers: DEV_AUTH_HEADER,
+		});
+		const pvCheckData = (await pvCheckRes.json()).analytics;
+		console.log("  After page visits/refreshes:", {
+			totalPageViews: pvCheckData.visitors?.totalPageViewsPeriod,
+			linkClicksPeriod: pvCheckData.linkClicksPeriod,
+			exploreClicksPeriod: pvCheckData.exploreClicksPeriod,
+			contactClicksPeriod: pvCheckData.contactClicksPeriod,
+			totalInteractionsPeriod: pvCheckData.totalInteractionsPeriod,
 		});
 
-		assert.ok(
-			monitoredData.exploreClicksPeriod >= 1,
-			`exploreClicksPeriod should be >= 1, got ${monitoredData.exploreClicksPeriod}`
-		);
-		assert.ok(
-			monitoredData.contactClicksPeriod >= 1,
-			`contactClicksPeriod should be >= 1, got ${monitoredData.contactClicksPeriod}`
-		);
-		assert.ok(
-			monitoredData.totalInteractionsPeriod >= 2,
-			`totalInteractionsPeriod should be >= 2, got ${monitoredData.totalInteractionsPeriod}`
-		);
-		console.log("  ✓ Telemetry successfully recorded and separated for Explore & Contact visits.");
+		assert.ok((pvCheckData.visitors?.totalPageViewsPeriod || 0) >= 2, "Page views must be recorded");
+		assert.equal(pvCheckData.exploreClicksPeriod, 0, "Explore clicks MUST remain 0 after mere page visits/refreshes");
+		assert.equal(pvCheckData.contactClicksPeriod, 0, "Contact clicks MUST remain 0 after mere page visits/refreshes");
+		assert.equal(pvCheckData.linkClicksPeriod, 0, "Link clicks MUST remain 0");
+		assert.equal(pvCheckData.totalInteractionsPeriod, 0, "Total interactions MUST remain 0 when no actual clicks occurred");
+		console.log("  ✓ PASSED: Opening or refreshing Explore/Contact pages does NOT trigger click telemetry.");
 
-		// Check Click Monitor UI in Studio
-		await page.setExtraHTTPHeaders(DEV_AUTH_HEADER);
-		await page.goto(`${BASE_URL}/studio?tab=clicks`, { waitUntil: "load" });
-		await page.waitForTimeout(600);
+		// 8.2. Actual Explore Item Click
+		console.log("  8.2 Simulating actual user click on Explore item card...");
+		await fetch(`${BASE_URL}/api/public/telemetry`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				type: "interaction",
+				category: "explore",
+				targetId: "explore-item-test-1",
+			}),
+		});
 
-		const clickMonitorHtml = await page.content();
-		assert.ok(clickMonitorHtml.includes("Total Interaksi"), "Must show 'Total Interaksi'");
-		assert.ok(clickMonitorHtml.includes("Klik Tautan"), "Must show 'Klik Tautan'");
-		assert.ok(clickMonitorHtml.includes("Klik Eksplorasi"), "Must show 'Klik Eksplorasi'");
-		assert.ok(clickMonitorHtml.includes("Klik Kontak"), "Must show 'Klik Kontak'");
-		console.log("  ✓ Click Monitor displays all 4 separated interaction metrics cleanly.");
+		const afterExploreClickRes = await fetch(`${BASE_URL}/api/studio/analytics?range=all`, {
+			headers: DEV_AUTH_HEADER,
+		});
+		const afterExploreClickData = (await afterExploreClickRes.json()).analytics;
+		assert.equal(afterExploreClickData.exploreClicksPeriod, 1, "Explore clicks must be exactly 1");
+		assert.equal(afterExploreClickData.contactClicksPeriod, 0, "Contact clicks must remain 0");
+		assert.equal(afterExploreClickData.linkClicksPeriod, 0, "Link clicks must remain 0");
+		assert.equal(afterExploreClickData.totalInteractionsPeriod, 1, "Total interactions must be exactly 1");
+		console.log("  ✓ PASSED: Actual Explore click recorded independently (Explore=1, Contact=0, Links=0, Total=1).");
+
+		// 8.3. Actual Contact Method Click
+		console.log("  8.3 Simulating actual user click on Contact method card...");
+		await fetch(`${BASE_URL}/api/public/telemetry`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				type: "interaction",
+				category: "contact",
+				targetId: "contact-method-email",
+			}),
+		});
+
+		const afterContactClickRes = await fetch(`${BASE_URL}/api/studio/analytics?range=all`, {
+			headers: DEV_AUTH_HEADER,
+		});
+		const afterContactClickData = (await afterContactClickRes.json()).analytics;
+		assert.equal(afterContactClickData.exploreClicksPeriod, 1, "Explore clicks must remain 1");
+		assert.equal(afterContactClickData.contactClicksPeriod, 1, "Contact clicks must be exactly 1");
+		assert.equal(afterContactClickData.linkClicksPeriod, 0, "Link clicks must remain 0");
+		assert.equal(afterContactClickData.totalInteractionsPeriod, 2, "Total interactions must be exactly 2");
+		console.log("  ✓ PASSED: Actual Contact click recorded independently (Explore=1, Contact=1, Links=0, Total=2).");
+
+		// 8.4. Actual Link Redirect Click
+		console.log("  8.4 Simulating actual user click on Bio Link redirect (/go/test-link-1)...");
+		await fetch(`${BASE_URL}/go/test-link-1`, { redirect: "manual" });
+
+		const afterLinkClickRes = await fetch(`${BASE_URL}/api/studio/analytics?range=all`, {
+			headers: DEV_AUTH_HEADER,
+		});
+		const afterLinkClickData = (await afterLinkClickRes.json()).analytics;
+		assert.equal(afterLinkClickData.exploreClicksPeriod, 1, "Explore clicks must remain 1");
+		assert.equal(afterLinkClickData.contactClicksPeriod, 1, "Contact clicks must remain 1");
+		assert.equal(afterLinkClickData.linkClicksPeriod, 1, "Link clicks must be exactly 1");
+		assert.equal(afterLinkClickData.totalInteractionsPeriod, 3, "Total interactions must be 3 (1 Link + 1 Explore + 1 Contact)");
+		console.log("  ✓ PASSED: Actual Link click recorded independently (Explore=1, Contact=1, Links=1, Total=3).");
+
+		// 8.5. Studio Click Monitor UI Verification
+		console.log("  8.5 Auditing Studio Click Monitor UI cards & subtexts...");
+		await context.setExtraHTTPHeaders(DEV_AUTH_HEADER);
+		await page.goto(`${BASE_URL}/studio?tab=clicks`, { waitUntil: "networkidle" });
+		await page.waitForTimeout(1000);
+
+		const clickMonitorText = await page.innerText("body");
+		const lowerText = clickMonitorText.toLowerCase();
+		assert.ok(lowerText.includes("total interaksi"), "Must show 'Total Interaksi'");
+		assert.ok(lowerText.includes("klik tautan"), "Must show 'Klik Tautan'");
+		assert.ok(lowerText.includes("klik eksplorasi"), "Must show 'Klik Eksplorasi'");
+		assert.ok(lowerText.includes("klik kontak"), "Must show 'Klik Kontak'");
+		assert.ok(lowerText.includes("akumulasi klik link, explore & contact"), "Must show accurate total subtext");
+		assert.ok(lowerText.includes("interaksi aktual pada kartu & karya explore"), "Must show accurate explore subtext");
+		assert.ok(lowerText.includes("klik aktual pada kartu metode kontak"), "Must show accurate contact subtext");
+		console.log("  ✓ PASSED: Click Monitor displays all 4 separated interaction metrics and verified subtexts.");
 
 		await page.screenshot({ path: path.join(SCREENSHOT_DIR, "v4-1-studio-click-monitor.png") });
 
@@ -383,10 +441,11 @@ async function runV41Verification() {
 		assert.equal(finalData.totalInteractionsPeriod, 0, "Final totalInteractionsPeriod must be 0");
 		assert.equal(finalData.exploreClicksPeriod, 0, "Final exploreClicksPeriod must be 0");
 		assert.equal(finalData.contactClicksPeriod, 0, "Final contactClicksPeriod must be 0");
-		console.log("  ✓ Analytics final reset verified: click_events and page_views are 0.");
+		assert.equal(finalData.visitors?.totalPageViewsPeriod, 0, "Final page views must be 0");
+		console.log("  ✓ Analytics final reset verified: click_events, interaction_events, and page_views are strictly 0.");
 
 		console.log("\n============================================================");
-		console.log("ALL V4.1 UI REFINEMENT & ANALYTICS TESTS PASSED SUCCESSFULLY!");
+		console.log("ALL V4.1 UI REFINEMENT & ACTUAL INTERACTION TESTS PASSED!");
 		console.log("============================================================\n");
 	} finally {
 		await browser.close();
