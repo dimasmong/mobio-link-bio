@@ -1,5 +1,6 @@
 import type { Route } from "./+types/api.public.media.$id";
 import { getMediaAssetById } from "../lib/media.server";
+import { requireAdmin } from "../lib/auth.server";
 
 function parseRangeHeader(
 	rangeHeader: string | null,
@@ -48,9 +49,16 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		return new Response("Media tidak ditemukan.", { status: 404 });
 	}
 
-	// Strictly enforce publication privacy: only published assets can be served publicly
+	// Enforce publication privacy: published assets are served publicly.
+	// Non-published (draft/uploaded) assets are ONLY accessible to authenticated studio admins for preview.
+	let isDraftPreviewAccess = false;
 	if (asset.status !== "published") {
-		return new Response("Media belum dipublikasikan.", { status: 403 });
+		try {
+			await requireAdmin(request, env);
+			isDraftPreviewAccess = true;
+		} catch {
+			return new Response("Media belum dipublikasikan.", { status: 403 });
+		}
 	}
 
 	const rangeHeader = request.headers.get("Range");
@@ -73,7 +81,12 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 	headers.set("Content-Type", asset.mime_type);
 	headers.set("Accept-Ranges", "bytes");
 	headers.set("X-Content-Type-Options", "nosniff");
-	headers.set("Cache-Control", "public, max-age=31536000, immutable");
+
+	if (isDraftPreviewAccess) {
+		headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate");
+	} else {
+		headers.set("Cache-Control", "public, max-age=31536000, immutable");
+	}
 
 	if (range) {
 		headers.set("Content-Range", `bytes ${range.start}-${range.end}/${asset.size_bytes}`);

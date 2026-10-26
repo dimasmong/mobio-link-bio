@@ -38,7 +38,7 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 	return (
 		<header className="w-full relative z-10">
 			<div className="glass-liquid-primary rounded-3xl sm:rounded-4xl relative overflow-hidden transition-all duration-300">
-				{/* 1. Full Uninterrupted Cover Banner (One whole banner, zero grey capsule overlay) */}
+				{/* 1. Full Uninterrupted Cover Banner with Bottom Gradient Vignette */}
 				{hasCover && (
 					<div className={`w-full ${coverAspectRatio} relative overflow-hidden z-0`}>
 						{hasCustomCover ? (
@@ -70,6 +70,11 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 								/>
 							</div>
 						)}
+						{/* Refined cover-to-body vignette melt */}
+						<div
+							className="absolute inset-x-0 bottom-0 h-16 sm:h-20 bg-gradient-to-t from-[var(--glass-surface-primary)] via-[var(--glass-surface-primary)]/40 to-transparent pointer-events-none"
+							aria-hidden="true"
+						/>
 					</div>
 				)}
 
@@ -85,33 +90,35 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 						aria-hidden="true"
 					/>
 
-					{/* Circular Avatar overlapping the cover boundary */}
+					{/* Sculpted Avatar Pedestal with Dual Specular Rings */}
 					<div className={`relative ${hasCover ? "-mt-12 sm:-mt-14 md:-mt-16 mb-3 sm:mb-4" : "mb-4 sm:mb-5"} z-20`}>
-						<div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-tr from-white/90 via-[var(--glass-surface-primary)] to-white/70 shadow-xl ring-4 ring-[var(--glass-surface-primary)] flex items-center justify-center">
-							{hasAvatar && !imageError ? (
-								<img
-									src={profile.avatarUrl}
-									alt={profile.name}
-									width={128}
-									height={128}
-									onError={() => setImageError(true)}
-									className="w-full h-full rounded-full object-cover ring-2 ring-white/95 bg-slate-100"
-									loading="eager"
-								/>
-							) : (
-								<div
-									className="w-full h-full rounded-full flex items-center justify-center bg-theme-accent font-bold text-2xl sm:text-3xl md:text-4xl shadow-inner ring-2 ring-white/95 select-none"
-									style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-foreground)" }}
-									aria-label={profile.name}
-								>
-									{initials}
-								</div>
-							)}
+						<div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full p-1.5 bg-[var(--glass-surface-primary)] border border-[var(--glass-border-specular)] shadow-2xl backdrop-blur-xl flex items-center justify-center transition-transform hover:scale-105 duration-300">
+							<div className="w-full h-full rounded-full overflow-hidden ring-2 ring-white/50 dark:ring-white/10 shadow-inner flex items-center justify-center">
+								{hasAvatar && !imageError ? (
+									<img
+										src={profile.avatarUrl}
+										alt={profile.name}
+										width={128}
+										height={128}
+										onError={() => setImageError(true)}
+										className="w-full h-full object-cover bg-slate-100 dark:bg-slate-800"
+										loading="eager"
+									/>
+								) : (
+									<div
+										className="w-full h-full flex items-center justify-center bg-theme-accent font-extrabold text-2xl sm:text-3xl md:text-4xl shadow-inner select-none"
+										style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-foreground)" }}
+										aria-label={profile.name}
+									>
+										{initials}
+									</div>
+								)}
+							</div>
 						</div>
 					</div>
 
 					{/* Display Name */}
-					<h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-theme-primary mb-1.5">
+					<h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-theme-primary mb-2 drop-shadow-xs">
 						{profile.name}
 					</h1>
 
@@ -121,13 +128,14 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 							hasBio ? "mb-4" : "mb-0"
 						}`}
 					>
-						<span className="font-semibold px-2.5 py-0.5 rounded-full border bg-theme-accent-subtle">
+						<span className="font-semibold px-3 py-1 rounded-full border border-[var(--glass-border-subtle)] bg-[var(--glass-surface-secondary)] text-theme-primary shadow-xs inline-flex items-center gap-1.5 backdrop-blur-md">
+							<span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-color)]" aria-hidden="true" />
 							{profile.handle}
 						</span>
 						{hasLocation && (
 							<>
 								<span className="opacity-40">•</span>
-								<span className="inline-flex items-center gap-1 font-medium text-theme-secondary">
+								<span className="inline-flex items-center gap-1 font-medium text-theme-secondary px-2.5 py-1 rounded-full bg-[var(--glass-surface-secondary)]/50 border border-[var(--glass-border-subtle)]/50">
 									<GlobeIcon className="w-3.5 h-3.5 text-theme-muted" />
 									{profile.location?.[lang]}
 								</span>

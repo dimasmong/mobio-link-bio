@@ -818,8 +818,29 @@ export interface ComputedThemeVariables {
 }
 
 /**
+ * Helper to check whether a color string (HEX or RGBA) is dark
+ */
+export function isDarkColor(colorStr?: string): boolean {
+	if (!colorStr) return false;
+	const s = colorStr.trim().toLowerCase();
+	if (s.startsWith("#")) {
+		const { r, g, b } = hexToRgb(s);
+		return getLuminance(r, g, b) < 0.35;
+	}
+	const rgbaMatch = s.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+	if (rgbaMatch) {
+		const r = parseInt(rgbaMatch[1], 10);
+		const g = parseInt(rgbaMatch[2], 10);
+		const b = parseInt(rgbaMatch[3], 10);
+		return getLuminance(r, g, b) < 0.35;
+	}
+	return false;
+}
+
+/**
  * Computes all CSS custom properties for a given appearance record or preset.
  * Takes user overrides (custom accent color, custom glass blur, custom tint) into account.
+ * Guards against cross-mode pollution (e.g. dark tint stuck when switching to a light theme).
  */
 export function computeThemeVariables(
 	appearance?: {
@@ -849,8 +870,16 @@ export function computeThemeVariables(
 	const accentHover = hexToRgba(accentHex, 0.85);
 	const accentRing = hexToRgba(accentHex, 0.45);
 
-	// Glass surfaces with optional user tint / opacity override
-	const glassSurfacePrimary = appearance?.glass_tint || tokens.glassSurfacePrimary;
+	// Mode-aware glass surfaces & overlay: prevent obsolete cross-mode overrides (e.g. AMOLED black stuck on Frost Aurora)
+	let glassSurfacePrimary = tokens.glassSurfacePrimary;
+	if (appearance?.glass_tint && appearance.glass_tint.trim() !== "") {
+		const tintDark = isDarkColor(appearance.glass_tint);
+		// Only accept override if it matches the preset mode
+		if ((preset.mode === "dark" && tintDark) || (preset.mode === "light" && !tintDark)) {
+			glassSurfacePrimary = appearance.glass_tint;
+		}
+	}
+
 	const glassBlur = appearance?.glass_blur || tokens.glassBlur;
 	const glassOpacity =
 		appearance?.glass_opacity !== undefined
@@ -858,7 +887,14 @@ export function computeThemeVariables(
 			: tokens.glassOpacity.toString();
 	const glassRadius = appearance?.glass_radius || tokens.glassRadius;
 
-	const overlayColor = appearance?.background_overlay_color || tokens.overlayColor;
+	let overlayColor = tokens.overlayColor;
+	if (appearance?.background_overlay_color && appearance.background_overlay_color.trim() !== "") {
+		const overlayDark = isDarkColor(appearance.background_overlay_color);
+		if ((preset.mode === "dark" && overlayDark) || (preset.mode === "light" && !overlayDark)) {
+			overlayColor = appearance.background_overlay_color;
+		}
+	}
+
 	const overlayOpacity =
 		appearance?.background_overlay_opacity !== undefined
 			? appearance.background_overlay_opacity.toString()

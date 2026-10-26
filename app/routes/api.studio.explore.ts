@@ -7,6 +7,11 @@ import {
 	deleteDraftExploreItem,
 	duplicateDraftExploreItem,
 	reorderDraftExploreItems,
+	getExploreSubcategories,
+	createDraftExploreSubcategory,
+	updateDraftExploreSubcategory,
+	deleteDraftExploreSubcategory,
+	reorderDraftExploreSubcategories,
 	validateUrl,
 	type ExploreBlockType,
 } from "../lib/db.server";
@@ -33,7 +38,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	}
 
 	const explore = await getExploreItems(env.DB, "draft");
-	return Response.json({ status: "ok", explore });
+	const subcategories = await getExploreSubcategories(env.DB, "draft");
+	return Response.json({ status: "ok", explore, subcategories });
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -53,7 +59,51 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	const method = request.method.toUpperCase();
 
-	// 1. DELETE
+	// --- Subcategory Actions (Can be invoked via POST/PUT/DELETE with body.action) ---
+	if (body.action === "create_subcategory") {
+		const category = typeof body.category === "string" ? body.category.trim() : "all";
+		const labelId = typeof body.label_id === "string" ? body.label_id.trim() : "";
+		const labelEn = typeof body.label_en === "string" ? body.label_en.trim() : labelId;
+		if (!labelId) {
+			return Response.json({ error: "Label subkategori wajib diisi." }, { status: 422 });
+		}
+		const subcat = await createDraftExploreSubcategory(env.DB, {
+			category,
+			label_id: labelId,
+			label_en: labelEn,
+			icon: typeof body.icon === "string" ? body.icon.trim() : "",
+			color: typeof body.color === "string" ? body.color.trim() : "",
+		});
+		return Response.json({ status: "ok", message: "Subkategori berhasil dibuat.", subcategory: subcat }, { status: 201 });
+	}
+
+	if (body.action === "update_subcategory") {
+		const id = typeof body.id === "string" ? body.id.trim() : "";
+		if (!id) {
+			return Response.json({ error: "Parameter 'id' wajib diisi." }, { status: 422 });
+		}
+		await updateDraftExploreSubcategory(env.DB, id, body);
+		return Response.json({ status: "ok", message: "Subkategori berhasil diperbarui." });
+	}
+
+	if (body.action === "delete_subcategory") {
+		const id = typeof body.id === "string" ? body.id.trim() : "";
+		if (!id) {
+			return Response.json({ error: "Parameter 'id' wajib diisi." }, { status: 422 });
+		}
+		await deleteDraftExploreSubcategory(env.DB, id);
+		return Response.json({ status: "ok", message: "Subkategori berhasil dihapus." });
+	}
+
+	if (body.action === "reorder_subcategories") {
+		if (Array.isArray(body.orderedIds)) {
+			await reorderDraftExploreSubcategories(env.DB, body.orderedIds as string[]);
+			return Response.json({ status: "ok", message: "Urutan subkategori berhasil diperbarui." });
+		}
+		return Response.json({ error: "Daftar orderedIds wajib disertakan." }, { status: 422 });
+	}
+
+	// 1. DELETE Explore Item
 	if (method === "DELETE") {
 		const id = typeof body.id === "string" ? body.id.trim() : "";
 		if (!id) {
@@ -63,7 +113,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return Response.json({ status: "ok", message: "Item Explore berhasil dihapus dari draft." });
 	}
 
-	// 2. PUT (Update, Duplicate, or Reorder)
+	// 2. PUT (Update, Duplicate, or Reorder Explore Item)
 	if (method === "PUT") {
 		// Reorder operation
 		if (Array.isArray(body.orderedIds)) {
@@ -121,7 +171,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return Response.json({ status: "ok", message: "Item Explore berhasil diperbarui di draft." });
 	}
 
-	// 3. POST (Create)
+	// 3. POST (Create Explore Item)
 	if (method === "POST") {
 		const typeStr = typeof body.type === "string" ? body.type.trim().toLowerCase() : "custom";
 		const titleId = typeof body.title_id === "string" ? body.title_id.trim() : "";
@@ -175,6 +225,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			badge_id: typeof body.badge_id === "string" ? body.badge_id.trim() : "",
 			badge_en: typeof body.badge_en === "string" ? body.badge_en.trim() : "",
 			metadata_json: metadataJson,
+			category: typeof body.category === "string" ? body.category.trim() : "all",
+			subcategory_id: typeof body.subcategory_id === "string" ? body.subcategory_id.trim() : "",
 			is_enabled: body.is_enabled === 0 ? 0 : 1,
 		});
 

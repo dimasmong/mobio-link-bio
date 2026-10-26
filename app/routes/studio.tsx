@@ -7,6 +7,7 @@ import {
 	getLinks,
 	getContactMethods,
 	getExploreItems,
+	getExploreSubcategories,
 	getAppearanceRecord,
 	getPublishMetadata,
 	type DatabaseStatus,
@@ -14,6 +15,7 @@ import {
 	type LinkRecord,
 	type ContactMethodRecord,
 	type ExploreItemRecord,
+	type ExploreSubcategoryRecord,
 	type ExploreBlockType,
 	type AppearanceRecord,
 	type PublishMetadataRecord,
@@ -58,13 +60,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			draftContacts: [] as ContactMethodRecord[],
 			draftAppearance: null as AppearanceRecord | null,
 			draftExplore: [] as ExploreItemRecord[],
+			draftSubcategories: [] as ExploreSubcategoryRecord[],
 			publishMetadata: null as PublishMetadataRecord | null,
 			initialAnalytics: null as ClickAnalyticsSummary | null,
 			envMode: import.meta.env.MODE,
 		};
 	}
 
-	const [dbStatus, draftProfile, draftLinks, draftContacts, draftExplore, draftAppearance, publishMetadata, initialAnalytics] = await Promise.all([
+	const [dbStatus, draftProfile, draftLinks, draftContacts, draftExplore, draftAppearance, publishMetadata, initialAnalytics, draftSubcategories] = await Promise.all([
 		getDatabaseStatus(env?.DB),
 		env?.DB ? getProfileRecord(env.DB, "draft") : null,
 		env?.DB ? getLinks(env.DB, "draft") : [],
@@ -73,6 +76,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		env?.DB ? getAppearanceRecord(env.DB, "draft") : null,
 		env?.DB ? getPublishMetadata(env.DB) : null,
 		env?.DB ? getClickSummary(env.DB, "7d") : null,
+		env?.DB ? getExploreSubcategories(env.DB, "draft") : [],
 	]);
 
 	return {
@@ -85,6 +89,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		draftLinks,
 		draftContacts,
 		draftExplore,
+		draftSubcategories,
 		draftAppearance,
 		publishMetadata,
 		initialAnalytics,
@@ -252,7 +257,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 	// Media Library Modal state (Cloudflare R2 + D1 Registry)
 	const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
-	const [mediaTarget, setMediaTarget] = useState<"avatar" | "cover" | "background" | "background_poster" | "explore_cover" | null>(null);
+	const [mediaTarget, setMediaTarget] = useState<"avatar" | "cover" | "background" | "background_poster" | "explore_cover" | "gallery_photo" | null>(null);
 	const [mediaCategoryFilter, setMediaCategoryFilter] = useState<string>("all");
 	const [mediaList, setMediaList] = useState<MediaAssetRecord[]>([]);
 	const [isLoadingMedia, setIsLoadingMedia] = useState(false);
@@ -260,8 +265,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 	const [uploadError, setUploadError] = useState<string | null>(null);
 	const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
 
-	// Explore items state (Phase 4)
+	// Explore items & Subcategories state (Phase 4 & Phase 6)
 	const [exploreItems, setExploreItems] = useState<ExploreItemRecord[]>(loaderData.draftExplore || []);
+	const [subcategories, setSubcategories] = useState<ExploreSubcategoryRecord[]>(loaderData.draftSubcategories || []);
+	const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
+	const [editingSubcat, setEditingSubcat] = useState<ExploreSubcategoryRecord | null>(null);
+	const [subcatForm, setSubcatForm] = useState({ category: "work", label_id: "", label_en: "", color: "#8b5cf6" });
+	const [isSubmittingSubcat, setIsSubmittingSubcat] = useState(false);
+
 	const [exploreFilterType, setExploreFilterType] = useState<string>("all");
 	const [exploreSearchQuery, setExploreSearchQuery] = useState("");
 	const [isAddExploreOpen, setIsAddExploreOpen] = useState(false);
@@ -272,6 +283,8 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 	const [isSubmittingExplore, setIsSubmittingExplore] = useState(false);
 	const [exploreForm, setExploreForm] = useState({
 		type: "project" as ExploreBlockType,
+		category: "all",
+		subcategory_id: "",
 		title_id: "",
 		title_en: "",
 		subtitle_id: "",
@@ -282,6 +295,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		cover_image: "",
 		badge_id: "",
 		badge_en: "",
+		photos: [] as { url: string; caption?: string; id?: string }[],
 		tags: "",
 		year: "",
 		rating: "",
@@ -854,9 +868,30 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 	// =========================================================================
 	// HANDLERS: PUBLISH & DISCARD
 	// =========================================================================
+	const saveDraftAppearanceDirectly = async (updated: AppearanceRecord) => {
+		try {
+			await fetch("/api/studio/appearance", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ action: "save", appearance: updated }),
+			});
+		} catch {
+			// silent fallback
+		}
+	};
+
 	const handlePublishChanges = async () => {
 		setIsPublishing(true);
 		try {
+			// Ensure in-memory appearance changes are saved to draft first
+			try {
+				await fetch("/api/studio/appearance", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ action: "save", appearance }),
+				});
+			} catch {}
+
 			const res = await fetch("/api/studio/publish", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -952,9 +987,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		}
 	}, []);
 
-	const handleOpenMediaLibrary = (target: "avatar" | "cover" | "background" | "background_poster" | "explore_cover") => {
+	const handleOpenMediaLibrary = (target: "avatar" | "cover" | "background" | "background_poster" | "explore_cover" | "gallery_photo") => {
 		setMediaTarget(target);
-		const initialCategory = target === "avatar" ? "avatar" : target === "cover" ? "cover" : target === "explore_cover" ? "all" : "background";
+		const initialCategory = target === "avatar" ? "avatar" : target === "cover" ? "cover" : target === "explore_cover" || target === "gallery_photo" ? "all" : "background";
 		setMediaCategoryFilter(initialCategory);
 		setIsMediaModalOpen(true);
 		fetchMediaList(initialCategory);
@@ -1008,18 +1043,31 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		} else if (mediaTarget === "explore_cover") {
 			setExploreForm((prev) => ({
 				...prev,
-				cover_image: `/api/studio/media/${asset.id}/preview`,
+				cover_image: `/api/public/media/${asset.id}`,
+			}));
+		} else if (mediaTarget === "gallery_photo") {
+			const newPhoto = {
+				id: asset.id,
+				url: `/api/public/media/${asset.id}`,
+				caption: "",
+			};
+			setExploreForm((prev) => ({
+				...prev,
+				photos: [...(prev.photos || []), newPhoto],
+				cover_image: prev.cover_image || `/api/public/media/${asset.id}`,
 			}));
 		}
 		setIsMediaModalOpen(false);
 		showToast(`Media berhasil dipilih untuk ${mediaTarget}.`, "success");
 	};
 
-	// HANDLERS: EXPLORE EDITOR (PHASE 4)
+	// HANDLERS: EXPLORE & SUBCATEGORIES (PHASE 4 & PHASE 6 & PHASE 8)
 	// =========================================================================
 	const handleOpenAddExplore = () => {
 		setExploreForm({
 			type: "project",
+			category: "all",
+			subcategory_id: "",
 			title_id: "",
 			title_en: "",
 			subtitle_id: "",
@@ -1030,6 +1078,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			cover_image: "",
 			badge_id: "",
 			badge_en: "",
+			photos: [],
 			tags: "",
 			year: "",
 			rating: "",
@@ -1049,6 +1098,8 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		setEditingExplore(item);
 		setExploreForm({
 			type: (item.type as ExploreBlockType) || "project",
+			category: item.category || "all",
+			subcategory_id: item.subcategory_id || "",
 			title_id: item.title_id || "",
 			title_en: item.title_en || "",
 			subtitle_id: item.subtitle_id || "",
@@ -1059,6 +1110,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			cover_image: item.cover_image || "",
 			badge_id: item.badge_id || "",
 			badge_en: item.badge_en || "",
+			photos: Array.isArray(meta.photos) ? meta.photos : [],
 			tags: Array.isArray(meta.tags) ? meta.tags.join(", ") : "",
 			year: meta.year || "",
 			rating: meta.rating || "",
@@ -1074,9 +1126,12 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		if (exploreForm.year) meta.year = exploreForm.year.trim();
 		if (exploreForm.rating) meta.rating = exploreForm.rating.trim();
 		if (exploreForm.artist) meta.artist = exploreForm.artist.trim();
+		if (exploreForm.photos && exploreForm.photos.length > 0) meta.photos = exploreForm.photos;
 
 		return {
 			type: exploreForm.type,
+			category: exploreForm.category.trim() || "all",
+			subcategory_id: exploreForm.subcategory_id.trim() || "",
 			title_id: exploreForm.title_id.trim(),
 			title_en: exploreForm.title_en.trim() || exploreForm.title_id.trim(),
 			subtitle_id: exploreForm.subtitle_id.trim(),
@@ -1090,6 +1145,93 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			metadata_json: JSON.stringify(meta),
 			is_enabled: exploreForm.is_enabled ? 1 : 0,
 		};
+	};
+
+	const handleSaveSubcategory = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!subcatForm.label_id.trim()) {
+			showToast("Label subkategori wajib diisi.", "error");
+			return;
+		}
+		setIsSubmittingSubcat(true);
+		try {
+			if (editingSubcat) {
+				const res = await fetch("/api/studio/explore", {
+					method: "PUT",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						action: "update_subcategory",
+						id: editingSubcat.id,
+						category: subcatForm.category,
+						label_id: subcatForm.label_id.trim(),
+						label_en: subcatForm.label_en.trim() || subcatForm.label_id.trim(),
+						color: subcatForm.color,
+					}),
+				});
+				if (res.ok) {
+					setSubcategories((prev) =>
+						prev.map((s) =>
+							s.id === editingSubcat.id
+								? {
+										...s,
+										category: subcatForm.category,
+										label_id: subcatForm.label_id.trim(),
+										label_en: subcatForm.label_en.trim() || subcatForm.label_id.trim(),
+										color: subcatForm.color,
+								  }
+								: s
+						)
+					);
+					setEditingSubcat(null);
+					setSubcatForm({ category: "work", label_id: "", label_en: "", color: "#8b5cf6" });
+					showToast("Subkategori berhasil diperbarui.", "success");
+					markUnpublished();
+				}
+			} else {
+				const res = await fetch("/api/studio/explore", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						action: "create_subcategory",
+						category: subcatForm.category,
+						label_id: subcatForm.label_id.trim(),
+						label_en: subcatForm.label_en.trim() || subcatForm.label_id.trim(),
+						color: subcatForm.color,
+					}),
+				});
+				const data = (await res.json()) as { status: string; subcategory?: ExploreSubcategoryRecord };
+				if (res.ok && data.subcategory) {
+					setSubcategories((prev) => [...prev, data.subcategory!]);
+					setSubcatForm({ category: "work", label_id: "", label_en: "", color: "#8b5cf6" });
+					showToast("Subkategori baru berhasil ditambahkan.", "success");
+					markUnpublished();
+				}
+			}
+		} catch {
+			showToast("Gagal menyimpan subkategori.", "error");
+		} finally {
+			setIsSubmittingSubcat(false);
+		}
+	};
+
+	const handleDeleteSubcategory = async (id: string) => {
+		try {
+			const res = await fetch("/api/studio/explore", {
+				method: "DELETE",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ action: "delete_subcategory", id }),
+			});
+			if (res.ok) {
+				setSubcategories((prev) => prev.filter((s) => s.id !== id));
+				setExploreItems((prev) =>
+					prev.map((item) => (item.subcategory_id === id ? { ...item, subcategory_id: "" } : item))
+				);
+				showToast("Subkategori berhasil dihapus.", "success");
+				markUnpublished();
+			}
+		} catch {
+			showToast("Gagal menghapus subkategori.", "error");
+		}
 	};
 
 	const handleSaveNewExplore = async (e: React.FormEvent) => {
@@ -1476,15 +1618,17 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						</span>
 					</div>
 
-					{/* Preview Draft Button */}
-					<button
-						type="button"
-						onClick={() => setIsPreviewOpen(true)}
+					{/* Preview Draft Button (Real Website Preview) */}
+					<a
+						href="/studio/preview"
+						target="_blank"
+						rel="noopener noreferrer"
 						className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center gap-1.5 border border-slate-700 cursor-pointer shrink-0"
-						title="Lihat preview draft sebelum dipublikasikan"
+						title="Buka Pratinjau Draft Real Website di tab baru"
 					>
 						<span>👁 Preview Draft</span>
-					</button>
+						<span className="text-[10px] text-slate-400">↗</span>
+					</a>
 
 					{/* Discard Button (Only active when there are unpublished changes) */}
 					{hasUnpublished && (
@@ -2199,13 +2343,36 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										Sesuaikan tema visual, gambar/video latar belakang, cover banner, foto avatar, dan efek Liquid Glass.
 									</p>
 								</div>
-								<div className="flex items-center gap-2 self-start sm:self-auto">
+								<div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+									<button
+										type="button"
+										onClick={() => {
+											const currentPreset = getThemePreset(appearance.palette);
+											const resetApp: AppearanceRecord = {
+												...appearance,
+												accent_color: currentPreset.tokens.defaultAccent,
+												glass_blur: currentPreset.tokens.glassBlur,
+												glass_opacity: currentPreset.tokens.glassOpacity,
+												glass_tint: currentPreset.tokens.glassSurfacePrimary,
+												background_overlay_color: currentPreset.tokens.overlayColor,
+												background_overlay_opacity: currentPreset.tokens.overlayOpacity,
+											};
+											setAppearance(resetApp);
+											markUnpublished();
+											saveDraftAppearanceDirectly(resetApp);
+											showToast(`Karakteristik visual dikembalikan ke default ${currentPreset.name.id}.`, "info");
+										}}
+										className="px-3.5 py-2 rounded-xl bg-violet-950/60 hover:bg-violet-900/60 text-violet-300 text-xs font-semibold transition-colors cursor-pointer border border-violet-800/60"
+										title="Reset penyesuaian aksen, blur, dan kaca kembali ke nilai asli preset ini"
+									>
+										↺ Reset ke Nilai Preset
+									</button>
 									<button
 										type="button"
 										onClick={() => setIsResetAppearanceOpen(true)}
 										className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer border border-slate-700"
 									>
-										Reset Default
+										Reset Default Pabrik
 									</button>
 									<button
 										type="button"
@@ -2272,8 +2439,8 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 												key={preset.id}
 												type="button"
 												onClick={() => {
-													setAppearance((prev) => ({
-														...prev,
+													const updatedAppearance: AppearanceRecord = {
+														...appearance,
 														palette: preset.id,
 														glass_intensity: preset.mode === "dark" ? "deep" : "medium",
 														accent_color: preset.tokens.defaultAccent,
@@ -2282,9 +2449,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														glass_tint: preset.tokens.glassSurfacePrimary,
 														background_overlay_color: preset.tokens.overlayColor,
 														background_overlay_opacity: preset.tokens.overlayOpacity,
-													}));
+													};
+													setAppearance(updatedAppearance);
 													markUnpublished();
-													showToast(`Preset ${preset.name.id} diterapkan.`, "info");
+													saveDraftAppearanceDirectly(updatedAppearance);
+													showToast(`Preset ${preset.name.id} diterapkan & disimpan ke draft.`, "info");
 												}}
 												className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
 													isSelected
@@ -2975,13 +3144,29 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											Kelola item konten modular (Galeri, Foto, Video, Musik, Game, Review, Portofolio Proyek, Catatan, Tautan, dan Blok Kustom).
 										</p>
 									</div>
-									<button
-										type="button"
-										onClick={handleOpenAddExplore}
-										className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs sm:text-sm font-semibold transition-all shadow-md cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
-									>
-										<span>+ Tambah Item Explore</span>
-									</button>
+									<div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+										<button
+											type="button"
+											onClick={() => {
+												setEditingSubcat(null);
+												setSubcatForm({ category: "work", label_id: "", label_en: "", color: "#8b5cf6" });
+												setIsSubcategoryModalOpen(true);
+											}}
+											className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold transition-all border border-slate-700 cursor-pointer flex items-center gap-1.5"
+										>
+											<span>🏷 Kelola Subkategori</span>
+											<span className="px-1.5 py-0.2 rounded-full bg-slate-700 text-[10px] text-slate-300">
+												{subcategories.length}
+											</span>
+										</button>
+										<button
+											type="button"
+											onClick={handleOpenAddExplore}
+											className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs sm:text-sm font-semibold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+										>
+											<span>+ Tambah Item Explore</span>
+										</button>
+									</div>
 								</div>
 
 								{/* Filters & Search */}
@@ -4125,7 +4310,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 						</div>
 
 						<form onSubmit={isAddExploreOpen ? handleSaveNewExplore : handleSaveEditExplore} className="flex flex-col gap-4">
-							{/* Content Type Selector */}
+							{/* 1. Content Type Selector */}
 							<div>
 								<label htmlFor="ef-type" className="block text-xs font-semibold text-slate-300 mb-1">
 									Tipe Konten Modular <span className="text-rose-400">*</span>
@@ -4137,7 +4322,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none"
 								>
 									<option value="project">Proyek (Portfolio Project)</option>
-									<option value="gallery">Galeri Foto (Photo Showcase)</option>
+									<option value="gallery">Galeri Multi-Foto (Multi-Photo Showcase)</option>
 									<option value="image">Foto Tunggal (Single Artwork)</option>
 									<option value="video">Video (Video Player / Embed)</option>
 									<option value="music">Musik (Audio Track / Playlist)</option>
@@ -4149,7 +4334,60 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</select>
 							</div>
 
-							{/* Localized Title */}
+							{/* 2. Category & Subcategory Selector (Phase 6) */}
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-xl bg-slate-950/60 border border-slate-800">
+								<div>
+									<label htmlFor="ef-category" className="block text-xs font-semibold text-slate-300 mb-1">
+										Kategori Utama
+									</label>
+									<select
+										id="ef-category"
+										value={exploreForm.category}
+										onChange={(e) => setExploreForm({ ...exploreForm, category: e.target.value, subcategory_id: "" })}
+										className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-violet-500 focus:outline-none"
+									>
+										<option value="all">Semua / Umum (General)</option>
+										<option value="work">Karya & Portofolio (Work)</option>
+										<option value="creative">Kreatif & Seni (Creative)</option>
+										<option value="personal">Pribadi (Personal)</option>
+										<option value="tech">Teknologi (Tech)</option>
+										<option value="photos">Foto & Visual (Photos)</option>
+									</select>
+								</div>
+								<div>
+									<div className="flex items-center justify-between mb-1">
+										<label htmlFor="ef-subcat" className="block text-xs font-semibold text-slate-300">
+											Subkategori (Opsional)
+										</label>
+										<button
+											type="button"
+											onClick={() => {
+												setIsSubcategoryModalOpen(true);
+											}}
+											className="text-[10px] text-violet-400 hover:text-violet-300 font-semibold cursor-pointer"
+										>
+											+ Kelola
+										</button>
+									</div>
+									<select
+										id="ef-subcat"
+										value={exploreForm.subcategory_id}
+										onChange={(e) => setExploreForm({ ...exploreForm, subcategory_id: e.target.value })}
+										className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-violet-500 focus:outline-none"
+									>
+										<option value="">— Tanpa Subkategori —</option>
+										{subcategories
+											.filter((s) => exploreForm.category === "all" || s.category === exploreForm.category)
+											.map((s) => (
+												<option key={s.id} value={s.id}>
+													{s.label_id} ({s.label_en})
+												</option>
+											))}
+									</select>
+								</div>
+							</div>
+
+							{/* 3. Localized Title & Subtitle */}
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								<div>
 									<label htmlFor="ef-title-id" className="block text-xs font-semibold text-slate-300 mb-1">
@@ -4180,7 +4418,6 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</div>
 							</div>
 
-							{/* Localized Subtitle */}
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								<div>
 									<label htmlFor="ef-subtitle-id" className="block text-xs font-semibold text-slate-300 mb-1">
@@ -4240,24 +4477,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</div>
 							</div>
 
-							{/* URL & Cover Image */}
-							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-								<div>
-									<label htmlFor="ef-url" className="block text-xs font-semibold text-slate-300 mb-1">
-										Tautan Tujuan (URL)
-									</label>
-									<input
-										id="ef-url"
-										type="text"
-										value={exploreForm.url}
-										onChange={(e) => setExploreForm({ ...exploreForm, url: e.target.value })}
-										placeholder="https://..."
-										className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none font-mono"
-									/>
-								</div>
+							{/* 4. Media Sampul & Gallery Manager (Phase 3 & Phase 8) */}
+							<div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col gap-3">
 								<div>
 									<label htmlFor="ef-cover" className="block text-xs font-semibold text-slate-300 mb-1">
-										Gambar Sampul / Thumbnail
+										Gambar Sampul Utama (Cover Image)
 									</label>
 									<div className="flex gap-2">
 										<input
@@ -4265,22 +4489,189 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											type="text"
 											value={exploreForm.cover_image}
 											onChange={(e) => setExploreForm({ ...exploreForm, cover_image: e.target.value })}
-											placeholder="https://... atau media R2"
-											className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none font-mono text-xs"
+											placeholder="/api/public/media/... atau https://..."
+											className="flex-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:border-violet-500 focus:outline-none"
 										/>
 										<button
 											type="button"
 											onClick={() => handleOpenMediaLibrary("explore_cover")}
-											className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold whitespace-nowrap cursor-pointer"
-											title="Pilih gambar dari Media Library R2"
+											className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold whitespace-nowrap cursor-pointer shadow-sm"
 										>
-											Pilih Media
+											Pilih Media R2
 										</button>
 									</div>
+									{exploreForm.cover_image && (
+										<div className="mt-2.5 flex items-center gap-3">
+											<div className="w-16 h-12 rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
+												<img
+													src={exploreForm.cover_image}
+													alt="Sampul"
+													className="w-full h-full object-cover"
+												/>
+											</div>
+											<span className="text-[11px] text-slate-400">Sampul aktif saat ini</span>
+										</div>
+									)}
 								</div>
+
+								{/* Multi-Photo Gallery Showcase Manager */}
+								{(exploreForm.type === "gallery" || (exploreForm.photos && exploreForm.photos.length > 0)) && (
+									<div className="pt-3 border-t border-slate-800">
+										<div className="flex items-center justify-between mb-2">
+											<div>
+												<span className="text-xs font-bold text-pink-400 uppercase tracking-wider block">
+													Koleksi Foto Galeri ({exploreForm.photos?.length || 0} Foto)
+												</span>
+												<p className="text-[11px] text-slate-400">
+													Foto-foto ini akan tampil di galeri geser (slideshow lightbox) publik.
+												</p>
+											</div>
+											<button
+												type="button"
+												onClick={() => handleOpenMediaLibrary("gallery_photo")}
+												className="px-2.5 py-1.5 rounded-lg bg-pink-950/70 border border-pink-700/60 hover:bg-pink-900 text-pink-200 text-xs font-semibold cursor-pointer flex items-center gap-1 shadow-sm"
+											>
+												<span>+ Tambah Foto</span>
+											</button>
+										</div>
+
+										{exploreForm.photos && exploreForm.photos.length > 0 ? (
+											<div className="flex flex-col gap-2 mt-2 max-h-56 overflow-y-auto pr-1">
+												{exploreForm.photos.map((photo, idx) => {
+													const isCover = exploreForm.cover_image === photo.url;
+													return (
+														<div
+															key={idx}
+															className={`p-2.5 rounded-xl border flex items-center gap-3 ${
+																isCover
+																	? "bg-violet-950/40 border-violet-600/70"
+																	: "bg-slate-900 border-slate-800"
+															}`}
+														>
+															<div className="w-12 h-10 rounded-lg overflow-hidden border border-slate-700 shrink-0 bg-slate-950">
+																<img
+																	src={photo.url}
+																	alt={`Foto ${idx + 1}`}
+																	className="w-full h-full object-cover"
+																/>
+															</div>
+															<div className="flex-1 min-w-0">
+																<input
+																	type="text"
+																	value={photo.caption || ""}
+																	onChange={(e) => {
+																		const val = e.target.value;
+																		setExploreForm((prev) => ({
+																			...prev,
+																			photos: prev.photos.map((p, pIdx) =>
+																				pIdx === idx ? { ...p, caption: val } : p
+																			),
+																		}));
+																	}}
+																	placeholder="Keterangan foto (opsional)..."
+																	className="w-full px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-pink-500"
+																/>
+															</div>
+
+															{/* Controls */}
+															<div className="flex items-center gap-1 shrink-0">
+																{isCover ? (
+																	<span className="text-[10px] font-bold text-violet-300 bg-violet-950 px-2 py-0.5 rounded border border-violet-800">
+																		Sampul
+																	</span>
+																) : (
+																	<button
+																		type="button"
+																		onClick={() => {
+																			setExploreForm((prev) => ({ ...prev, cover_image: photo.url }));
+																			showToast("Foto ini dijadikan gambar sampul.", "info");
+																		}}
+																		className="text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded hover:bg-slate-800 cursor-pointer"
+																	>
+																		Jadikan Sampul
+																	</button>
+																)}
+
+																{/* Reorder Buttons */}
+																<button
+																	type="button"
+																	disabled={idx === 0}
+																	onClick={() => {
+																		setExploreForm((prev) => {
+																			const copy = [...prev.photos];
+																			const temp = copy[idx - 1];
+																			copy[idx - 1] = copy[idx];
+																			copy[idx] = temp;
+																			return { ...prev, photos: copy };
+																		});
+																	}}
+																	className="text-xs text-slate-400 hover:text-white disabled:opacity-30 px-1 cursor-pointer"
+																	title="Geser ke atas"
+																>
+																	▲
+																</button>
+																<button
+																	type="button"
+																	disabled={idx === exploreForm.photos.length - 1}
+																	onClick={() => {
+																		setExploreForm((prev) => {
+																			const copy = [...prev.photos];
+																			const temp = copy[idx + 1];
+																			copy[idx + 1] = copy[idx];
+																			copy[idx] = temp;
+																			return { ...prev, photos: copy };
+																		});
+																	}}
+																	className="text-xs text-slate-400 hover:text-white disabled:opacity-30 px-1 cursor-pointer"
+																	title="Geser ke bawah"
+																>
+																	▼
+																</button>
+
+																{/* Remove Button */}
+																<button
+																	type="button"
+																	onClick={() => {
+																		setExploreForm((prev) => ({
+																			...prev,
+																			photos: prev.photos.filter((_, pIdx) => pIdx !== idx),
+																		}));
+																	}}
+																	className="text-xs text-rose-400 hover:text-rose-300 px-1.5 py-0.5 rounded hover:bg-rose-950/50 cursor-pointer"
+																	title="Hapus foto dari galeri"
+																>
+																	✕
+																</button>
+															</div>
+														</div>
+													);
+												})}
+											</div>
+										) : (
+											<p className="text-xs text-slate-500 italic mt-1">
+												Belum ada foto dalam galeri ini. Klik "+ Tambah Foto" untuk memilih dari R2.
+											</p>
+										)}
+									</div>
+								)}
 							</div>
 
-							{/* Type-Specific Dynamic Fields */}
+							{/* 5. Tautan Tujuan (URL) */}
+							<div>
+								<label htmlFor="ef-url" className="block text-xs font-semibold text-slate-300 mb-1">
+									Tautan Tujuan (URL Eksternal / Demo / Unduhan)
+								</label>
+								<input
+									id="ef-url"
+									type="text"
+									value={exploreForm.url}
+									onChange={(e) => setExploreForm({ ...exploreForm, url: e.target.value })}
+									placeholder="https://..."
+									className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-violet-500 focus:outline-none font-mono"
+								/>
+							</div>
+
+							{/* 6. Type-Specific Dynamic Fields & Badges */}
 							<div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col gap-3">
 								<span className="text-[11px] font-semibold uppercase tracking-wider text-violet-400">
 									Pengaturan Tambahan ({exploreForm.type})
@@ -4394,7 +4785,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</div>
 							</div>
 
-							{/* Enabled Switch */}
+							{/* 7. Enabled Switch */}
 							<label className="flex items-center gap-2.5 cursor-pointer pt-1">
 								<input
 									type="checkbox"
@@ -4407,7 +4798,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</span>
 							</label>
 
-							{/* Actions */}
+							{/* 8. Actions */}
 							<div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
 								<button
 									type="button"
@@ -4466,6 +4857,174 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							>
 								Ya, Hapus Item
 							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* =========================================================================
+			    MODALS: SUBCATEGORY MANAGER (PHASE 6)
+			    ========================================================================= */}
+			{isSubcategoryModalOpen && (
+				<div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+					<div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl my-8">
+						<div className="flex items-center justify-between mb-4">
+							<div>
+								<h3 className="text-base font-bold text-white">Kelola Subkategori Explore</h3>
+								<p className="text-xs text-slate-400">Atur filter subkategori untuk menyusun konten lebih rapi.</p>
+							</div>
+							<button
+								type="button"
+								onClick={() => {
+									setIsSubcategoryModalOpen(false);
+									setEditingSubcat(null);
+								}}
+								className="text-slate-400 hover:text-white text-sm cursor-pointer"
+							>
+								✕
+							</button>
+						</div>
+
+						{/* Form Tambah / Edit */}
+						<form onSubmit={handleSaveSubcategory} className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 mb-5 flex flex-col gap-3">
+							<span className="text-xs font-bold text-violet-400 uppercase tracking-wider">
+								{editingSubcat ? "Edit Subkategori" : "+ Tambah Subkategori Baru"}
+							</span>
+
+							<div>
+								<label className="block text-xs text-slate-400 mb-1">Kategori Induk</label>
+								<select
+									value={subcatForm.category}
+									onChange={(e) => setSubcatForm({ ...subcatForm, category: e.target.value })}
+									className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:border-violet-500 focus:outline-none"
+								>
+									<option value="work">Karya & Portofolio (work)</option>
+									<option value="creative">Kreatif & Seni (creative)</option>
+									<option value="personal">Pribadi (personal)</option>
+									<option value="tech">Teknologi (tech)</option>
+									<option value="photos">Foto & Visual (photos)</option>
+									<option value="all">Umum (all)</option>
+								</select>
+							</div>
+
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+								<div>
+									<label className="block text-xs text-slate-400 mb-1">Label (ID) *</label>
+									<input
+										type="text"
+										required
+										value={subcatForm.label_id}
+										onChange={(e) => setSubcatForm({ ...subcatForm, label_id: e.target.value })}
+										placeholder="e.g. Desain UI"
+										className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
+									/>
+								</div>
+								<div>
+									<label className="block text-xs text-slate-400 mb-1">Label (EN)</label>
+									<input
+										type="text"
+										value={subcatForm.label_en}
+										onChange={(e) => setSubcatForm({ ...subcatForm, label_en: e.target.value })}
+										placeholder="e.g. UI Design"
+										className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200"
+									/>
+								</div>
+							</div>
+
+							<div className="flex items-center justify-between gap-3 pt-1">
+								<div className="flex items-center gap-2">
+									<label className="text-xs text-slate-400">Warna Aksen:</label>
+									<input
+										type="color"
+										value={subcatForm.color || "#8b5cf6"}
+										onChange={(e) => setSubcatForm({ ...subcatForm, color: e.target.value })}
+										className="w-7 h-7 rounded-lg bg-transparent border border-slate-700 cursor-pointer"
+									/>
+								</div>
+
+								<div className="flex items-center gap-2">
+									{editingSubcat && (
+										<button
+											type="button"
+											onClick={() => {
+												setEditingSubcat(null);
+												setSubcatForm({ category: "work", label_id: "", label_en: "", color: "#8b5cf6" });
+											}}
+											className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+										>
+											Batal Edit
+										</button>
+									)}
+									<button
+										type="submit"
+										disabled={isSubmittingSubcat}
+										className="px-4 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+									>
+										{isSubmittingSubcat ? "Menyimpan..." : editingSubcat ? "Perbarui" : "Tambah"}
+									</button>
+								</div>
+							</div>
+						</form>
+
+						{/* Daftar Subkategori yang Ada */}
+						<div>
+							<h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+								Daftar Subkategori ({subcategories.length})
+							</h4>
+							{subcategories.length === 0 ? (
+								<p className="text-xs text-slate-500 italic py-4 text-center">
+									Belum ada subkategori. Tambahkan subkategori pertama di atas.
+								</p>
+							) : (
+								<div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
+									{subcategories.map((sub) => (
+										<div
+											key={sub.id}
+											className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-3"
+										>
+											<div className="flex items-center gap-2.5 min-w-0">
+												<span
+													className="w-3 h-3 rounded-full shrink-0"
+													style={{ backgroundColor: sub.color || "#8b5cf6" }}
+												/>
+												<div className="min-w-0">
+													<div className="text-xs font-bold text-white truncate">
+														{sub.label_id} <span className="text-slate-400 font-normal">({sub.label_en})</span>
+													</div>
+													<span className="text-[10px] text-violet-400 font-mono">
+														kat: {sub.category}
+													</span>
+												</div>
+											</div>
+
+											<div className="flex items-center gap-1.5 shrink-0">
+												<button
+													type="button"
+													onClick={() => {
+														setEditingSubcat(sub);
+														setSubcatForm({
+															category: sub.category,
+															label_id: sub.label_id,
+															label_en: sub.label_en,
+															color: sub.color || "#8b5cf6",
+														});
+													}}
+													className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold cursor-pointer"
+												>
+													Edit
+												</button>
+												<button
+													type="button"
+													onClick={() => handleDeleteSubcategory(sub.id)}
+													className="px-2 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 text-[11px] font-semibold cursor-pointer"
+												>
+													Hapus
+												</button>
+											</div>
+										</div>
+									))}
+								</div>
+							)}
 						</div>
 					</div>
 				</div>

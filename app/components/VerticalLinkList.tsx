@@ -6,6 +6,7 @@ import { LinkIconRenderer } from "./IconLibrary";
 interface VerticalLinkListProps {
 	links: VerticalLink[];
 	lang: Language;
+	isPreview?: boolean;
 }
 
 function isValidUrl(url?: string): boolean {
@@ -14,7 +15,7 @@ function isValidUrl(url?: string): boolean {
 	return trimmed.length > 0 && trimmed !== "#";
 }
 
-export function VerticalLinkList({ links, lang }: VerticalLinkListProps) {
+export function VerticalLinkList({ links, lang, isPreview = false }: VerticalLinkListProps) {
 	// Filter: only display active links with valid URLs (one link per row, single column)
 	const activeLinks = (links || []).filter(
 		(l) => l.enabled !== false && isValidUrl(l.url)
@@ -52,7 +53,7 @@ export function VerticalLinkList({ links, lang }: VerticalLinkListProps) {
 			<div className="w-full flex flex-col gap-3 sm:gap-3.5">
 				{activeLinks.map((link) => {
 					const isEmail = link.url.startsWith("mailto:");
-					const href = (!isEmail && link.id && !link.id.startsWith("profile-") && !link.url.startsWith("#"))
+					const href = (!isPreview && !isEmail && link.id && !link.id.startsWith("profile-") && !link.url.startsWith("#"))
 						? `/go/${link.id}`
 						: link.url;
 

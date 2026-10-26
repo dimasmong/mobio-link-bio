@@ -72,10 +72,24 @@ export interface ExploreItemRecord {
 	badge_id?: string;
 	badge_en?: string;
 	metadata_json?: string;
+	category?: string;
+	subcategory_id?: string;
 	sort_order: number;
 	is_enabled: number;
 	created_at: string;
 	updated_at: string;
+}
+
+export interface ExploreSubcategoryRecord {
+	id: string;
+	category: string;
+	label_id: string;
+	label_en: string;
+	icon?: string;
+	color?: string;
+	sort_order: number;
+	created_at?: string;
+	updated_at?: string;
 }
 
 export interface ContactMethodRecord {
@@ -984,6 +998,8 @@ export async function createDraftExploreItem(
 		badge_id?: string;
 		badge_en?: string;
 		metadata_json?: string;
+		category?: string;
+		subcategory_id?: string;
 		sort_order?: number;
 		is_enabled?: number;
 	}
@@ -1013,6 +1029,8 @@ export async function createDraftExploreItem(
 		badge_id: item.badge_id?.trim() || "",
 		badge_en: item.badge_en?.trim() || "",
 		metadata_json: item.metadata_json?.trim() || "{}",
+		category: item.category?.trim() || "all",
+		subcategory_id: item.subcategory_id?.trim() || "",
 		sort_order: sortOrder,
 		is_enabled: item.is_enabled ?? 1,
 		created_at: now,
@@ -1022,8 +1040,8 @@ export async function createDraftExploreItem(
 	await db.batch([
 		db
 			.prepare(
-				`INSERT INTO explore_items_draft (id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, created_at, updated_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+				`INSERT INTO explore_items_draft (id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, category, subcategory_id, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 			)
 			.bind(
 				newRecord.id,
@@ -1041,6 +1059,8 @@ export async function createDraftExploreItem(
 				newRecord.metadata_json,
 				newRecord.sort_order,
 				newRecord.is_enabled,
+				newRecord.category,
+				newRecord.subcategory_id,
 				newRecord.created_at,
 				newRecord.updated_at
 			),
@@ -1089,6 +1109,8 @@ export async function updateDraftExploreItem(
 		badge_id: data.badge_id !== undefined ? data.badge_id.trim() : current.badge_id,
 		badge_en: data.badge_en !== undefined ? data.badge_en.trim() : current.badge_en,
 		metadata_json: data.metadata_json !== undefined ? data.metadata_json.trim() : current.metadata_json,
+		category: data.category !== undefined ? data.category.trim() : current.category || "all",
+		subcategory_id: data.subcategory_id !== undefined ? data.subcategory_id.trim() : current.subcategory_id || "",
 		sort_order: data.sort_order !== undefined ? data.sort_order : current.sort_order,
 		is_enabled: data.is_enabled !== undefined ? data.is_enabled : current.is_enabled,
 		updated_at: now,
@@ -1098,7 +1120,7 @@ export async function updateDraftExploreItem(
 		db
 			.prepare(
 				`UPDATE explore_items_draft
-				 SET type = ?, title_id = ?, title_en = ?, subtitle_id = ?, subtitle_en = ?, description_id = ?, description_en = ?, url = ?, cover_image = ?, badge_id = ?, badge_en = ?, metadata_json = ?, sort_order = ?, is_enabled = ?, updated_at = ?
+				 SET type = ?, title_id = ?, title_en = ?, subtitle_id = ?, subtitle_en = ?, description_id = ?, description_en = ?, url = ?, cover_image = ?, badge_id = ?, badge_en = ?, metadata_json = ?, category = ?, subcategory_id = ?, sort_order = ?, is_enabled = ?, updated_at = ?
 				 WHERE id = ?;`
 			)
 			.bind(
@@ -1114,6 +1136,8 @@ export async function updateDraftExploreItem(
 				updated.badge_id,
 				updated.badge_en,
 				updated.metadata_json,
+				updated.category,
+				updated.subcategory_id,
 				updated.sort_order,
 				updated.is_enabled,
 				updated.updated_at,
@@ -1180,6 +1204,8 @@ export async function duplicateDraftExploreItem(
 		badge_id: current.badge_id,
 		badge_en: current.badge_en,
 		metadata_json: current.metadata_json,
+		category: current.category,
+		subcategory_id: current.subcategory_id,
 		sort_order: newOrder,
 		is_enabled: current.is_enabled,
 	});
@@ -1207,6 +1233,181 @@ export async function reorderDraftExploreItems(
 				 WHERE id = 'current';`
 			)
 			.bind(now)
+	);
+
+	await db.batch(statements);
+}
+
+/**
+ * Reads explore subcategories from D1.
+ */
+export async function getExploreSubcategories(
+	db: D1Database,
+	mode: "published" | "draft" = "published",
+	category?: string
+): Promise<ExploreSubcategoryRecord[]> {
+	const table = mode === "draft" ? "explore_subcategories_draft" : "explore_subcategories";
+	try {
+		let query = `SELECT * FROM ${table}`;
+		const params: string[] = [];
+		if (category && category !== "all") {
+			query += " WHERE category = ?";
+			params.push(category);
+		}
+		query += " ORDER BY sort_order ASC, created_at ASC;";
+		const stmt = params.length > 0 ? db.prepare(query).bind(...params) : db.prepare(query);
+		const res = await stmt.all<ExploreSubcategoryRecord>();
+		return res.results ?? [];
+	} catch (err: unknown) {
+		console.warn(`Failed to fetch explore subcategories from ${table}:`, err);
+		return [];
+	}
+}
+
+/**
+ * Creates a draft explore subcategory.
+ */
+export async function createDraftExploreSubcategory(
+	db: D1Database,
+	item: {
+		category: string;
+		label_id: string;
+		label_en: string;
+		icon?: string;
+		color?: string;
+		sort_order?: number;
+	}
+): Promise<ExploreSubcategoryRecord> {
+	const id = crypto.randomUUID();
+	const now = new Date().toISOString();
+
+	let sortOrder = item.sort_order;
+	if (typeof sortOrder !== "number") {
+		const maxOrder = await db
+			.prepare("SELECT MAX(sort_order) as maxOrder FROM explore_subcategories_draft WHERE category = ?;")
+			.bind(item.category)
+			.first<{ maxOrder: number | null }>();
+		sortOrder = (maxOrder?.maxOrder ?? -1) + 1;
+	}
+
+	const newRecord: ExploreSubcategoryRecord = {
+		id,
+		category: item.category.trim(),
+		label_id: item.label_id.trim(),
+		label_en: item.label_en.trim() || item.label_id.trim(),
+		icon: item.icon?.trim() || "",
+		color: item.color?.trim() || "",
+		sort_order: sortOrder,
+		created_at: now,
+		updated_at: now,
+	};
+
+	await db.batch([
+		db.prepare(
+			`INSERT INTO explore_subcategories_draft (id, category, label_id, label_en, icon, color, sort_order, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`
+		).bind(
+			newRecord.id,
+			newRecord.category,
+			newRecord.label_id,
+			newRecord.label_en,
+			newRecord.icon,
+			newRecord.color,
+			newRecord.sort_order,
+			newRecord.created_at,
+			newRecord.updated_at
+		),
+		db.prepare(
+			`UPDATE publish_metadata SET has_unpublished_changes = 1, draft_updated_at = ? WHERE id = 'current';`
+		).bind(now),
+	]);
+
+	return newRecord;
+}
+
+/**
+ * Updates a draft explore subcategory.
+ */
+export async function updateDraftExploreSubcategory(
+	db: D1Database,
+	id: string,
+	data: Partial<ExploreSubcategoryRecord>
+): Promise<void> {
+	const now = new Date().toISOString();
+	const current = await db
+		.prepare("SELECT * FROM explore_subcategories_draft WHERE id = ? LIMIT 1;")
+		.bind(id)
+		.first<ExploreSubcategoryRecord>();
+
+	if (!current) {
+		throw new Error(`Subkategori dengan ID '${id}' tidak ditemukan.`);
+	}
+
+	const updated: ExploreSubcategoryRecord = {
+		...current,
+		...data,
+		category: data.category !== undefined ? data.category.trim() : current.category,
+		label_id: data.label_id !== undefined ? data.label_id.trim() : current.label_id,
+		label_en: data.label_en !== undefined ? data.label_en.trim() : current.label_en,
+		icon: data.icon !== undefined ? data.icon.trim() : current.icon,
+		color: data.color !== undefined ? data.color.trim() : current.color,
+		sort_order: data.sort_order !== undefined ? data.sort_order : current.sort_order,
+		updated_at: now,
+	};
+
+	await db.batch([
+		db.prepare(
+			`UPDATE explore_subcategories_draft
+			 SET category = ?, label_id = ?, label_en = ?, icon = ?, color = ?, sort_order = ?, updated_at = ?
+			 WHERE id = ?;`
+		).bind(
+			updated.category,
+			updated.label_id,
+			updated.label_en,
+			updated.icon,
+			updated.color,
+			updated.sort_order,
+			updated.updated_at,
+			id
+		),
+		db.prepare(
+			`UPDATE publish_metadata SET has_unpublished_changes = 1, draft_updated_at = ? WHERE id = 'current';`
+		).bind(now),
+	]);
+}
+
+/**
+ * Deletes a draft explore subcategory. Safe: Reassigns any explore items that had this subcategory to empty string.
+ */
+export async function deleteDraftExploreSubcategory(db: D1Database, id: string): Promise<void> {
+	const now = new Date().toISOString();
+	await db.batch([
+		db.prepare("DELETE FROM explore_subcategories_draft WHERE id = ?;").bind(id),
+		db.prepare("UPDATE explore_items_draft SET subcategory_id = '' WHERE subcategory_id = ?;").bind(id),
+		db.prepare(
+			`UPDATE publish_metadata SET has_unpublished_changes = 1, draft_updated_at = ? WHERE id = 'current';`
+		).bind(now),
+	]);
+}
+
+/**
+ * Reorders draft explore subcategories.
+ */
+export async function reorderDraftExploreSubcategories(
+	db: D1Database,
+	orderedIds: string[]
+): Promise<void> {
+	const now = new Date().toISOString();
+	const statements = orderedIds.map((id, index) =>
+		db
+			.prepare("UPDATE explore_subcategories_draft SET sort_order = ?, updated_at = ? WHERE id = ?;")
+			.bind(index, now, id)
+	);
+
+	statements.push(
+		db.prepare(
+			`UPDATE publish_metadata SET has_unpublished_changes = 1, draft_updated_at = ? WHERE id = 'current';`
+		).bind(now)
 	);
 
 	await db.batch(statements);
@@ -1446,9 +1647,17 @@ export async function publishAllDrafts(
 		// 3b. Promote explore_items_draft to explore_items
 		db.prepare("DELETE FROM explore_items;"),
 		db.prepare(
-			`INSERT INTO explore_items (id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, created_at, updated_at)
-			 SELECT id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, created_at, updated_at
+			`INSERT INTO explore_items (id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, category, subcategory_id, created_at, updated_at)
+			 SELECT id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, category, subcategory_id, created_at, updated_at
 			 FROM explore_items_draft;`
+		),
+
+		// 3c. Promote explore_subcategories_draft to explore_subcategories
+		db.prepare("DELETE FROM explore_subcategories;"),
+		db.prepare(
+			`INSERT INTO explore_subcategories (id, category, label_id, label_en, icon, color, sort_order, created_at, updated_at)
+			 SELECT id, category, label_id, label_en, icon, color, sort_order, created_at, updated_at
+			 FROM explore_subcategories_draft;`
 		),
 
 		// 4. Promote appearance_settings draft to published
@@ -1503,17 +1712,16 @@ export async function publishAllDrafts(
 		db.prepare(
 			`UPDATE media_assets
 			 SET status = 'published', updated_at = ?
-			 WHERE id IN (
-				SELECT avatar_media_id FROM profile WHERE id = 'draft' AND avatar_media_id != ''
-				UNION
-				SELECT background_media_id FROM appearance_settings WHERE id = 'draft' AND background_media_id != ''
-				UNION
-				SELECT background_poster_media_id FROM appearance_settings WHERE id = 'draft' AND background_poster_media_id != ''
-				UNION
-				SELECT cover_media_id FROM appearance_settings WHERE id = 'draft' AND cover_media_id != ''
-				UNION
-				SELECT icon_media_id FROM links_draft WHERE icon_media_id != ''
-			 );`
+			 WHERE id IN (SELECT avatar_media_id FROM profile WHERE id = 'draft' AND avatar_media_id != '')
+			    OR id IN (SELECT background_media_id FROM appearance_settings WHERE id = 'draft' AND background_media_id != '')
+			    OR id IN (SELECT background_poster_media_id FROM appearance_settings WHERE id = 'draft' AND background_poster_media_id != '')
+			    OR id IN (SELECT cover_media_id FROM appearance_settings WHERE id = 'draft' AND cover_media_id != '')
+			    OR id IN (SELECT icon_media_id FROM links_draft WHERE icon_media_id != '')
+			    OR EXISTS (
+			        SELECT 1 FROM explore_items_draft e
+			        WHERE e.cover_image LIKE '%' || media_assets.id || '%'
+			           OR e.metadata_json LIKE '%' || media_assets.id || '%'
+			    );`
 		).bind(now),
 
 		// 6. Update publish metadata
@@ -1576,9 +1784,17 @@ export async function discardAllDrafts(db: D1Database): Promise<void> {
 		// 3b. Reset explore_items_draft from explore_items
 		db.prepare("DELETE FROM explore_items_draft;"),
 		db.prepare(
-			`INSERT INTO explore_items_draft (id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, created_at, updated_at)
-			 SELECT id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, created_at, updated_at
+			`INSERT INTO explore_items_draft (id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, category, subcategory_id, created_at, updated_at)
+			 SELECT id, type, title_id, title_en, subtitle_id, subtitle_en, description_id, description_en, url, cover_image, badge_id, badge_en, metadata_json, sort_order, is_enabled, category, subcategory_id, created_at, updated_at
 			 FROM explore_items;`
+		),
+
+		// 3c. Reset explore_subcategories_draft from explore_subcategories
+		db.prepare("DELETE FROM explore_subcategories_draft;"),
+		db.prepare(
+			`INSERT INTO explore_subcategories_draft (id, category, label_id, label_en, icon, color, sort_order, created_at, updated_at)
+			 SELECT id, category, label_id, label_en, icon, color, sort_order, created_at, updated_at
+			 FROM explore_subcategories;`
 		),
 
 		// 4. Reset appearance_settings draft from published

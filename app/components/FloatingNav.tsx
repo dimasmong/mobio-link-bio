@@ -118,15 +118,15 @@ export function FloatingNav({
 
 	return (
 		<>
-			{/* DESKTOP: Floating Top Navigation Bar */}
+			{/* DESKTOP: Floating Bottom Navigation Dock */}
 			<aside
 				aria-label="Desktop Tab Navigation"
-				className="hidden sm:flex fixed top-5 left-1/2 -translate-x-1/2 z-40 transition-all duration-300"
+				className="hidden sm:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40 transition-all duration-300"
 			>
 				<div
 					role="tablist"
 					aria-label={lang === "id" ? "Menu navigasi tab" : "Tab navigation menu"}
-					className="glass-liquid-nav rounded-full p-1.5 flex items-center gap-1 shadow-lg border border-[var(--glass-border-specular)]"
+					className="glass-liquid-nav rounded-full p-2 flex items-center gap-1.5 shadow-2xl border border-[var(--glass-border-specular)] backdrop-blur-2xl"
 				>
 					{navItems.map((item, index) => {
 						const isActive = activeTab === item.id;
@@ -146,9 +146,9 @@ export function FloatingNav({
 								onKeyDown={(e) =>
 									handleKeyDown(e, index, desktopTabRefs.current)
 								}
-								className={`relative px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
+								className={`relative px-4 py-2 rounded-full text-xs font-semibold flex items-center gap-2 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
 									isActive
-										? "glass-nav-active shadow-sm"
+										? "glass-nav-active shadow-sm text-theme-primary font-bold"
 										: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
 								}`}
 							>
@@ -161,7 +161,7 @@ export function FloatingNav({
 					{/* Vertical Separator */}
 					<div className="w-px h-4 bg-[var(--glass-border-subtle)] mx-1" aria-hidden="true" />
 
-					{/* Integrated Language Globe Button & Dropdown */}
+					{/* Integrated Language Globe Button & Dropdown (Upward Opening) */}
 					<div className="relative" ref={desktopLangRef}>
 						<button
 							type="button"
@@ -169,23 +169,23 @@ export function FloatingNav({
 							aria-haspopup="menu"
 							aria-expanded={isLangOpen}
 							onClick={() => setIsLangOpen((prev) => !prev)}
-							className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
+							className={`px-3 py-2 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
 								isLangOpen
-									? "bg-[var(--glass-surface-hover)] text-theme-primary"
+									? "bg-[var(--glass-surface-hover)] text-theme-primary font-bold"
 									: "text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
 							}`}
 						>
 							<GlobeIcon className="w-3.5 h-3.5" />
 							<span className="uppercase text-[11px] font-bold">{lang}</span>
-							<span className={`text-[8px] transition-transform duration-200 ${isLangOpen ? "rotate-180" : ""}`}>▾</span>
+							<span className={`text-[8px] transition-transform duration-200 ${isLangOpen ? "rotate-180" : ""}`}>▴</span>
 						</button>
 
-						{/* Dropdown Menu */}
+						{/* Dropdown Menu (Opens Upward Above Bottom Dock) */}
 						{isLangOpen && (
 							<div
 								role="menu"
 								aria-label="Pilihan Bahasa"
-								className="absolute top-full mt-2.5 right-0 glass-liquid-secondary rounded-2xl p-1.5 shadow-2xl border border-[var(--glass-border-specular)] min-w-[150px] flex flex-col gap-1 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
+								className="absolute bottom-full mb-3 right-0 glass-liquid-secondary rounded-2xl p-1.5 shadow-2xl border border-[var(--glass-border-specular)] min-w-[160px] flex flex-col gap-1 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-2xl"
 							>
 								<button
 									type="button"

@@ -6,6 +6,7 @@ import {
 	getLinks,
 	getContactMethods,
 	getExploreItems,
+	getExploreSubcategories,
 	getAppearanceRecord,
 	getPublishMetadata,
 	type AppearanceRecord,
@@ -54,13 +55,14 @@ export async function loader({ context }: Route.LoaderArgs) {
 
 	if (env?.DB) {
 		try {
-			const [dbProfile, dbLinks, dbContacts, dbExplore, dbAppearance, pubMeta] = await Promise.all([
+			const [dbProfile, dbLinks, dbContacts, dbExplore, dbAppearance, pubMeta, dbSubcategories] = await Promise.all([
 				getProfileRecord(env.DB, "published"),
 				getLinks(env.DB, "published", true),
 				getContactMethods(env.DB, "published", true),
 				getExploreItems(env.DB, "published", true),
 				getAppearanceRecord(env.DB, "published"),
 				getPublishMetadata(env.DB),
+				getExploreSubcategories(env.DB, "published"),
 			]);
 
 			appearance = dbAppearance;
@@ -118,11 +120,19 @@ export async function loader({ context }: Route.LoaderArgs) {
 				};
 			}
 
-			// Apply explore items if published in D1
-			if (dbExplore.length > 0) {
+			// Apply explore items & subcategories if published in D1
+			if (dbExplore.length > 0 || (dbSubcategories && dbSubcategories.length > 0)) {
 				profile.explore = {
 					...profile.explore,
 					enabled: true,
+					subcategories: (dbSubcategories || []).map((sub) => ({
+						id: sub.id,
+						category: sub.category,
+						label: { id: sub.label_id, en: sub.label_en },
+						icon: sub.icon,
+						color: sub.color,
+						sortOrder: sub.sort_order,
+					})),
 					items: dbExplore.map((item) => {
 						let metadata = undefined;
 						if (item.metadata_json) {
@@ -131,6 +141,14 @@ export async function loader({ context }: Route.LoaderArgs) {
 							} catch {
 								metadata = undefined;
 							}
+						}
+						if (metadata?.photos && Array.isArray(metadata.photos)) {
+							metadata.photos = metadata.photos.map((p: any) => ({
+								...p,
+								url: typeof p.url === "string"
+									? p.url.replace(/\/api\/studio\/media\/([a-zA-Z0-9_-]+)\/preview/g, "/api/public/media/$1")
+									: p.url,
+							}));
 						}
 						return {
 							id: item.id,
@@ -145,12 +163,16 @@ export async function loader({ context }: Route.LoaderArgs) {
 									? { id: item.description_id || "", en: item.description_en || "" }
 									: undefined,
 							url: item.url || undefined,
-							coverImage: item.cover_image || undefined,
+							coverImage: item.cover_image
+								? item.cover_image.replace(/\/api\/studio\/media\/([a-zA-Z0-9_-]+)\/preview/g, "/api/public/media/$1")
+								: undefined,
 							badge:
 								item.badge_id || item.badge_en
 									? { id: item.badge_id || "", en: item.badge_en || "" }
 									: undefined,
 							metadata,
+							category: item.category || "all",
+							subcategory_id: item.subcategory_id || "",
 						};
 					}),
 				};
@@ -223,9 +245,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	const themeVariables = computeThemeVariables(appearance);
 	const dynamicStyles: React.CSSProperties = {
 		...(themeVariables as unknown as React.CSSProperties),
-		...(appearance?.accent_color ? ({ "--aurora-violet": appearance.accent_color, "--accent-color": appearance.accent_color } as React.CSSProperties) : {}),
-		...(appearance?.glass_blur ? ({ "--glass-blur": appearance.glass_blur } as React.CSSProperties) : {}),
-		...(appearance?.glass_tint ? ({ "--glass-surface-primary": appearance.glass_tint } as React.CSSProperties) : {}),
 	};
 
 	// Synchronize tab state with URL hash and browser history (Back / Forward buttons)
@@ -286,7 +305,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			/>
 
 			{/* App-Like Centered Container */}
-			<main className="relative z-10 w-full min-h-screen px-4 sm:px-6 pt-6 sm:pt-8 pb-28 sm:pb-32 flex flex-col items-center">
+			<main className="relative z-10 w-full min-h-screen px-4 sm:px-6 pt-6 sm:pt-8 pb-36 sm:pb-44 flex flex-col items-center">
 				<div className="w-full max-w-xl sm:max-w-2xl mx-auto flex flex-col items-center">
 					{/* 1. HOME TAB PANEL: Pure Profile Glass Card with Unified Cover & Overlapping Avatar + Vertical Links */}
 					<div

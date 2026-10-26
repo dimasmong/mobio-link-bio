@@ -69,6 +69,22 @@ export type ExploreContentType =
 	| "custom"
 	| "book";
 
+export interface ExplorePhoto {
+	url: string;
+	caption?: string;
+	id?: string;
+	alt?: string;
+}
+
+export interface ExploreSubcategory {
+	id: string;
+	category: string;
+	label: LocalizedString;
+	icon?: string;
+	color?: string;
+	sortOrder?: number;
+}
+
 export interface ExploreItem {
 	id: string;
 	type: ExploreContentType;
@@ -84,13 +100,18 @@ export interface ExploreItem {
 		rating?: string;
 		year?: string;
 		author?: string;
+		photos?: ExplorePhoto[];
+		[key: string]: any;
 	};
+	category?: string;
+	subcategory_id?: string;
 }
 
 export interface ExploreConfig {
 	enabled: boolean;
 	title: LocalizedString;
 	description?: LocalizedString;
+	subcategories?: ExploreSubcategory[];
 	items: ExploreItem[];
 }
 
