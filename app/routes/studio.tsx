@@ -747,25 +747,30 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 	const handlePlatformChange = (p: string) => {
 		let label = "Chat WhatsApp";
+		let labelEn = "Chat on WhatsApp";
 		let urlPrefix = "https://wa.me/";
 		if (p === "telegram") {
 			label = "Telegram";
+			labelEn = "Telegram";
 			urlPrefix = "https://t.me/";
 		} else if (p === "email") {
 			label = "Kirim Email";
+			labelEn = "Send Email";
 			urlPrefix = "mailto:";
 		} else if (p === "instagram") {
 			label = "Instagram";
+			labelEn = "Instagram";
 			urlPrefix = "https://instagram.com/";
 		} else if (p === "custom") {
 			label = "Kontak Lainnya";
+			labelEn = "Other Contact";
 			urlPrefix = "https://";
 		}
 		setContactForm((prev) => ({
 			...prev,
 			platform: p,
 			label_id: label,
-			label_en: label,
+			label_en: labelEn,
 			url: prev.value ? `${urlPrefix}${prev.value.replace(/[@+]/g, "")}` : "",
 		}));
 	};

@@ -278,7 +278,7 @@ export const profileData: ProfileData = {
 		enabled: true,
 		title: {
 			id: "Hubungi Saya",
-			en: "Get in Touch",
+			en: "Contact Me",
 		},
 		description: {
 			id: "",

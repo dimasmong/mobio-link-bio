@@ -18,15 +18,15 @@ interface ContactSectionProps {
 function getContactPlatformIcon(platform: string) {
 	switch (platform) {
 		case "email":
-			return <EmailIcon className="w-5 h-5 text-violet-600" />;
+			return <EmailIcon className="w-5 h-5 text-violet-500" />;
 		case "whatsapp":
-			return <WhatsAppIcon className="w-5 h-5 text-emerald-600" />;
+			return <WhatsAppIcon className="w-5 h-5 text-emerald-500" />;
 		case "telegram":
 			return <TelegramIcon className="w-5 h-5 text-sky-500" />;
 		case "instagram":
-			return <InstagramIcon className="w-5 h-5 text-pink-600" />;
+			return <InstagramIcon className="w-5 h-5 text-pink-500" />;
 		default:
-			return <ContactIcon className="w-5 h-5 text-slate-700" />;
+			return <ContactIcon className="w-5 h-5 text-[var(--accent-color)]" />;
 	}
 }
 
@@ -34,6 +34,74 @@ function isValidContactUrl(url?: string): boolean {
 	if (!url) return false;
 	const trimmed = url.trim();
 	return trimmed.length > 0 && trimmed !== "#";
+}
+
+function getLocalizedContactTitle(
+	title: { id?: string | null; en?: string | null } | undefined,
+	lang: Language
+): string {
+	const rawEn = (title?.en || "").trim();
+	const rawId = (title?.id || "").trim();
+
+	if (lang === "en") {
+		if (rawEn && rawEn !== "Hubungi Saya") {
+			return rawEn;
+		}
+		return TRANSLATIONS.en.public.contactHeading;
+	} else {
+		if (rawId) {
+			return rawId;
+		}
+		return TRANSLATIONS.id.public.contactHeading;
+	}
+}
+
+export function getContactMethodLabel(
+	method: { label?: { id?: string | null; en?: string | null }; platform?: string },
+	lang: Language
+): string {
+	const rawEn = (method.label?.en || "").trim();
+	const rawId = (method.label?.id || "").trim();
+
+	if (lang === "en") {
+		// If label is explicitly English and not the default Indonesian seed string
+		if (
+			rawEn &&
+			rawEn !== "Kirim Email" &&
+			rawEn !== "Hubungi Saya" &&
+			rawEn !== "Chat WhatsApp" &&
+			rawEn !== "Kontak Lainnya"
+		) {
+			return rawEn;
+		}
+		if (method.platform === "email" || rawId === "Kirim Email" || rawEn === "Kirim Email") {
+			return TRANSLATIONS.en.public.sendEmail || "Send Email";
+		}
+		if (method.platform === "whatsapp" || rawId === "Chat WhatsApp") {
+			return "Chat on WhatsApp";
+		}
+		if (method.platform === "custom" || rawId === "Kontak Lainnya") {
+			return "Other Contact";
+		}
+		return getLocalizedText(
+			method.label,
+			"en",
+			method.platform ? method.platform.charAt(0).toUpperCase() + method.platform.slice(1) : "Contact"
+		);
+	} else {
+		if (rawId) return rawId;
+		if (method.platform === "email") {
+			return TRANSLATIONS.id.public.sendEmail || "Kirim Email";
+		}
+		if (method.platform === "whatsapp") {
+			return "Chat WhatsApp";
+		}
+		return getLocalizedText(
+			method.label,
+			"id",
+			method.platform ? method.platform.charAt(0).toUpperCase() + method.platform.slice(1) : "Kontak"
+		);
+	}
 }
 
 const lastContactClickRef = { id: "", time: 0 };
@@ -81,7 +149,9 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 					<span className="w-5 h-5 rounded-full bg-[var(--accent-color)] text-[var(--accent-foreground)] flex items-center justify-center shrink-0 shadow-2xs">
 						<ContactIcon className="w-3 h-3" />
 					</span>
-					<h2 id="contact-heading" className="tracking-tight">{getLocalizedText(config.title, lang, TRANSLATIONS[lang].public.contactHeading)}</h2>
+					<h2 id="contact-heading" className="tracking-tight">
+						{getLocalizedContactTitle(config.title, lang)}
+					</h2>
 				</div>
 				{config.description &&
 					getLocalizedText(config.description, lang) &&
@@ -94,8 +164,8 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 			</div>
 
 			{activeMethods.length > 0 ? (
-				/* Contact Methods Grid */
-				<div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+				/* Contact Methods Stack — Unified full-width vertical rhythm matching Home links */
+				<div className="w-full flex flex-col gap-3 sm:gap-3.5">
 					{activeMethods.map((method) => {
 						const isEmail = method.url.startsWith("mailto:");
 
@@ -108,22 +178,25 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 								onClick={() => {
 									trackContactInteraction(method.id);
 								}}
-								className="glass-liquid-card rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
+								className="glass-liquid-card rounded-2xl px-5 py-4 sm:py-4.5 flex items-center justify-between gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left w-full transition-all"
 							>
-								<div className="flex items-center gap-3.5 min-w-0 flex-1">
-									<div className="w-11 h-11 rounded-xl bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-specular)] shadow-2xs flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-										{getContactPlatformIcon(method.platform)}
-									</div>
-									<div className="min-w-0 flex-1">
-										<h3 className="text-sm sm:text-base font-bold text-theme-primary group-hover:text-[var(--accent-color)] transition-colors leading-snug">
-											{getLocalizedText(method.label, lang, method.platform)}
-										</h3>
-										<p className="text-xs text-theme-secondary truncate mt-0.5">
-											{method.value}
-										</p>
-									</div>
+								{/* Left: Platform Icon */}
+								<div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-specular)] shadow-2xs flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-[var(--glass-surface-hover)] transition-all overflow-hidden p-2.5">
+									{getContactPlatformIcon(method.platform)}
 								</div>
-								<div className="w-7 h-7 rounded-full bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-subtle)] flex items-center justify-center text-theme-muted group-hover:text-[var(--accent-color)] group-hover:bg-[var(--accent-subtle)] group-hover:border-[var(--accent-border)] transition-colors shrink-0">
+
+								{/* Center: Title & Value */}
+								<div className="min-w-0 flex-1 text-left">
+									<h3 className="text-sm sm:text-base font-semibold text-theme-primary group-hover:text-[var(--accent-color)] transition-colors leading-snug whitespace-nowrap truncate">
+										{getContactMethodLabel(method, lang)}
+									</h3>
+									<p className="text-xs sm:text-sm text-theme-secondary font-normal mt-0.5 truncate break-all leading-relaxed">
+										{method.value}
+									</p>
+								</div>
+
+								{/* Right: Refined External Link Indicator */}
+								<div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-subtle)] flex items-center justify-center text-theme-muted group-hover:text-[var(--accent-color)] group-hover:bg-[var(--accent-subtle)] group-hover:border-[var(--accent-border)] group-hover:translate-x-0.5 transition-all shrink-0">
 									<ExternalLinkIcon className="w-3.5 h-3.5" />
 								</div>
 							</a>
@@ -132,7 +205,7 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 				</div>
 			) : (
 				/* Professional Liquid Glass Empty State */
-				<div className="glass-liquid-secondary rounded-3xl p-8 sm:p-10 flex flex-col items-center text-center">
+				<div className="glass-liquid-secondary rounded-3xl p-8 sm:p-10 flex flex-col items-center text-center w-full">
 					<div className="w-12 h-12 rounded-full bg-emerald-100/80 border border-emerald-200/50 text-emerald-600 flex items-center justify-center mb-4 shadow-2xs">
 						<ContactIcon className="w-6 h-6" />
 					</div>
