@@ -2,11 +2,13 @@ import React from "react";
 import type { VerticalLink, Language } from "../data/profile";
 import { ExternalLinkIcon, SparklesIcon } from "./Icons";
 import { LinkIconRenderer } from "./IconLibrary";
+import type { LinkArrangement } from "../lib/layouts";
 
 interface VerticalLinkListProps {
 	links: VerticalLink[];
 	lang: Language;
 	isPreview?: boolean;
+	arrangement?: LinkArrangement;
 }
 
 function isValidUrl(url?: string): boolean {
@@ -15,8 +17,13 @@ function isValidUrl(url?: string): boolean {
 	return trimmed.length > 0 && trimmed !== "#";
 }
 
-export function VerticalLinkList({ links, lang, isPreview = false }: VerticalLinkListProps) {
-	// Filter: only display active links with valid URLs (one link per row, single column)
+export function VerticalLinkList({
+	links,
+	lang,
+	isPreview = false,
+	arrangement = "stack",
+}: VerticalLinkListProps) {
+	// Filter: only display active links with valid URLs
 	const activeLinks = (links || []).filter(
 		(l) => l.enabled !== false && isValidUrl(l.url)
 	);
@@ -36,12 +43,22 @@ export function VerticalLinkList({ links, lang, isPreview = false }: VerticalLin
 					</h2>
 					<p className="text-xs sm:text-sm text-theme-muted max-w-sm leading-relaxed">
 						{lang === "id"
-							? "Tautan pribadi Anda akan muncul otomatis di sini setelah ditambahkan pada file app/data/profile.ts."
-							: "Your personal links will appear automatically here once added to app/data/profile.ts."}
+							? "Tautan pribadi Anda akan muncul otomatis di sini setelah ditambahkan."
+							: "Your personal links will appear automatically here once added."}
 					</p>
 				</div>
 			</section>
 		);
+	}
+
+	// Determine container classes based on arrangement
+	let containerClass = "w-full flex flex-col gap-3 sm:gap-3.5";
+	if (arrangement === "grid-2") {
+		containerClass = "w-full grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5";
+	} else if (arrangement === "dense-stack") {
+		containerClass = "w-full flex flex-col gap-2";
+	} else if (arrangement === "island-stack") {
+		containerClass = "w-full flex flex-col gap-4";
 	}
 
 	return (
@@ -49,13 +66,23 @@ export function VerticalLinkList({ links, lang, isPreview = false }: VerticalLin
 			aria-label={lang === "id" ? "Daftar Tautan" : "Links List"}
 			className="w-full my-6 sm:my-8"
 		>
-			{/* Strict Single Vertical Column on all viewports */}
-			<div className="w-full flex flex-col gap-3 sm:gap-3.5">
+			<div className={containerClass}>
 				{activeLinks.map((link) => {
 					const isEmail = link.url.startsWith("mailto:");
 					const href = (!isPreview && !isEmail && link.id && !link.id.startsWith("profile-") && !link.url.startsWith("#"))
 						? `/go/${link.id}`
 						: link.url;
+
+					let cardStyleClass = "glass-liquid-card rounded-2xl px-5 py-4 sm:py-4.5";
+					if (arrangement === "capsule-stack") {
+						cardStyleClass = "glass-liquid-card rounded-full px-5 py-3.5";
+					} else if (arrangement === "dense-stack") {
+						cardStyleClass = "glass-liquid-card rounded-xl px-4 py-3";
+					} else if (arrangement === "minimal-stack") {
+						cardStyleClass = "border-0 bg-transparent hover:bg-[var(--glass-surface-hover)] border-b border-[var(--glass-border-subtle)] rounded-none px-3 py-3.5";
+					} else if (arrangement === "island-stack") {
+						cardStyleClass = "glass-liquid-card rounded-2xl px-5 py-4.5 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-transform";
+					}
 
 					return (
 						<a
@@ -63,7 +90,7 @@ export function VerticalLinkList({ links, lang, isPreview = false }: VerticalLin
 							href={href}
 							target={isEmail ? undefined : "_blank"}
 							rel={isEmail ? undefined : "noopener noreferrer"}
-							className="glass-liquid-card rounded-2xl sm:rounded-full px-5 py-4 sm:py-4.5 flex items-center justify-between gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)]"
+							className={`${cardStyleClass} flex items-center justify-between gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] transition-all`}
 						>
 							{/* Left: Platform / Category Icon */}
 							<div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[var(--glass-surface-secondary)] border border-[var(--glass-border-specular)] shadow-2xs flex items-center justify-center shrink-0 group-hover:bg-[var(--glass-surface-hover)] group-hover:scale-105 transition-all overflow-hidden p-2">

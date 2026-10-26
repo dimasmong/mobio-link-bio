@@ -1,10 +1,17 @@
 import React, { useState } from "react";
 import type { ProfileData, Language } from "../data/profile";
 import { GlobeIcon } from "./Icons";
+import {
+	getProfileCardStyle,
+	getCardSizeConfig,
+	type CardSize,
+} from "../lib/profileCard";
 
 interface ProfileGlassCardProps {
 	profile: ProfileData;
 	lang: Language;
+	cardStyle?: string;
+	cardSize?: CardSize;
 }
 
 function getInitials(name: string): string {
@@ -16,18 +23,12 @@ function getInitials(name: string): string {
 	return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function getCoverAspectRatioCSS(ratio?: string): string {
-	if (!ratio) return "21 / 9";
-	const clean = ratio.replace(/^aspect-/, "").replace(/\[|\]/g, "").trim();
-	if (clean === "16:9" || clean === "16/9") return "16 / 9";
-	if (clean === "21:9" || clean === "21/9" || clean.includes("21/9")) return "21 / 9";
-	if (clean === "3:1" || clean === "3/1") return "3 / 1";
-	if (clean.includes(":")) return clean.replace(":", " / ");
-	if (clean.includes("/")) return clean;
-	return "21 / 9";
-}
-
-export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
+export function ProfileGlassCard({
+	profile,
+	lang,
+	cardStyle: rawStyleId,
+	cardSize: rawSizeId,
+}: ProfileGlassCardProps) {
 	const [imageError, setImageError] = useState(false);
 	const initials = getInitials(profile.name);
 	const hasAvatar = Boolean(profile.avatarUrl && profile.avatarUrl.trim() !== "");
@@ -35,183 +36,350 @@ export function ProfileGlassCard({ profile, lang }: ProfileGlassCardProps) {
 	const hasBio = Boolean(profile.bio && profile.bio[lang]?.trim());
 	const hasCover = Boolean(profile.cover?.enabled);
 	const hasCustomCover = Boolean(profile.cover?.coverUrl && profile.cover.coverUrl.trim() !== "");
-	const coverAspectRatioCSS = getCoverAspectRatioCSS(profile.cover?.aspectRatio);
+
+	const styleConfig = getProfileCardStyle(rawStyleId);
+	const sizeConfig = getCardSizeConfig(rawSizeId);
+	const styleId = styleConfig.id;
+
+	// Avatar Element Renderer
+	const renderAvatar = (customClasses = "") => (
+		<div
+			className={`rounded-full p-1 sm:p-1.5 bg-[var(--glass-surface-primary)] border border-[var(--glass-border-specular)] shadow-2xl backdrop-blur-xl flex items-center justify-center transition-transform hover:scale-105 duration-300 shrink-0 ${sizeConfig.avatarSizeClass} ${customClasses}`}
+		>
+			<div className="w-full h-full rounded-full overflow-hidden ring-2 ring-white/60 dark:ring-white/10 shadow-inner flex items-center justify-center">
+				{hasAvatar && !imageError ? (
+					<img
+						src={profile.avatarUrl}
+						alt={profile.name}
+						onError={() => setImageError(true)}
+						className="w-full h-full object-cover bg-slate-100 dark:bg-slate-800"
+						loading="eager"
+					/>
+				) : (
+					<div
+						className="w-full h-full flex items-center justify-center font-extrabold shadow-inner select-none text-base sm:text-lg"
+						style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-foreground)" }}
+						aria-label={profile.name}
+					>
+						{initials}
+					</div>
+				)}
+			</div>
+		</div>
+	);
+
+	// Cover Image Background Renderer
+	const renderCoverMedia = (extraClass = "", extraStyle?: React.CSSProperties) => {
+		if (!hasCover) return null;
+		return hasCustomCover ? (
+			<img
+				src={profile.cover?.coverUrl}
+				alt={profile.cover?.alt ? profile.cover.alt[lang] : "Cover banner"}
+				className={`w-full h-full object-cover ${extraClass}`}
+				style={{ objectPosition: profile.cover?.focalPoint || "center", ...extraStyle }}
+				loading="eager"
+			/>
+		) : (
+			<div className={`w-full h-full relative overflow-hidden bg-gradient-to-tr from-violet-200/60 via-sky-100/50 to-pink-200/50 ${extraClass}`}>
+				<div
+					className="absolute -top-10 -left-10 w-40 h-40 rounded-full bg-[var(--accent-subtle)] blur-2xl pointer-events-none opacity-60"
+					aria-hidden="true"
+				/>
+				<div
+					className="absolute -bottom-10 -right-10 w-40 h-40 rounded-full bg-sky-300/30 blur-2xl pointer-events-none"
+					aria-hidden="true"
+				/>
+			</div>
+		);
+	};
+
+	// Identity Block (Name, Handle, Location, Bio)
+	const renderIdentity = (align: "center" | "start" = "center") => {
+		const isStart = align === "start";
+		return (
+			<div className={`flex flex-col ${isStart ? "items-start text-left" : "items-center text-center"} w-full`}>
+				<h1 className={`${sizeConfig.nameClass} tracking-tight text-theme-primary mb-1 drop-shadow-xs`}>
+					{profile.name}
+				</h1>
+				<div className={`flex items-center flex-wrap gap-1.5 ${isStart ? "justify-start" : "justify-center"} ${hasBio ? "mb-2" : "mb-0"}`}>
+					<span className="font-semibold px-2.5 py-0.5 rounded-full border border-[var(--glass-border-subtle)] bg-[var(--glass-surface-secondary)] text-theme-primary shadow-2xs inline-flex items-center gap-1.5 backdrop-blur-md text-xs">
+						<span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-color)]" aria-hidden="true" />
+						{profile.handle}
+					</span>
+					{hasLocation && (
+						<>
+							<span className="opacity-30 text-xs">•</span>
+							<span className="inline-flex items-center gap-1 font-medium text-theme-secondary px-2 py-0.5 rounded-full bg-[var(--glass-surface-secondary)]/60 border border-[var(--glass-border-subtle)]/50 text-xs">
+								<GlobeIcon className="w-2.5 h-2.5 text-theme-muted" />
+								{profile.location?.[lang]}
+							</span>
+						</>
+					)}
+				</div>
+				{hasBio && (
+					<p className={`${sizeConfig.bioClass} text-theme-secondary leading-relaxed font-normal mt-1`}>
+						{profile.bio[lang]}
+					</p>
+				)}
+			</div>
+		);
+	};
 
 	return (
-		<header className="w-full relative z-10">
-			{/* Main Compact Immersive Card Container */}
+		<header className={`w-full ${sizeConfig.maxWidthClass} mx-auto relative z-10 transition-all duration-300`}>
 			<div className="glass-liquid-primary rounded-3xl sm:rounded-4xl relative overflow-hidden transition-all duration-300 shadow-2xl border border-[var(--glass-border-specular)]">
-				{/* =========================================================================
-				    LAYERS 2 & 3: FULL-CARD PHOTOGRAPHIC BLEED & PROGRESSIVE GRADIENT MASK
-				    Extends cover visual depth down behind the card, fading smoothly to bottom
-				    ========================================================================= */}
-				{hasCover && (
-					<div
-						className="absolute inset-0 z-0 pointer-events-none overflow-hidden select-none"
-						aria-hidden="true"
-					>
-						{hasCustomCover ? (
-							<div
-								className="w-full h-full"
-								style={{
-									maskImage:
-										"linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.50) 35%, rgba(0,0,0,0.15) 65%, rgba(0,0,0,0) 95%)",
-									WebkitMaskImage:
-										"linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.50) 35%, rgba(0,0,0,0.15) 65%, rgba(0,0,0,0) 95%)",
-								}}
-							>
-								<img
-									src={profile.cover.coverUrl}
-									alt=""
-									className="w-full h-full object-cover scale-105 filter blur-xs opacity-50 dark:opacity-35 transition-opacity"
-									style={{ objectPosition: profile.cover.focalPoint || "center" }}
-								/>
-							</div>
-						) : (
-							/* Gradient Fallback Bleed */
-							<div
-								className="w-full h-full bg-gradient-to-b from-[var(--accent-subtle)] via-transparent to-transparent opacity-60"
-								style={{
-									maskImage: "linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 80%)",
-									WebkitMaskImage: "linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 80%)",
-								}}
-							/>
-						)}
-					</div>
-				)}
-
-				{/* =========================================================================
-				    LAYER 1 & 2: TOP COVER BANNER WITH DEFINED ASPECT RATIO GEOMETRY
-				    Vivid, crisp top region with smooth vignette melt at bottom boundary
-				    ========================================================================= */}
-				{hasCover && (
-					<div
-						className={`w-full relative overflow-hidden z-1 transition-all duration-300 ${
-							profile.cover?.aspectRatio === "16:9"
-								? "aspect-[16/9]"
-								: profile.cover?.aspectRatio === "3:1"
-								? "aspect-[3/1]"
-								: "aspect-[21/9] sm:aspect-[24/9]"
-						}`}
-						style={{ aspectRatio: coverAspectRatioCSS }}
-					>
-						{hasCustomCover ? (
-							<img
-								src={profile.cover.coverUrl}
-								alt={profile.cover.alt ? profile.cover.alt[lang] : "Cover banner"}
-								className="w-full h-full object-cover"
-								style={{ objectPosition: profile.cover.focalPoint || "center" }}
-								loading="eager"
-							/>
-						) : (
-							/* Liquid Aurora Specular Fallback Banner */
-							<div className="w-full h-full relative overflow-hidden bg-gradient-to-tr from-violet-200/60 via-sky-100/50 to-pink-200/50">
+				{/* ------------------------------------------------------------------ */}
+				{/* STYLE 01: IMMERSIVE FADE (Default)                                 */}
+				{/* ------------------------------------------------------------------ */}
+				{styleId === "immersive-fade" && (
+					<>
+						{hasCover && (
+							<div className="absolute inset-0 z-0 pointer-events-none overflow-hidden select-none" aria-hidden="true">
 								<div
-									className="absolute -top-12 -left-12 w-48 h-48 rounded-full bg-[var(--accent-subtle)] blur-2xl pointer-events-none opacity-60"
-									aria-hidden="true"
-								/>
-								<div
-									className="absolute -bottom-10 -right-10 w-56 h-56 rounded-full bg-sky-300/30 blur-2xl pointer-events-none"
-									aria-hidden="true"
-								/>
-								<div
-									className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-32 rounded-full bg-pink-300/20 blur-3xl pointer-events-none"
-									aria-hidden="true"
-								/>
+									className="w-full h-full"
+									style={{
+										maskImage: "linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.50) 35%, rgba(0,0,0,0.15) 65%, rgba(0,0,0,0) 95%)",
+										WebkitMaskImage: "linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.50) 35%, rgba(0,0,0,0.15) 65%, rgba(0,0,0,0) 95%)",
+									}}
+								>
+									{renderCoverMedia("scale-105 filter blur-xs opacity-50 dark:opacity-35")}
+								</div>
 							</div>
 						)}
-
-						{/* Smooth progressive vignette melt bridging top cover into the body */}
-						<div
-							className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[var(--glass-surface-primary)] via-[var(--glass-surface-primary)]/40 to-transparent pointer-events-none"
-							aria-hidden="true"
-						/>
-					</div>
+						{hasCover && (
+							<div className={`w-full relative overflow-hidden z-1 ${styleConfig.coverHeightClass}`}>
+								{renderCoverMedia()}
+								<div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[var(--glass-surface-primary)] via-[var(--glass-surface-primary)]/40 to-transparent pointer-events-none" />
+							</div>
+						)}
+						<div className={`relative z-10 flex flex-col items-center text-center ${sizeConfig.paddingClass} ${hasCover ? "pt-0" : "pt-5"}`}>
+							<div className={`relative ${hasCover ? "-mt-8 sm:-mt-10 mb-2" : "mb-3"} z-20`}>
+								{renderAvatar()}
+							</div>
+							{renderIdentity("center")}
+						</div>
+					</>
 				)}
 
-				{/* =========================================================================
-				    LAYER 4 & 5: COMPACT PROFILE CARD BODY & CONTENT
-				    Crisp typography, theme-aware readability, elegant avatar pedestal
-				    ========================================================================= */}
-				<div
-					className={`relative z-10 flex flex-col items-center text-center px-5 sm:px-6 md:px-8 pb-5 sm:pb-6 ${
-						hasCover ? "pt-0" : "pt-6 sm:pt-8"
-					}`}
-				>
-					{/* Optical ambient highlights */}
-					<div
-						className="absolute -top-12 -right-12 w-36 h-36 rounded-full bg-[var(--accent-subtle)] blur-3xl pointer-events-none opacity-50"
-						aria-hidden="true"
-					/>
-					<div
-						className="absolute -bottom-12 -left-12 w-36 h-36 rounded-full bg-[var(--accent-subtle)] blur-3xl pointer-events-none opacity-30"
-						aria-hidden="true"
-					/>
-
-					{/* Sculpted Avatar Pedestal with Dual Specular Rings */}
-					<div
-						className={`relative ${
-							hasCover ? "-mt-10 sm:-mt-12 md:-mt-14 mb-2.5 sm:mb-3" : "mb-3 sm:mb-4"
-						} z-20`}
-					>
-						<div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full p-1 sm:p-1.5 bg-[var(--glass-surface-primary)] border border-[var(--glass-border-specular)] shadow-2xl backdrop-blur-xl flex items-center justify-center transition-transform hover:scale-105 duration-300">
-							<div className="w-full h-full rounded-full overflow-hidden ring-2 ring-white/60 dark:ring-white/10 shadow-inner flex items-center justify-center">
-								{hasAvatar && !imageError ? (
-									<img
-										src={profile.avatarUrl}
-										alt={profile.name}
-										width={112}
-										height={112}
-										onError={() => setImageError(true)}
-										className="w-full h-full object-cover bg-slate-100 dark:bg-slate-800"
-										loading="eager"
-									/>
-								) : (
-									<div
-										className="w-full h-full flex items-center justify-center bg-theme-accent font-extrabold text-xl sm:text-2xl md:text-3xl shadow-inner select-none"
-										style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-foreground)" }}
-										aria-label={profile.name}
-									>
-										{initials}
+				{/* ------------------------------------------------------------------ */}
+				{/* STYLE 02: MINIMAL IDENTITY (Adjacent Avatar & Identity)             */}
+				{/* ------------------------------------------------------------------ */}
+				{styleId === "minimal-identity" && (
+					<div className="flex flex-col w-full">
+						{hasCover && (
+							<div className={`w-full relative overflow-hidden ${styleConfig.coverHeightClass}`}>
+								{renderCoverMedia("opacity-80")}
+								<div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent-color)] to-transparent opacity-80" />
+							</div>
+						)}
+						<div className={`p-4 sm:p-5 flex flex-col gap-2.5`}>
+							<div className="flex items-center gap-3.5 w-full">
+								{renderAvatar()}
+								<div className="flex flex-col min-w-0 flex-1 text-left">
+									<h1 className={`${sizeConfig.nameClass} tracking-tight text-theme-primary truncate drop-shadow-xs`}>
+										{profile.name}
+									</h1>
+									<div className="flex items-center gap-1.5 flex-wrap text-xs text-theme-muted">
+										<span className="font-semibold text-theme-accent">
+											{profile.handle}
+										</span>
+										{hasLocation && (
+											<>
+												<span className="opacity-30">•</span>
+												<span className="text-theme-secondary inline-flex items-center gap-1">
+													<GlobeIcon className="w-2.5 h-2.5 text-theme-muted" />
+													{profile.location?.[lang]}
+												</span>
+											</>
+										)}
 									</div>
+								</div>
+							</div>
+							{hasBio && (
+								<p className={`${sizeConfig.bioClass} text-theme-secondary leading-relaxed font-normal text-left pt-1 border-t border-[var(--glass-border-subtle)]`}>
+									{profile.bio[lang]}
+								</p>
+							)}
+						</div>
+					</div>
+				)}
+
+				{/* ------------------------------------------------------------------ */}
+				{/* STYLE 03: COMPACT BANNER                                           */}
+				{/* ------------------------------------------------------------------ */}
+				{styleId === "compact-banner" && (
+					<>
+						{hasCover && (
+							<div className={`w-full relative overflow-hidden ${styleConfig.coverHeightClass}`}>
+								{renderCoverMedia()}
+								<div className="absolute inset-0 bg-black/10 dark:bg-black/20" />
+							</div>
+						)}
+						<div className={`relative z-10 flex flex-col items-center text-center ${sizeConfig.paddingClass} ${hasCover ? "pt-0" : "pt-4"}`}>
+							<div className={`relative ${hasCover ? "-mt-7 sm:-mt-8 mb-2" : "mb-2"} z-20`}>
+								{renderAvatar()}
+							</div>
+							{renderIdentity("center")}
+						</div>
+					</>
+				)}
+
+				{/* ------------------------------------------------------------------ */}
+				{/* STYLE 04: FLOATING AVATAR                                          */}
+				{/* ------------------------------------------------------------------ */}
+				{styleId === "floating-avatar" && (
+					<div className={`relative flex flex-col items-center text-center ${sizeConfig.paddingClass}`}>
+						{hasCover && (
+							<div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none opacity-25 dark:opacity-20 filter blur-sm">
+								{renderCoverMedia()}
+							</div>
+						)}
+						<div className="relative z-10 mb-2.5">
+							{renderAvatar("ring-4 ring-[var(--accent-subtle)] shadow-xl")}
+						</div>
+						<div className="relative z-10 w-full">
+							{renderIdentity("center")}
+						</div>
+					</div>
+				)}
+
+				{/* ------------------------------------------------------------------ */}
+				{/* STYLE 05: EDITORIAL PROFILE (Asymmetric Left-Aligned)              */}
+				{/* ------------------------------------------------------------------ */}
+				{styleId === "editorial-profile" && (
+					<div className="flex flex-col w-full text-left">
+						{hasCover && (
+							<div className={`w-full relative overflow-hidden ${styleConfig.coverHeightClass}`}>
+								{renderCoverMedia()}
+								<div className="absolute inset-x-0 bottom-0 h-1 bg-[var(--accent-color)]" />
+							</div>
+						)}
+						<div className={`p-4 sm:p-5 flex flex-col items-start ${hasCover ? "pt-3" : "pt-4"}`}>
+							<div className="mb-2">
+								{renderAvatar()}
+							</div>
+							{renderIdentity("start")}
+						</div>
+					</div>
+				)}
+
+				{/* ------------------------------------------------------------------ */}
+				{/* STYLE 06: FROSTED PANEL                                            */}
+				{/* ------------------------------------------------------------------ */}
+				{styleId === "frosted-panel" && (
+					<div className="relative flex flex-col items-center w-full">
+						{hasCover && (
+							<div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
+								{renderCoverMedia("filter blur-md scale-110 opacity-35 dark:opacity-25")}
+							</div>
+						)}
+						<div className={`relative z-10 flex flex-col items-center text-center w-full backdrop-blur-xl bg-[var(--glass-surface-primary)]/80 ${sizeConfig.paddingClass}`}>
+							<div className="mb-2">
+								{renderAvatar()}
+							</div>
+							{renderIdentity("center")}
+						</div>
+					</div>
+				)}
+
+				{/* ------------------------------------------------------------------ */}
+				{/* STYLE 07: FRAMELESS COVER                                          */}
+				{/* ------------------------------------------------------------------ */}
+				{styleId === "frameless-cover" && (
+					<div className="relative flex flex-col w-full overflow-hidden">
+						{hasCover && (
+							<div className={`w-full relative ${styleConfig.coverHeightClass} overflow-hidden`}>
+								{renderCoverMedia("scale-105")}
+								<div className="absolute inset-0 bg-gradient-to-t from-[var(--glass-surface-primary)] via-transparent to-transparent" />
+							</div>
+						)}
+						<div className={`relative z-10 flex flex-col items-center text-center p-4 sm:p-5 ${hasCover ? "-mt-8" : ""}`}>
+							<div className="mb-2">
+								{renderAvatar()}
+							</div>
+							<div className="bg-[var(--glass-surface-primary)]/90 backdrop-blur-md rounded-2xl p-3 sm:p-4 shadow-lg border border-[var(--glass-border-specular)] w-full">
+								{renderIdentity("center")}
+							</div>
+						</div>
+					</div>
+				)}
+
+				{/* ------------------------------------------------------------------ */}
+				{/* STYLE 08: SPLIT IDENTITY (Two-Zone Split)                          */}
+				{/* ------------------------------------------------------------------ */}
+				{styleId === "split-identity" && (
+					<div className="flex flex-col w-full">
+						{hasCover && (
+							<div className={`w-full relative overflow-hidden ${styleConfig.coverHeightClass}`}>
+								{renderCoverMedia()}
+								<div className="absolute inset-x-0 bottom-0 h-1 bg-[var(--glass-border-specular)]" />
+							</div>
+						)}
+						<div className="p-4 sm:p-5 flex flex-col sm:flex-row items-center sm:items-start gap-3.5 w-full">
+							<div className="flex flex-col items-center shrink-0">
+								{renderAvatar()}
+								<span className="mt-1.5 font-semibold text-theme-accent text-xs">
+									{profile.handle}
+								</span>
+							</div>
+							<div className="flex flex-col min-w-0 flex-1 text-center sm:text-left">
+								<h1 className={`${sizeConfig.nameClass} tracking-tight text-theme-primary drop-shadow-xs mb-1`}>
+									{profile.name}
+								</h1>
+								{hasLocation && (
+									<div className="inline-flex items-center gap-1 font-medium text-theme-secondary text-xs mb-1.5 justify-center sm:justify-start">
+										<GlobeIcon className="w-2.5 h-2.5 text-theme-muted" />
+										{profile.location?.[lang]}
+									</div>
+								)}
+								{hasBio && (
+									<p className={`${sizeConfig.bioClass} text-theme-secondary leading-relaxed font-normal`}>
+										{profile.bio[lang]}
+									</p>
 								)}
 							</div>
 						</div>
 					</div>
+				)}
 
-					{/* Display Name */}
-					<h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-theme-primary mb-1.5 drop-shadow-xs">
-						{profile.name}
-					</h1>
-
-					{/* Username / Handle and Optional Location */}
-					<div
-						className={`flex items-center justify-center flex-wrap gap-1.5 text-xs sm:text-sm text-theme-muted ${
-							hasBio ? "mb-3" : "mb-0"
-						}`}
-					>
-						<span className="font-semibold px-2.5 py-0.5 rounded-full border border-[var(--glass-border-subtle)] bg-[var(--glass-surface-secondary)] text-theme-primary shadow-2xs inline-flex items-center gap-1.5 backdrop-blur-md">
-							<span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-color)]" aria-hidden="true" />
-							{profile.handle}
-						</span>
-						{hasLocation && (
-							<>
-								<span className="opacity-30">•</span>
-								<span className="inline-flex items-center gap-1 font-medium text-theme-secondary px-2 py-0.5 rounded-full bg-[var(--glass-surface-secondary)]/60 border border-[var(--glass-border-subtle)]/50">
-									<GlobeIcon className="w-3 h-3 text-theme-muted" />
-									{profile.location?.[lang]}
-								</span>
-							</>
+				{/* ------------------------------------------------------------------ */}
+				{/* STYLE 09: SOFT CAPSULE                                             */}
+				{/* ------------------------------------------------------------------ */}
+				{styleId === "soft-capsule" && (
+					<div className={`p-4 sm:p-5 flex flex-col items-center text-center`}>
+						{hasCover && (
+							<div className="w-full h-8 rounded-full overflow-hidden mb-3 relative opacity-80 border border-[var(--glass-border-specular)]">
+								{renderCoverMedia()}
+							</div>
 						)}
+						<div className="mb-2">
+							{renderAvatar()}
+						</div>
+						{renderIdentity("center")}
 					</div>
+				)}
 
-					{/* Biography (Rendered only if bio is non-empty) */}
-					{hasBio && (
-						<p className="text-xs sm:text-sm md:text-base text-theme-secondary leading-relaxed max-w-md sm:max-w-lg mx-auto font-normal">
-							{profile.bio[lang]}
-						</p>
-					)}
-				</div>
+				{/* ------------------------------------------------------------------ */}
+				{/* STYLE 10: CINEMATIC MINI                                           */}
+				{/* ------------------------------------------------------------------ */}
+				{styleId === "cinematic-mini" && (
+					<div className="relative flex flex-col w-full overflow-hidden">
+						{hasCover && (
+							<div className={`w-full relative ${styleConfig.coverHeightClass} overflow-hidden`}>
+								{renderCoverMedia("scale-105")}
+								<div className="absolute inset-0 bg-gradient-to-t from-[var(--glass-surface-primary)] via-[var(--glass-surface-primary)]/70 to-black/30" />
+							</div>
+						)}
+						<div className={`relative z-10 flex flex-col items-center text-center p-4 sm:p-5 ${hasCover ? "-mt-10" : ""}`}>
+							<div className="mb-2">
+								{renderAvatar("ring-2 ring-[var(--accent-color)] shadow-2xl")}
+							</div>
+							<div className="bg-[var(--glass-surface-primary)]/80 backdrop-blur-lg rounded-2xl p-3 sm:p-4 shadow-xl border border-[var(--glass-border-specular)] w-full">
+								{renderIdentity("center")}
+							</div>
+						</div>
+					</div>
+				)}
 			</div>
 		</header>
 	);

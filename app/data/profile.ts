@@ -254,8 +254,8 @@ export const profileData: ProfileData = {
 			en: "Explore & Highlights",
 		},
 		description: {
-			id: "Kumpulan proyek terpilih, galeri foto, playlist, dan catatan pribadi",
-			en: "Selected projects, photo gallery, music playlists, and notes",
+			id: "",
+			en: "",
 		},
 		items: [
 			/* Contoh menambahkan item explore:
@@ -281,8 +281,8 @@ export const profileData: ProfileData = {
 			en: "Get in Touch",
 		},
 		description: {
-			id: "Silakan hubungi melalui saluran komunikasi pilihan di bawah ini",
-			en: "Reach out via any of the direct communication channels below",
+			id: "",
+			en: "",
 		},
 		methods: [
 			/* Contoh menambahkan kontak:

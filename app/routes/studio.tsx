@@ -35,6 +35,9 @@ import {
 	type ThemePreset,
 	type AccentColorPreset,
 } from "../lib/theme";
+import { LAYOUT_THEMES } from "../lib/layouts";
+import { PROFILE_CARD_STYLES, CARD_SIZES, type CardSize } from "../lib/profileCard";
+import { FONT_PRESETS, FONT_CATEGORIES } from "../lib/typography";
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -158,6 +161,10 @@ const defaultAppearanceFallback: AppearanceRecord = {
 	background_media_id: "",
 	background_poster_media_id: "",
 	cover_media_id: "",
+	layout_theme_id: "compact-center",
+	profile_card_style_id: "immersive-fade",
+	profile_card_size: "medium",
+	font_family_id: "inter",
 	created_at: "",
 	updated_at: "",
 };
@@ -204,6 +211,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 	const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
 	const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
 	const [presetFilter, setPresetFilter] = useState<"all" | "light" | "dark">("all");
+	const [appearanceSubTab, setAppearanceSubTab] = useState<"themes" | "layouts" | "card" | "typography" | "media" | "glass">("themes");
+	const [fontSearch, setFontSearch] = useState("");
+	const [fontCategoryFilter, setFontCategoryFilter] = useState<string>("all");
 
 	// Links modals & state
 	const [isAddLinkOpen, setIsAddLinkOpen] = useState(false);
@@ -2536,7 +2546,33 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								</div>
 							</div>
 
-							{/* 1. Theme Presets Panel */}
+							{/* Subtab Navigation (V4 Customization Engine) */}
+							<div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-800 no-scrollbar">
+								{[
+									{ id: "themes", label: "🎨 Tema Warna (30)" },
+									{ id: "layouts", label: "📐 Tata Letak (20)" },
+									{ id: "card", label: "🪪 Kartu Profil (10)" },
+									{ id: "typography", label: "✍️ Tipografi (24)" },
+									{ id: "media", label: "🖼️ Latar Belakang & Media" },
+									{ id: "glass", label: "🧊 Efek Liquid Glass" },
+								].map((tab) => (
+									<button
+										key={tab.id}
+										type="button"
+										onClick={() => setAppearanceSubTab(tab.id as any)}
+										className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+											appearanceSubTab === tab.id
+												? "bg-violet-600 text-white shadow-md shadow-violet-950"
+												: "bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800"
+										}`}
+									>
+										{tab.label}
+									</button>
+								))}
+							</div>
+
+							{appearanceSubTab === "themes" && (
+							/* 1. Theme Presets Panel */
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 								<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
 									<div>
@@ -2661,7 +2697,307 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									})}
 								</div>
 							</div>
+							)}
 
+							{/* 2. Layout Themes Subtab */}
+							{appearanceSubTab === "layouts" && (
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+									<div className="mb-4">
+										<h3 className="text-sm font-bold text-white mb-1">Pilihan Tata Letak Halaman (20 Koleksi)</h3>
+										<p className="text-xs text-slate-400">
+											Pilih komposisi struktural halaman publik. Mengatur lebar kolom, perataan, tata letak kartu tautan (vertikal tunggal, kisi 2 kolom, atau split desktop), dan kepadatan spasial.
+										</p>
+									</div>
+									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+										{LAYOUT_THEMES.map((layout) => {
+											const isSelected = (appearance.layout_theme_id || "compact-center") === layout.id;
+											return (
+												<button
+													key={layout.id}
+													type="button"
+													onClick={() => {
+														const updated: AppearanceRecord = {
+															...appearance,
+															layout_theme_id: layout.id,
+														};
+														setAppearance(updated);
+														markUnpublished();
+														saveDraftAppearanceDirectly(updated);
+														showToast(`Tata letak diubah ke ${layout.name.id}`, "info");
+													}}
+													className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+														isSelected
+															? "bg-violet-950/40 border-violet-500 shadow-md ring-1 ring-violet-500"
+															: "bg-slate-950/80 border-slate-800 hover:border-slate-700 hover:bg-slate-950"
+													}`}
+												>
+													<div>
+														<div className="flex items-center justify-between mb-1.5">
+															<h4 className="text-xs font-bold text-white">{layout.name.id}</h4>
+															{isSelected && (
+																<span className="w-4 h-4 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px]">
+																	✓
+																</span>
+															)}
+														</div>
+														<div className="text-[11px] font-medium text-violet-300 mb-1">{layout.tagline.id}</div>
+														<p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+															{layout.description.id}
+														</p>
+													</div>
+													<div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-800/80 text-[10px] text-slate-400">
+														<span className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800">
+															{layout.containerMaxWidth}
+														</span>
+														<span className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800">
+															{layout.linkArrangement}
+														</span>
+														{layout.isSplitDesktop && (
+															<span className="px-2 py-0.5 rounded-md bg-violet-900/60 text-violet-200 border border-violet-700/60 font-semibold">
+																Split Desktop
+															</span>
+														)}
+													</div>
+												</button>
+											);
+										})}
+									</div>
+								</div>
+							)}
+
+							{/* 3. Profile Card Design & Size Engine Subtab */}
+							{appearanceSubTab === "card" && (
+								<div className="flex flex-col gap-6">
+									{/* Card Size Engine */}
+									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+										<div className="mb-4">
+											<h3 className="text-sm font-bold text-white mb-1">Ukuran Kartu Profil (Card Size Engine)</h3>
+											<p className="text-xs text-slate-400">
+												Pilih skala dimensi kartu profil. Format bawaan Sedang (Medium) dioptimalkan agar lebih ringkas, proporsional, dan nyaman dilihat tanpa memakan layar.
+											</p>
+										</div>
+										<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+											{CARD_SIZES.map((sizeOpt) => {
+												const isSelected = (appearance.profile_card_size || "medium") === sizeOpt.id;
+												return (
+													<button
+														key={sizeOpt.id}
+														type="button"
+														onClick={() => {
+															const updated: AppearanceRecord = {
+																...appearance,
+																profile_card_size: sizeOpt.id,
+															};
+															setAppearance(updated);
+															markUnpublished();
+															saveDraftAppearanceDirectly(updated);
+															showToast(`Ukuran kartu diubah ke ${sizeOpt.name.id}`, "info");
+														}}
+														className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+															isSelected
+																? "bg-violet-950/50 border-violet-500 shadow-md ring-1 ring-violet-500"
+																: "bg-slate-950 border-slate-800 hover:border-slate-700"
+														}`}
+													>
+														<div className="flex items-center justify-between">
+															<span className="text-xs font-bold text-white">{sizeOpt.name.id}</span>
+															{isSelected && (
+																<span className="w-4 h-4 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px]">
+																	✓
+																</span>
+															)}
+														</div>
+														<span className="text-[11px] text-violet-300 font-medium">{sizeOpt.tagline.id}</span>
+														<div className="flex items-center gap-2 text-[10px] text-slate-400 mt-1">
+															<span>Avatar: {sizeOpt.avatarPx}px</span>
+															<span>•</span>
+															<span>Batas: {sizeOpt.maxWidthClass}</span>
+														</div>
+													</button>
+												);
+											})}
+										</div>
+									</div>
+
+									{/* 10 Profile Card Styles */}
+									<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+										<div className="mb-4">
+											<h3 className="text-sm font-bold text-white mb-1">Gaya Kartu Profil (10 Koleksi)</h3>
+											<p className="text-xs text-slate-400">
+												Pilih komposisi kartu profil. Geometri cover, overlap avatar, dan perataan identitas disesuaikan secara otomatis berdasarkan gaya yang dipilih.
+											</p>
+										</div>
+										<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+											{PROFILE_CARD_STYLES.map((styleOpt) => {
+												const isSelected = (appearance.profile_card_style_id || "immersive-fade") === styleOpt.id;
+												return (
+													<button
+														key={styleOpt.id}
+														type="button"
+														onClick={() => {
+															const updated: AppearanceRecord = {
+																...appearance,
+																profile_card_style_id: styleOpt.id,
+															};
+															setAppearance(updated);
+															markUnpublished();
+															saveDraftAppearanceDirectly(updated);
+															showToast(`Gaya profil diubah ke ${styleOpt.name.id}`, "info");
+														}}
+														className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+															isSelected
+																? "bg-violet-950/40 border-violet-500 shadow-md ring-1 ring-violet-500"
+																: "bg-slate-950/80 border-slate-800 hover:border-slate-700 hover:bg-slate-950"
+														}`}
+													>
+														<div>
+															<div className="flex items-center justify-between mb-1.5">
+																<h4 className="text-xs font-bold text-white">{styleOpt.name.id}</h4>
+																{isSelected && (
+																	<span className="w-4 h-4 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px]">
+																		✓
+																	</span>
+																)}
+															</div>
+															<div className="text-[11px] font-medium text-violet-300 mb-1">{styleOpt.tagline.id}</div>
+															<p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+																{styleOpt.description.id}
+															</p>
+														</div>
+														<div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-400 flex items-center justify-between">
+															<span className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800">
+																{styleOpt.coverTreatment}
+															</span>
+														</div>
+													</button>
+												);
+											})}
+										</div>
+									</div>
+								</div>
+							)}
+
+							{/* 4. Typography Subtab */}
+							{appearanceSubTab === "typography" && (
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+									<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+										<div>
+											<h3 className="text-sm font-bold text-white mb-1">Tipografi & Koleksi Font (24 Pilihan)</h3>
+											<p className="text-xs text-slate-400">
+												Pilih jenis font Google Fonts premium untuk nama, bio, tautan, dan seluruh antarmuka. Hanya font yang aktif yang akan dimuat di halaman publik.
+											</p>
+										</div>
+										<button
+											type="button"
+											onClick={() => {
+												const updated: AppearanceRecord = {
+													...appearance,
+													font_family_id: "inter",
+												};
+												setAppearance(updated);
+												markUnpublished();
+												saveDraftAppearanceDirectly(updated);
+												showToast("Font direset ke Inter", "info");
+											}}
+											className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold self-start sm:self-auto transition-colors cursor-pointer border border-slate-700"
+										>
+											↺ Reset ke Inter
+										</button>
+									</div>
+
+									{/* Search & Category Filter */}
+									<div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
+										<div className="relative flex-1">
+											<input
+												type="text"
+												value={fontSearch}
+												onChange={(e) => setFontSearch(e.target.value)}
+												placeholder="Cari nama font..."
+												className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-violet-500"
+											/>
+										</div>
+										<div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar text-xs">
+											<button
+												type="button"
+												onClick={() => setFontCategoryFilter("all")}
+												className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap ${
+													fontCategoryFilter === "all" ? "bg-violet-600 text-white" : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
+												}`}
+											>
+												Semua (24)
+											</button>
+											{FONT_CATEGORIES.map((cat) => (
+												<button
+													key={cat.id}
+													type="button"
+													onClick={() => setFontCategoryFilter(cat.id)}
+													className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap ${
+														fontCategoryFilter === cat.id ? "bg-violet-600 text-white" : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
+													}`}
+												>
+													{cat.name.id}
+												</button>
+											))}
+										</div>
+									</div>
+
+									{/* Font Grid */}
+									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+										{FONT_PRESETS.filter((font) => {
+											const matchCat = fontCategoryFilter === "all" || font.category === fontCategoryFilter;
+											const matchSearch = !fontSearch || font.name.toLowerCase().includes(fontSearch.toLowerCase());
+											return matchCat && matchSearch;
+										}).map((font) => {
+											const isSelected = (appearance.font_family_id || "inter") === font.id;
+											return (
+												<button
+													key={font.id}
+													type="button"
+													onClick={() => {
+														const updated: AppearanceRecord = {
+															...appearance,
+															font_family_id: font.id,
+														};
+														setAppearance(updated);
+														markUnpublished();
+														saveDraftAppearanceDirectly(updated);
+														showToast(`Font diubah ke ${font.name}`, "info");
+													}}
+													className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+														isSelected
+															? "bg-violet-950/40 border-violet-500 shadow-md ring-1 ring-violet-500"
+															: "bg-slate-950/80 border-slate-800 hover:border-slate-700 hover:bg-slate-950"
+													}`}
+												>
+													<div>
+														<div className="flex items-center justify-between mb-1">
+															<h4 className="text-xs font-bold text-white">{font.name}</h4>
+															{isSelected && (
+																<span className="w-4 h-4 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px]">
+																	✓
+																</span>
+															)}
+														</div>
+														<span className="text-[10px] text-violet-300 capitalize font-medium">
+															{font.category}
+														</span>
+													</div>
+													<div
+														className="text-sm text-slate-200 py-2 px-2.5 rounded-lg bg-slate-900 border border-slate-800/80 truncate"
+														style={{ fontFamily: font.cssFontFamily }}
+													>
+														Aa Bb Gg 123
+													</div>
+												</button>
+											);
+										})}
+									</div>
+								</div>
+							)}
+
+							{/* 5. Background & Media Subtab */}
+							{appearanceSubTab === "media" && (
+								<div className="flex flex-col gap-6">
 							{/* 2. Fullscreen Background Panel */}
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 								<h3 className="text-sm font-bold text-white mb-1">Latar Belakang Layar Penuh (Fixed Background)</h3>
@@ -2962,47 +3298,30 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 								{Boolean(appearance.cover_enabled) && (
 									<div className="flex flex-col gap-4 pt-3 border-t border-slate-800">
-										{/* Aspect Ratio */}
-										<div>
-											<label className="block text-xs font-semibold text-slate-300 mb-2">
-												Rasio Aspek Cover
-											</label>
-											<div className="flex flex-wrap gap-2">
-												{[
-													{ label: "Ultrawide (21:9)", id: "21:9" },
-													{ label: "Standar (16:9)", id: "16:9" },
-													{ label: "Panorama (3:1)", id: "3:1" },
-												].map((opt) => {
-													const currentRatio = (appearance.cover_aspect_ratio || "21:9").includes("16:9")
-														? "16:9"
-														: (appearance.cover_aspect_ratio || "21:9").includes("3:1")
-														? "3:1"
-														: "21:9";
-													const isSelected = currentRatio === opt.id;
-													return (
-														<button
-															key={opt.id}
-															type="button"
-															onClick={() => {
-																const updatedAppearance: AppearanceRecord = {
-																	...appearance,
-																	cover_aspect_ratio: opt.id,
-																};
-																setAppearance(updatedAppearance);
-																markUnpublished();
-																saveDraftAppearanceDirectly(updatedAppearance);
-																showToast(`Rasio cover diubah ke ${opt.label}`, "info");
-															}}
-															className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-																isSelected
-																	? "bg-violet-600 text-white border-violet-500 shadow-sm"
-																	: "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
-															}`}
-														>
-															{opt.label}
-														</button>
-													);
-												})}
+										{/* Automatic Style-Driven Cover Geometry Note */}
+										<div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+											<div className="w-6 h-6 rounded-lg bg-violet-950/80 border border-violet-700/50 flex items-center justify-center text-xs text-violet-300 shrink-0 mt-0.5">
+												📐
+											</div>
+											<div className="text-xs text-slate-300 leading-relaxed">
+												<div className="font-semibold text-white mb-0.5">
+													Geometri Cover Otomatis (Style-Driven)
+												</div>
+												<p className="text-slate-400">
+													Proporsi dan tinggi banner cover dikendalikan secara otomatis oleh{" "}
+													<button
+														type="button"
+														onClick={() => setAppearanceSubTab("card")}
+														className="text-violet-400 hover:text-violet-300 underline font-semibold cursor-pointer"
+													>
+														Gaya Kartu Profil
+													</button>
+													{" "}yang dipilih pada tab Kartu Profil (saat ini:{" "}
+													<span className="text-violet-200 font-mono font-medium">
+														{PROFILE_CARD_STYLES.find((s) => s.id === (appearance.profile_card_style_id || "immersive-fade"))?.name.id || appearance.profile_card_style_id || "Immersive Fade"}
+													</span>
+													).
+												</p>
 											</div>
 										</div>
 
@@ -3103,8 +3422,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									</div>
 								</div>
 							</div>
+							</div>
+							)}
 
-							{/* 5. Liquid Glass Material Controls */}
+							{/* 6. Liquid Glass Subtab */}
+							{appearanceSubTab === "glass" && (
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
 								<h3 className="text-sm font-bold text-white mb-1">Kontrol Material Liquid Glass</h3>
 								<p className="text-xs text-slate-400 mb-4">
@@ -3293,6 +3615,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									</div>
 								</div>
 							</div>
+							)}
 						</div>
 					)}
 

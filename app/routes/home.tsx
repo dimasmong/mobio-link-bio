@@ -13,6 +13,7 @@ import {
 	type AppearanceRecord,
 } from "../lib/db.server";
 import { computeThemeVariables } from "../lib/theme";
+import { resolveAppearance } from "../lib/appearance";
 import { FixedBackground } from "../components/FixedBackground";
 import { FloatingNav, type TabId } from "../components/FloatingNav";
 import { ProfileGlassCard } from "../components/ProfileGlassCard";
@@ -253,10 +254,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	const profile = loaderData.profile || profileData;
 	const appearance = loaderData.appearance;
 
-	const themeVariables = computeThemeVariables(appearance);
-	const dynamicStyles: React.CSSProperties = {
-		...(themeVariables as unknown as React.CSSProperties),
-	};
+	const resolved = resolveAppearance(appearance);
+	const { layoutTheme, cardStyle, cardSize, font, dynamicStyles, googleFontHref } = resolved;
 
 	// Synchronize tab state with URL hash and browser history (Back / Forward buttons)
 	useEffect(() => {
@@ -329,10 +328,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div
+			id="mobio-root"
 			className="relative min-h-[100dvh] flex flex-col text-theme-primary selection:bg-[var(--accent-subtle)] selection:text-[var(--accent-color)]"
-			data-theme={themeVariables["--theme-mode"]}
+			data-theme={resolved.themeVariables["--theme-mode"]}
+			data-layout={layoutTheme.id}
+			data-card-style={cardStyle.id}
+			data-card-size={cardSize.id}
+			data-font={font.id}
 			style={dynamicStyles}
 		>
+			{/* Dynamic Google Fonts Link */}
+			<link rel="stylesheet" href={googleFontHref} />
+
 			{/* Fixed Fullscreen Background (Gradient Mesh, Image, or Video with safe playback & readability overlay) */}
 			<FixedBackground config={profile.background} />
 
@@ -345,31 +352,65 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				onToggleLang={setLang}
 			/>
 
-			{/* App-Like Centered Main Container */}
+			{/* Main Layout Container with Dynamic Max-Width and Alignment */}
 			<main className="relative z-10 w-full flex-grow px-4 sm:px-6 pt-6 sm:pt-8 pb-28 sm:pb-32 flex flex-col items-center">
-				<div className="w-full max-w-xl sm:max-w-2xl mx-auto flex flex-col items-center">
-					{/* 1. HOME TAB PANEL: Pure Profile Glass Card with Unified Cover & Overlapping Avatar + Vertical Links */}
+				<div className={`w-full ${layoutTheme.containerMaxWidth} mx-auto flex flex-col ${layoutTheme.alignment === "start" ? "items-start text-left" : "items-center"}`}>
+					{/* 1. HOME TAB PANEL */}
 					<div
 						role="tabpanel"
 						id="tabpanel-home"
 						aria-labelledby="desktop-tab-home"
 						hidden={activeTab !== "home"}
-						className={`w-full flex flex-col items-center ${
+						className={`w-full flex flex-col ${layoutTheme.alignment === "start" ? "items-start" : "items-center"} ${
 							activeTab === "home" ? "tab-panel-enter" : "hidden"
 						}`}
 					>
 						{activeTab === "home" && (
 							<>
-								<section
-									aria-label={lang === "id" ? "Beranda & Profil" : "Home & Profile"}
-									className="w-full flex flex-col items-center"
-								>
-									{/* Unified Profile Glass Card with full-bleed cover banner & overlapping avatar */}
-									<ProfileGlassCard profile={profile} lang={lang} />
-								</section>
+								{layoutTheme.isSplitDesktop ? (
+									/* Two-Column Desktop Split */
+									<div className="w-full md:grid md:grid-cols-12 md:gap-8 items-start my-2">
+										<div className="md:col-span-5 md:sticky md:top-8 w-full flex flex-col items-center mb-6 md:mb-0">
+											<ProfileGlassCard
+												profile={profile}
+												lang={lang}
+												cardStyle={cardStyle.id}
+												cardSize={cardSize.id}
+											/>
+										</div>
+										<div className="md:col-span-7 w-full flex flex-col">
+											<VerticalLinkList
+												links={profile.links}
+												lang={lang}
+												arrangement={layoutTheme.linkArrangement}
+											/>
+										</div>
+									</div>
+								) : (
+									<div className={`w-full flex flex-col ${layoutTheme.alignment === "start" ? "items-start" : "items-center"} ${
+										layoutTheme.hasOuterFrame
+											? "glass-liquid-secondary rounded-4xl p-4 sm:p-7 border border-[var(--glass-border-specular)] shadow-xl my-2"
+											: ""
+									}`}>
+										<section
+											aria-label={lang === "id" ? "Beranda & Profil" : "Home & Profile"}
+											className={`w-full flex flex-col ${layoutTheme.alignment === "start" ? "items-start" : "items-center"}`}
+										>
+											<ProfileGlassCard
+												profile={profile}
+												lang={lang}
+												cardStyle={cardStyle.id}
+												cardSize={cardSize.id}
+											/>
+										</section>
 
-								{/* Regular Links: Strict Single Vertical Column */}
-								<VerticalLinkList links={profile.links} lang={lang} />
+										<VerticalLinkList
+											links={profile.links}
+											lang={lang}
+											arrangement={layoutTheme.linkArrangement}
+										/>
+									</div>
+								)}
 							</>
 						)}
 					</div>

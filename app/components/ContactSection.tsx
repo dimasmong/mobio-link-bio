@@ -54,7 +54,10 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 					<ContactIcon className="w-3.5 h-3.5" />
 					<h2 id="contact-heading">{config.title[lang]}</h2>
 				</div>
-				{config.description && config.description[lang]?.trim() && (
+				{config.description &&
+					config.description[lang]?.trim() &&
+					!config.description[lang].toLowerCase().includes("silakan hubungi") &&
+					!config.description[lang].toLowerCase().includes("reach out via any") && (
 					<p className="text-xs sm:text-sm text-theme-muted max-w-md">
 						{config.description[lang]}
 					</p>

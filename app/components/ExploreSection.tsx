@@ -239,7 +239,10 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 					<CompassIcon className="w-3.5 h-3.5" />
 					<h2 id="explore-heading">{config.title[lang]}</h2>
 				</div>
-				{config.description && config.description[lang]?.trim() && (
+				{config.description &&
+					config.description[lang]?.trim() &&
+					!config.description[lang].toLowerCase().includes("kumpulan proyek terpilih") &&
+					!config.description[lang].toLowerCase().includes("selected showcase of projects") && (
 					<p className="text-xs sm:text-sm text-theme-muted max-w-md">
 						{config.description[lang]}
 					</p>

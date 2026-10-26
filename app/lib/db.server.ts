@@ -117,6 +117,8 @@ export interface ContactMethodRecord {
 	updated_at: string;
 }
 
+export type CardSize = "small" | "medium" | "normal";
+
 export interface AppearanceRecord {
 	id: string;
 	palette: string;
@@ -145,6 +147,10 @@ export interface AppearanceRecord {
 	background_media_id?: string;
 	background_poster_media_id?: string;
 	cover_media_id?: string;
+	layout_theme_id?: string;
+	profile_card_style_id?: string;
+	profile_card_size?: CardSize;
+	font_family_id?: string;
 	created_at: string;
 	updated_at: string;
 }
@@ -1642,6 +1648,10 @@ export const DEFAULT_APPEARANCE: AppearanceRecord = {
 	background_media_id: "",
 	background_poster_media_id: "",
 	cover_media_id: "",
+	layout_theme_id: "compact-center",
+	profile_card_style_id: "immersive-fade",
+	profile_card_size: "medium",
+	font_family_id: "inter",
 	created_at: "",
 	updated_at: "",
 };
@@ -1706,8 +1716,9 @@ export async function saveDraftAppearance(
 				accent_color, background_position_x, background_position_y, background_scale,
 				background_overlay_color, background_brightness, glass_blur, glass_opacity, glass_tint,
 				glass_border_opacity, glass_highlight_intensity, glass_shadow_intensity, glass_radius,
-				background_media_id, background_poster_media_id, cover_media_id, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				background_media_id, background_poster_media_id, cover_media_id,
+				layout_theme_id, profile_card_style_id, profile_card_size, font_family_id, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				palette = excluded.palette,
 				glass_intensity = excluded.glass_intensity,
@@ -1735,6 +1746,10 @@ export async function saveDraftAppearance(
 				background_media_id = excluded.background_media_id,
 				background_poster_media_id = excluded.background_poster_media_id,
 				cover_media_id = excluded.cover_media_id,
+				layout_theme_id = excluded.layout_theme_id,
+				profile_card_style_id = excluded.profile_card_style_id,
+				profile_card_size = excluded.profile_card_size,
+				font_family_id = excluded.font_family_id,
 				updated_at = excluded.updated_at;`
 		).bind(
 			"draft",
@@ -1764,6 +1779,10 @@ export async function saveDraftAppearance(
 			merged.background_media_id || "",
 			merged.background_poster_media_id || "",
 			merged.cover_media_id || "",
+			merged.layout_theme_id || "compact-center",
+			merged.profile_card_style_id || "immersive-fade",
+			merged.profile_card_size || "medium",
+			merged.font_family_id || "inter",
 			now
 		),
 		db.prepare(
@@ -1861,7 +1880,8 @@ export async function publishAllDrafts(
 				accent_color, background_position_x, background_position_y, background_scale,
 				background_overlay_color, background_brightness, glass_blur, glass_opacity, glass_tint,
 				glass_border_opacity, glass_highlight_intensity, glass_shadow_intensity, glass_radius,
-				background_media_id, background_poster_media_id, cover_media_id, updated_at
+				background_media_id, background_poster_media_id, cover_media_id,
+				layout_theme_id, profile_card_style_id, profile_card_size, font_family_id, updated_at
 			)
 			SELECT
 				'published', palette, glass_intensity, background_type, background_src, background_poster,
@@ -1869,7 +1889,8 @@ export async function publishAllDrafts(
 				accent_color, background_position_x, background_position_y, background_scale,
 				background_overlay_color, background_brightness, glass_blur, glass_opacity, glass_tint,
 				glass_border_opacity, glass_highlight_intensity, glass_shadow_intensity, glass_radius,
-				background_media_id, background_poster_media_id, cover_media_id, ?
+				background_media_id, background_poster_media_id, cover_media_id,
+				layout_theme_id, profile_card_style_id, profile_card_size, font_family_id, ?
 			FROM appearance_settings WHERE id = 'draft'
 			ON CONFLICT(id) DO UPDATE SET
 				palette = excluded.palette,
@@ -1898,6 +1919,10 @@ export async function publishAllDrafts(
 				background_media_id = excluded.background_media_id,
 				background_poster_media_id = excluded.background_poster_media_id,
 				cover_media_id = excluded.cover_media_id,
+				layout_theme_id = excluded.layout_theme_id,
+				profile_card_style_id = excluded.profile_card_style_id,
+				profile_card_size = excluded.profile_card_size,
+				font_family_id = excluded.font_family_id,
 				updated_at = excluded.updated_at;`
 		).bind(now),
 
@@ -2006,7 +2031,8 @@ export async function discardAllDrafts(db: D1Database): Promise<void> {
 				accent_color, background_position_x, background_position_y, background_scale,
 				background_overlay_color, background_brightness, glass_blur, glass_opacity, glass_tint,
 				glass_border_opacity, glass_highlight_intensity, glass_shadow_intensity, glass_radius,
-				background_media_id, background_poster_media_id, cover_media_id, updated_at
+				background_media_id, background_poster_media_id, cover_media_id,
+				layout_theme_id, profile_card_style_id, profile_card_size, font_family_id, updated_at
 			)
 			SELECT
 				'draft', palette, glass_intensity, background_type, background_src, background_poster,
@@ -2014,7 +2040,8 @@ export async function discardAllDrafts(db: D1Database): Promise<void> {
 				accent_color, background_position_x, background_position_y, background_scale,
 				background_overlay_color, background_brightness, glass_blur, glass_opacity, glass_tint,
 				glass_border_opacity, glass_highlight_intensity, glass_shadow_intensity, glass_radius,
-				background_media_id, background_poster_media_id, cover_media_id, ?
+				background_media_id, background_poster_media_id, cover_media_id,
+				layout_theme_id, profile_card_style_id, profile_card_size, font_family_id, ?
 			FROM appearance_settings WHERE id = 'published'
 			ON CONFLICT(id) DO UPDATE SET
 				palette = excluded.palette,
@@ -2043,6 +2070,10 @@ export async function discardAllDrafts(db: D1Database): Promise<void> {
 				background_media_id = excluded.background_media_id,
 				background_poster_media_id = excluded.background_poster_media_id,
 				cover_media_id = excluded.cover_media_id,
+				layout_theme_id = excluded.layout_theme_id,
+				profile_card_style_id = excluded.profile_card_style_id,
+				profile_card_size = excluded.profile_card_size,
+				font_family_id = excluded.font_family_id,
 				updated_at = excluded.updated_at;`
 		).bind(now),
 
