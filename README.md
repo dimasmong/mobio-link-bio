@@ -105,7 +105,7 @@ npm install
 # PowerShell / Bash:  cp .dev.vars.example .dev.vars
 
 # 5. Apply migrations to your local SQLite database
-npx wrangler d1 migrations apply DB --local --config wrangler.instance.json
+npm run migrate:instance:local
 
 # 6. Start the local development server
 npm run dev
@@ -113,6 +113,10 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
+> [!NOTE]
+> **Fork-Safe Independent Deployment:**  
+> The repository includes a tracked `wrangler.json` reserved exclusively for the upstream maintainer's production website (`me.dimasmong.web.id`). Independent self-hosters deploy via `wrangler.instance.json` and safe npm commands (`npm run migrate:instance`, `npm run deploy:instance`). Forking this repository does not automatically deploy or configure your Cloudflare resources.
+>
 > 📖 **Ready for production deployment?**  
 > Follow the complete step-by-step guide: [**docs/INSTALLATION.md**](docs/INSTALLATION.md).
 

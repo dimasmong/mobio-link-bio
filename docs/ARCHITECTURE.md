@@ -65,7 +65,7 @@ flowchart TD
    - If D1 is unreachable or uninitialized, loaders gracefully fall back to default profile definitions in `app/data/profile.ts`.
 4. **Streaming HTML Output:** `app/entry.server.tsx` executes `renderToReadableStream()` from `react-dom/server`. Semantic HTML streams to the browser with complete meta tags, OG cards, and inline SVG assets.
 5. **Client Hydration:** `app/entry.client.tsx` hydrates interactive state (language switching, tab panels, lightbox modals) without causing hydration mismatch.
-6. **Configuration Isolation:** `vite.config.ts` dynamically binds `wrangler.instance.json` when present, ensuring that self-hosters compile and run against their own bindings without modifying the upstream production `wrangler.json`.
+6. **Configuration Isolation & Deployment Safety:** `vite.config.ts` dynamically binds `wrangler.instance.json` when present (or prioritizes `process.env.WRANGLER_CONFIG`). Self-hosters use dedicated npm scripts (`npm run build:instance`, `npm run deploy:instance`, `npm run migrate:instance`) backed by an automated preflight guard (`scripts/preflight-instance.mjs`) that halts deployment if production identifiers or unconfigured placeholders are detected, completely isolating independent instances from the upstream production `wrangler.json`.
 
 ---
 

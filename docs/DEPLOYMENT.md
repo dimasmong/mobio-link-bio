@@ -51,23 +51,39 @@ A guided, 10-minute manual setup guarantees that your deployment is **secure, fa
 
 ## 3. Deployment Workflows
 
-### A. Independent Self-Hosted Deployment (Fork / Instance)
-For self-hosters deploying their own instance, always use `--config wrangler.instance.json`:
+### A. Independent Self-Hosted Deployment (Recommended Workflow)
+For independent self-hosters deploying their own instance, always use the dedicated instance scripts or `--config wrangler.instance.json`:
 
 ```bash
-# 1. Run preflight verification
-node scripts/preflight-instance.mjs
-
-# 2. Type check
+# 1. Verify TypeScript types
 npm run typecheck
 
-# 3. Build SSR server and client assets (Vite automatically detects wrangler.instance.json)
-npm run build
+# 2. Run automated preflight safety audit
+npm run preflight:instance
 
-# 4. Apply migrations to your remote Cloudflare D1 database
+# 3. Compile instance build
+npm run build:instance
+
+# 4. Apply migrations to your remote Cloudflare D1 database (runs preflight first)
+npm run migrate:instance
+
+# 5. Deploy to your personal Cloudflare Workers account (runs preflight first)
+npm run deploy:instance
+```
+
+> [!WARNING]
+> **Safety Warning for Self-Hosters:**
+> Do **NOT** run `npx wrangler deploy` or `npm run deploy` without `--config`!
+> The repository includes a tracked `wrangler.json` file which is reserved exclusively for the project maintainer's production deployment (`me.dimasmong.web.id`). Running unqualified deploy commands targets that production file instead of your own.
+> Always use `npm run deploy:instance` or pass `--config wrangler.instance.json` explicitly.
+
+#### Direct CLI Alternatives:
+If you prefer running direct Wrangler commands:
+```bash
+# Apply migrations:
 npx wrangler d1 migrations apply DB --remote --config wrangler.instance.json
 
-# 5. Deploy to your personal Cloudflare Workers account
+# Deploy worker:
 npx wrangler deploy --config wrangler.instance.json
 ```
 
@@ -75,14 +91,16 @@ npx wrangler deploy --config wrangler.instance.json
 For the original project maintainer deploying `me.dimasmong.web.id`:
 
 ```bash
-# Run production preflight verification
-node scripts/preflight-instance.mjs --prod
+# 1. Run production preflight verification
+npm run preflight:instance -- --prod
 
-# Build and deploy targeting wrangler.json
+# 2. Compile production build
 npm run typecheck
-npm run build
+npm run build:prod
+
+# 3. Apply upstream production migrations and deploy
 npx wrangler d1 migrations apply DB --remote
-npx wrangler deploy
+npm run deploy
 ```
 
 ---
@@ -132,8 +150,11 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
+          command: deploy --config wrangler.instance.json
 ```
+
+> [!NOTE]
+> For self-hosters running CI/CD, ensure your CI pipeline passes `--config wrangler.instance.json` (or creates `wrangler.instance.json` from secrets). Running unqualified `deploy` in CI defaults to the upstream maintainer's `wrangler.json`.
 
 ---
 
@@ -142,7 +163,7 @@ jobs:
 To create a separate staging environment:
 
 1. Create a staging D1 database (`mobio-studio-db-staging`) and R2 bucket (`mobio-media-staging`).
-2. Add an `env.staging` block in `wrangler.json`:
+2. Add an `env.staging` block in your `wrangler.instance.json`:
    ```json
    "env": {
      "staging": {
@@ -161,7 +182,7 @@ To create a separate staging environment:
    ```
 3. Deploy to staging via:
    ```bash
-   npx wrangler deploy --env staging
+   npx wrangler deploy --config wrangler.instance.json --env staging
    ```
 
 ---
@@ -172,7 +193,7 @@ Cloudflare Workers automatically archives prior deployments:
 
 1. **List Previous Deployments:**
    ```bash
-   npx wrangler deployments list
+   npx wrangler deployments list --config wrangler.instance.json
    ```
 2. **Instant Rollback:**
    In the Cloudflare Dashboard under **Workers & Pages** ➔ **mobio-link-bio** ➔ **Deployments**, select any previous deployment and click **Rollback to this version**. Rollbacks take effect worldwide in milliseconds.

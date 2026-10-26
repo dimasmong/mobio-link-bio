@@ -71,13 +71,17 @@ Local D1 data is persisted inside `.wrangler/state/v3/d1/`.
 
 ### Applying Migrations Locally
 ```bash
-npx wrangler d1 migrations apply DB --local
+# Recommended safe script:
+npm run migrate:instance:local
+
+# Or direct Wrangler command with explicit config:
+npx wrangler d1 migrations apply DB --local --config wrangler.instance.json
 ```
 
 ### Inspecting Local Data
 To run raw SQL queries against your local development database:
 ```bash
-npx wrangler d1 execute DB --local --command "SELECT * FROM profile;"
+npx wrangler d1 execute DB --local --command "SELECT * FROM profile;" --config wrangler.instance.json
 ```
 
 ### Resetting Local Database
@@ -86,8 +90,8 @@ To start with a fresh local database:
 # Delete the local state directory (does NOT affect production)
 rm -rf .wrangler/state/v3/d1
 
-# Re-apply all migrations
-npx wrangler d1 migrations apply DB --local
+# Re-apply all migrations locally
+npm run migrate:instance:local
 ```
 
 ---
@@ -102,11 +106,23 @@ npm run typecheck
 ```
 Generates Wrangler runtime types and validates TypeScript code under strict mode.
 
-### 2. Full Production Build
+### 2. Application Builds
 ```bash
+# Compile independent instance build:
+npm run build:instance
+
+# Or standard build:
 npm run build
+
+# Maintainer explicit production build:
+npm run build:prod
 ```
-Compiles both the Vite SSR edge server bundle and client hydration assets.
+
+### 3. Open Source Readiness & Deployment Safety Audit
+```bash
+node scripts/test-oss-readiness.mjs
+```
+Validates required documentation, license, secret cleanliness, neutral defaults, markdown links, preflight guard validation edge cases, and halting guarantees.
 
 ### 3. Fresh D1 Database Migration Test
 ```bash

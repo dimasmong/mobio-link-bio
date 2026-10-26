@@ -58,17 +58,18 @@ Each installation is completely sovereign: it runs on your own Cloudflare accoun
    database_name = "mobio-studio-db"
    database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
    ```
-4. In `wrangler.json`, the D1 binding is configured as:
+4. In your independent instance configuration (`wrangler.instance.json`, copied from `wrangler.example.json`), configure your D1 binding:
    ```json
    "d1_databases": [
      {
        "binding": "DB",
        "database_name": "mobio-studio-db",
-       "database_id": "local-mobio-studio-db",
+       "database_id": "your-d1-database-uuid-here",
        "migrations_dir": "migrations"
      }
    ]
    ```
+   *(Note: The tracked `wrangler.json` is reserved for the upstream maintainer's production deployment. Independent instances must use `wrangler.instance.json`.)*
 
 ---
 
@@ -85,11 +86,19 @@ MOBIO Studio uses versioned SQLite migrations located in the `migrations/` direc
 
 1. **Apply migrations to your local development database:**
    ```bash
-   npx wrangler d1 migrations apply mobio-studio-db --local
+   # Recommended safe script (validates preflight and binds wrangler.instance.json):
+   npm run migrate:instance:local
+
+   # Or direct Wrangler command with explicit config:
+   npx wrangler d1 migrations apply DB --local --config wrangler.instance.json
    ```
-2. **Apply migrations to your remote Cloudflare production database:**
+2. **Apply migrations to your remote Cloudflare database:**
    ```bash
-   npx wrangler d1 migrations apply mobio-studio-db --remote
+   # Recommended safe script (validates preflight guard before touching remote D1):
+   npm run migrate:instance
+
+   # Or direct Wrangler command with explicit config:
+   npx wrangler d1 migrations apply DB --remote --config wrangler.instance.json
    ```
 
 This creates the core database tables and registry:
@@ -253,18 +262,29 @@ npx wrangler secret put ADMIN_EMAIL
 
 ### Step 10: Deploying to Production
 
-When you are ready to publish your changes:
+When you are ready to build and publish your independent MOBIO instance:
 
 ```bash
-# 1. Verify TypeScript types
+# 1. Run automated preflight guard to audit your wrangler.instance.json
+npm run preflight:instance
+
+# 2. Verify TypeScript types
 npm run typecheck
 
-# 2. Compile production build
-npm run build
+# 3. Compile instance build
+npm run build:instance
 
-# 3. Deploy to Cloudflare Workers
-npx wrangler deploy
+# 4. Deploy your independent Worker (automatically verifies preflight first)
+npm run deploy:instance
 ```
+
+> [!WARNING]
+> **Deployment Safety Notice for Self-Hosters:**
+> Do **NOT** run `npx wrangler deploy` or `npm run deploy` without explicit configuration!
+> The repository tracks an upstream maintainer configuration file (`wrangler.json`) targeting `me.dimasmong.web.id`. Running unqualified deploy commands targets that upstream production file instead of your own.
+> Always use `npm run deploy:instance` (or pass `--config wrangler.instance.json` explicitly) to guarantee deployment to your personal Cloudflare Worker.
+
+*(For the original repository maintainer only, deploying to upstream production uses `npm run build:prod` and `npm run deploy`.)*
 
 ---
 

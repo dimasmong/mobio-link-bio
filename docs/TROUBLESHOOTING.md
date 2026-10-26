@@ -23,7 +23,7 @@ This guide covers common issues, error messages, and verified solutions when sel
 ## 1. Wrangler Authentication Failed
 
 ### Symptoms:
-Running `npx wrangler d1 ...` or `npx wrangler deploy` outputs:
+Running `npx wrangler d1 ...` or `npm run deploy:instance` outputs:
 `Error: Not logged in. Please run wrangler login.`
 
 ### Solution:

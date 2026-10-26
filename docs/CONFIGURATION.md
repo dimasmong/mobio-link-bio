@@ -127,7 +127,7 @@ To bind MOBIO to your own custom domain (e.g., `bio.example.com` or `links.examp
      }
    ]
    ```
-3. **Deploy:** Run `npx wrangler deploy --config wrangler.instance.json`. Cloudflare automatically provisions an SSL/TLS certificate and routes traffic to your Worker.
+3. **Deploy:** Run `npm run deploy:instance` (or `npx wrangler deploy --config wrangler.instance.json`). Cloudflare automatically provisions an SSL/TLS certificate and routes traffic to your Worker.
 4. **Update Access Application:** Ensure your Cloudflare Access Application domain in Zero Trust points to `bio.example.com` with path `studio`.
 
 ---

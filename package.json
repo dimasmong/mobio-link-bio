@@ -5,11 +5,17 @@
   "type": "module",
   "scripts": {
     "build": "react-router build",
+    "build:instance": "node scripts/build-instance.mjs",
+    "build:prod": "node scripts/build-prod.mjs",
     "typegen": "wrangler types && react-router typegen",
     "cf-typegen": "wrangler types && react-router typegen",
     "check": "tsc && react-router build && wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
+    "deploy:instance": "node scripts/deploy-instance.mjs",
     "dev": "react-router dev",
+    "migrate:instance": "node scripts/migrate-instance.mjs --remote",
+    "migrate:instance:local": "node scripts/migrate-instance.mjs --local",
+    "preflight:instance": "node scripts/preflight-instance.mjs",
     "preview": "npm run build && vite preview",
     "typecheck": "npm run typegen && tsc -b"
   },

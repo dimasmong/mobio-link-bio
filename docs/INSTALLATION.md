@@ -175,6 +175,10 @@ Always pass `--config wrangler.instance.json` to ensure operations target your p
 
 ### A. Apply Migrations Locally (for `npm run dev`)
 ```bash
+# Recommended safe script (preflight-guarded):
+npm run migrate:instance:local
+
+# Or direct Wrangler command with explicit config:
 npx wrangler d1 migrations apply DB --local --config wrangler.instance.json
 ```
 Select `Yes` when prompted. This initializes your local SQLite storage.
@@ -184,6 +188,10 @@ Select `Yes` when prompted. This initializes your local SQLite storage.
 > This command applies the schema migrations to **your remote Cloudflare D1 database** created in Step 5A.
 
 ```bash
+# Recommended safe script (verifies preflight guard before touching remote D1):
+npm run migrate:instance
+
+# Or direct Wrangler command with explicit config:
 npx wrangler d1 migrations apply DB --remote --config wrangler.instance.json
 ```
 Wrangler will list the 11 migrations (`0001_initial_schema.sql` through `0011_interaction_events.sql`). Confirm with `y` to apply.
@@ -277,18 +285,26 @@ Test that your application runs smoothly locally:
 Build and deploy your application to your personal Cloudflare Workers account:
 
 ```bash
-# 1. Verify configuration integrity
-node scripts/preflight-instance.mjs
+# 1. Run automated preflight guard to audit configuration
+npm run preflight:instance
 
 # 2. Run typecheck to guarantee type safety
 npm run typecheck
 
-# 3. Build the production React Router SSR bundles
-npm run build
+# 3. Build the independent instance application bundle
+npm run build:instance
 
-# 4. Deploy your Worker to Cloudflare
-npx wrangler deploy --config wrangler.instance.json
+# 4. Deploy your independent Worker (automatically executes preflight first)
+npm run deploy:instance
 ```
+
+> [!WARNING]
+> **Safety Warning for Self-Hosters:**
+> Do **NOT** run `npx wrangler deploy` or `npm run deploy` without `--config`!
+> The repository includes a tracked `wrangler.json` file which is reserved exclusively for the project maintainer's production deployment (`me.dimasmong.web.id`). Running unqualified deploy commands targets that production file instead of your own.
+> Always use `npm run deploy:instance` or pass `--config wrangler.instance.json` explicitly.
+
+*(Direct CLI alternative: `npx wrangler deploy --config wrangler.instance.json`)*
 
 Wrangler will output your live URL:
 ```text
