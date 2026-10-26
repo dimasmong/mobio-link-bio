@@ -44,9 +44,9 @@ export function ProfileGlassCard({
 	// Avatar Element Renderer
 	const renderAvatar = (customClasses = "") => (
 		<div
-			className={`rounded-full p-1 sm:p-1.5 bg-[var(--glass-surface-primary)] border border-[var(--glass-border-specular)] shadow-2xl backdrop-blur-xl flex items-center justify-center transition-transform hover:scale-105 duration-300 shrink-0 ${sizeConfig.avatarSizeClass} ${customClasses}`}
+			className={`rounded-full p-0.5 sm:p-1 bg-[var(--glass-surface-primary)] border border-[var(--glass-border-specular)] shadow-xl backdrop-blur-xl flex items-center justify-center transition-transform hover:scale-105 duration-300 shrink-0 ${sizeConfig.avatarSizeClass} ${customClasses}`}
 		>
-			<div className="w-full h-full rounded-full overflow-hidden ring-2 ring-white/60 dark:ring-white/10 shadow-inner flex items-center justify-center">
+			<div className="w-full h-full rounded-full overflow-hidden ring-1 ring-white/50 dark:ring-white/20 shadow-inner flex items-center justify-center">
 				{hasAvatar && !imageError ? (
 					<img
 						src={profile.avatarUrl}
@@ -57,7 +57,7 @@ export function ProfileGlassCard({
 					/>
 				) : (
 					<div
-						className="w-full h-full flex items-center justify-center font-extrabold shadow-inner select-none text-base sm:text-lg"
+						className="w-full h-full flex items-center justify-center font-extrabold shadow-inner select-none text-base sm:text-xl"
 						style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-foreground)" }}
 						aria-label={profile.name}
 					>
@@ -126,7 +126,7 @@ export function ProfileGlassCard({
 	};
 
 	return (
-		<header className={`w-full ${sizeConfig.maxWidthClass} mx-auto relative z-10 transition-all duration-300`}>
+		<header className="w-full relative z-10 transition-all duration-300">
 			<div className="glass-liquid-primary rounded-3xl sm:rounded-4xl relative overflow-hidden transition-all duration-300 shadow-2xl border border-[var(--glass-border-specular)]">
 				{/* ------------------------------------------------------------------ */}
 				{/* STYLE 01: IMMERSIVE FADE (Default)                                 */}
@@ -235,7 +235,7 @@ export function ProfileGlassCard({
 							</div>
 						)}
 						<div className="relative z-10 mb-2.5">
-							{renderAvatar("ring-4 ring-[var(--accent-subtle)] shadow-xl")}
+							{renderAvatar("ring-2 ring-[var(--accent-subtle)] shadow-xl")}
 						</div>
 						<div className="relative z-10 w-full">
 							{renderIdentity("center")}

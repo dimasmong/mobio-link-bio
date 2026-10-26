@@ -110,10 +110,10 @@ async function runV4Verification() {
 		const medCfg = getCardSizeConfig("medium");
 		const normCfg = getCardSizeConfig("normal");
 
-		assert.equal(smallCfg.avatarPx, 56);
-		assert.equal(medCfg.avatarPx, 64);
-		assert.equal(normCfg.avatarPx, 76);
-		console.log("  ✓ Card sizes registered: Small (avatar 56px), Medium (avatar 64px), Normal (avatar 76px).");
+		assert.equal(smallCfg.avatarPx, 68);
+		assert.equal(medCfg.avatarPx, 84);
+		assert.equal(normCfg.avatarPx, 96);
+		console.log("  ✓ Card sizes registered: Small (avatar 68px), Medium (avatar 84px), Normal (avatar 96px).");
 
 		// ---------------------------------------------------------------------
 		// 5. LAYER D: 24 CURATED GOOGLE FONTS & 5 CATEGORIES

@@ -50,9 +50,11 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 		>
 			{/* Section Header */}
 			<div className="flex flex-col items-center text-center mb-6 px-2">
-				<div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-theme-accent-subtle border mb-2">
-					<ContactIcon className="w-3.5 h-3.5" />
-					<h2 id="contact-heading">{config.title[lang]}</h2>
+				<div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold bg-[var(--glass-surface-interactive)] text-theme-primary border border-[var(--glass-border-specular)] shadow-sm backdrop-blur-md mb-2.5">
+					<span className="w-5 h-5 rounded-full bg-[var(--accent-color)] text-[var(--accent-foreground)] flex items-center justify-center shrink-0 shadow-2xs">
+						<ContactIcon className="w-3 h-3" />
+					</span>
+					<h2 id="contact-heading" className="tracking-tight">{config.title[lang]}</h2>
 				</div>
 				{config.description &&
 					config.description[lang]?.trim() &&
@@ -76,6 +78,18 @@ export function ContactSection({ config, lang }: ContactSectionProps) {
 								href={method.url}
 								target={isEmail ? undefined : "_blank"}
 								rel={isEmail ? undefined : "noopener noreferrer"}
+								onClick={() => {
+									try {
+										const sessionKey = (typeof window !== "undefined" && window.sessionStorage?.getItem("mobio_session")) || "anonymous";
+										fetch("/api/public/telemetry", {
+											method: "POST",
+											headers: { "Content-Type": "application/json" },
+											body: JSON.stringify({ page: "contact", sessionKey }),
+										}).catch(() => {});
+									} catch {
+										// silent fallback
+									}
+								}}
 								className="glass-liquid-card rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] text-left"
 							>
 								<div className="flex items-center gap-3.5 min-w-0 flex-1">

@@ -186,7 +186,7 @@ export function IconPicker({
 						type="button"
 						onClick={handleResetToDefault}
 						className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/60 text-slate-300 hover:text-white text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1"
-						title={`Reset ke ikon rekomendasi untuk ${platform} (${recommendedIcon.name.id})`}
+						title={`Kembalikan ke ikon standar (${recommendedIcon.name.id})`}
 					>
 						<span>↺</span>
 						<span>Reset Default</span>
@@ -265,29 +265,10 @@ export function IconPicker({
 								</button>
 							)}
 						</div>
-
-						{/* Platform Recommendation Pill */}
-						{icon !== recommendedIconId && (
-							<button
-								type="button"
-								onClick={() =>
-									onChange({
-										icon_type: "preset",
-										icon: recommendedIconId,
-										icon_url: "",
-										icon_media_id: "",
-									})
-								}
-								className="px-2.5 py-1.5 rounded-xl bg-violet-950/60 hover:bg-violet-900/60 border border-violet-700/60 text-violet-300 text-[11px] font-medium transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
-							>
-								<span>💡 Rekomendasi:</span>
-								<span className="font-bold underline">{recommendedIcon.name.id}</span>
-							</button>
-						)}
 					</div>
 
 					{/* Category Pill Filters */}
-					<div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin text-[11px]">
+					<div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar text-[11px]">
 						{ICON_CATEGORIES.map((cat) => (
 							<button
 								key={cat.id}
@@ -304,8 +285,8 @@ export function IconPicker({
 						))}
 					</div>
 
-					{/* Responsive Visual Icon Grid */}
-					<div className="max-h-56 overflow-y-auto p-2 rounded-xl bg-slate-900/70 border border-slate-800/80 grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2">
+					{/* Responsive Visual Icon Grid (Icons only, compact & clean) */}
+					<div className="max-h-56 overflow-y-auto p-2 rounded-xl bg-slate-900/70 border border-slate-800/80 grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-1.5">
 						{filteredIcons.length === 0 ? (
 							<div className="col-span-full py-8 text-center text-xs text-slate-500">
 								Tidak ada ikon yang sesuai dengan pencarian "{searchQuery}".
@@ -326,17 +307,14 @@ export function IconPicker({
 												icon_media_id: "",
 											})
 										}
-										title={`${item.name.id} (${item.category})`}
-										className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer relative group ${
+										title={`${item.name.id} • ${item.category}`}
+										className={`p-2.5 aspect-square rounded-xl border flex items-center justify-center transition-all cursor-pointer relative group ${
 											isSelected
 												? "bg-violet-950/80 border-violet-500 ring-2 ring-violet-500/50 shadow-md scale-105"
 												: "bg-slate-900/90 border-slate-800 hover:border-slate-700 hover:bg-slate-800/80 hover:scale-105"
 										}`}
 									>
-										<SvgComp className={`w-5 h-5 ${item.colorClass || "text-slate-300"}`} />
-										<span className="text-[9px] text-slate-400 group-hover:text-slate-200 truncate max-w-full text-center">
-											{item.name.id}
-										</span>
+										<SvgComp className={`w-5 h-5 ${item.colorClass || "text-slate-300"} group-hover:scale-110 transition-transform`} />
 									</button>
 								);
 							})

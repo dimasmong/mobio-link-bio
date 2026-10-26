@@ -234,10 +234,12 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 			className="w-full my-4 sm:my-6"
 		>
 			{/* Section Header */}
-			<div className="flex flex-col items-center text-center mb-5 px-2">
-				<div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-theme-accent-subtle border mb-2">
-					<CompassIcon className="w-3.5 h-3.5" />
-					<h2 id="explore-heading">{config.title[lang]}</h2>
+			<div className="flex flex-col items-center text-center mb-6 px-2">
+				<div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold bg-[var(--glass-surface-interactive)] text-theme-primary border border-[var(--glass-border-specular)] shadow-sm backdrop-blur-md mb-2.5">
+					<span className="w-5 h-5 rounded-full bg-[var(--accent-color)] text-[var(--accent-foreground)] flex items-center justify-center shrink-0 shadow-2xs">
+						<CompassIcon className="w-3 h-3" />
+					</span>
+					<h2 id="explore-heading" className="tracking-tight">{config.title[lang]}</h2>
 				</div>
 				{config.description &&
 					config.description[lang]?.trim() &&

@@ -951,7 +951,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 					draft_updated_at: new Date().toISOString(),
 				});
 				setIsPublishModalOpen(false);
-				showToast(`Berhasil dipublikasikan! Versi v${data.version || 2} kini aktif di web publik.`, "success");
+				showToast("Berhasil dipublikasikan! Perubahan kini aktif di website publik.", "success");
 			}
 		} catch (err: unknown) {
 			const msg = err instanceof Error ? err.message : "Kesalahan jaringan.";
@@ -1745,9 +1745,6 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								<h1 className="text-sm sm:text-base font-bold text-white tracking-tight">
 									MOBIO Studio
 								</h1>
-								<span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/60">
-									Phase 2
-								</span>
 							</div>
 							<p className="text-[11px] text-slate-400 hidden sm:block">
 								Profile, Links & Contact Management
@@ -1775,7 +1772,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							}`}
 						/>
 						<span className="text-slate-300 text-[11px] font-medium">
-							{hasUnpublished ? "Ada perubahan draft" : `Terbit v${pubMeta?.version || 1}`}
+							{hasUnpublished ? "Ada perubahan draft" : "Telah Terbit"}
 						</span>
 					</div>
 
@@ -1933,7 +1930,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 											/>
 										</div>
 										<h3 className="text-base font-bold text-white">
-											{hasUnpublished ? "Draft Menunggu Terbit" : `Versi Aktif v${pubMeta?.version || 1}`}
+											{hasUnpublished ? "Draft Menunggu Terbit" : "Website Aktif & Terbit"}
 										</h3>
 										<p className="text-xs text-slate-400 mt-1">
 											Perubahan Draft:{" "}
@@ -1951,7 +1948,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									<div>
 										<div className="flex items-center justify-between text-xs text-slate-400 mb-2">
 											<span>Isolasi Draft & Publish</span>
-											<span className="text-emerald-400 font-bold text-[10px]">ATOMIC D1</span>
+											<span className="text-emerald-400 font-bold text-[10px]">AKTIF</span>
 										</div>
 										<h3 className="text-base font-bold text-white">Transaksional</h3>
 										<p className="text-xs text-slate-400 mt-1 leading-relaxed">
@@ -1959,14 +1956,14 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 										</p>
 									</div>
 									<div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-										Zero Partial State
+										Tersinkronisasi
 									</div>
 								</div>
 							</div>
 
 							{/* Summary metrics */}
 							<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
-								<h3 className="text-base font-bold text-white mb-1">Entitas Konten D1 (Draft)</h3>
+								<h3 className="text-base font-bold text-white mb-1">Ringkasan Konten Aktif</h3>
 								<p className="text-xs text-slate-400 mb-4">
 									Data yang sedang aktif dalam ruang kerja draft Anda
 								</p>
@@ -4184,86 +4181,95 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							</div>
 
 							{/* =========================================================================
-							    PART B: LINK CLICKS MONITOR
+							    PART B: LINK CLICKS & INTERACTION MONITOR
 							    ========================================================================= */}
-							<div className="pt-2 flex items-center gap-2">
-								<span className="p-1.5 rounded-lg bg-violet-950/80 border border-violet-800/60 text-violet-400">
-									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-									</svg>
+							<div className="pt-2 flex items-center justify-between">
+								<div className="flex items-center gap-2">
+									<span className="p-1.5 rounded-lg bg-violet-950/80 border border-violet-800/60 text-violet-400">
+										<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+										</svg>
+									</span>
+									<h3 className="text-sm font-bold text-white uppercase tracking-wider">
+										Interaksi & Klik Terpadu (Click Monitor V4.1)
+									</h3>
+								</div>
+								<span className="text-xs text-slate-400 font-mono">
+									Total Sepanjang Waktu: <strong className="text-violet-300">{analyticsData?.totalInteractionsAllTime ?? (analyticsData?.totalAllTime ?? 0)}</strong>
 								</span>
-								<h3 className="text-sm font-bold text-white uppercase tracking-wider">
-									Interaksi & Klik Tautan (Link Clicks)
-								</h3>
 							</div>
 
-							{/* 4 Metric Cards */}
+							{/* 4 Metric Cards: Total Interactions, Link Clicks, Explore Clicks, Contact Clicks */}
 							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+								{/* 1. Total Interaksi */}
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 									<div className="flex items-center justify-between text-slate-400 mb-2">
-										<span className="text-xs font-semibold uppercase tracking-wider">Total Klik ({analyticsRange})</span>
+										<span className="text-xs font-semibold uppercase tracking-wider">Total Interaksi ({analyticsRange})</span>
 										<span className="p-1.5 rounded-lg bg-violet-950/60 text-violet-400">
 											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
 											</svg>
 										</span>
 									</div>
 									<div className="text-2xl sm:text-3xl font-extrabold text-white">
-										{analyticsData?.totalClicksPeriod ?? 0}
+										{analyticsData?.totalInteractionsPeriod ?? (analyticsData?.totalClicksPeriod ?? 0)}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
-										Akumulasi klik dalam periode terpilih
+										Akumulasi tautan & navigasi seksi
 									</div>
 								</div>
 
+								{/* 2. Klik Tautan */}
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 									<div className="flex items-center justify-between text-slate-400 mb-2">
-										<span className="text-xs font-semibold uppercase tracking-wider">Klik Hari Ini</span>
-										<span className="p-1.5 rounded-lg bg-emerald-950/60 text-emerald-400">
-											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-											</svg>
-										</span>
-									</div>
-									<div className="text-2xl sm:text-3xl font-extrabold text-white">
-										{analyticsData?.todayClicks ?? 0}
-									</div>
-									<div className="text-[11px] text-slate-500 mt-2">
-										Sejak pukul 00:00 UTC hari ini
-									</div>
-								</div>
-
-								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
-									<div className="flex items-center justify-between text-slate-400 mb-2">
-										<span className="text-xs font-semibold uppercase tracking-wider">Tautan Terpantau</span>
-										<span className="p-1.5 rounded-lg bg-cyan-950/60 text-cyan-400">
+										<span className="text-xs font-semibold uppercase tracking-wider">Klik Tautan (Links)</span>
+										<span className="p-1.5 rounded-lg bg-blue-950/60 text-blue-400">
 											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
 											</svg>
 										</span>
 									</div>
 									<div className="text-2xl sm:text-3xl font-extrabold text-white">
-										{analyticsData?.activeLinksCount ?? 0}
+										{analyticsData?.linkClicksPeriod ?? (analyticsData?.totalClicksPeriod ?? 0)}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
-										Tautan aktif di database D1
+										{analyticsData?.activeLinksCount ?? 0} tautan aktif di bio
 									</div>
 								</div>
 
+								{/* 3. Klik Navigasi Explore */}
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
 									<div className="flex items-center justify-between text-slate-400 mb-2">
-										<span className="text-xs font-semibold uppercase tracking-wider">Tautan Terpopuler</span>
-										<span className="p-1.5 rounded-lg bg-amber-950/60 text-amber-400">
+										<span className="text-xs font-semibold uppercase tracking-wider">Klik Eksplorasi (Explore)</span>
+										<span className="p-1.5 rounded-lg bg-pink-950/60 text-pink-400">
 											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 											</svg>
 										</span>
 									</div>
-									<div className="text-sm font-bold text-white truncate" title={analyticsData?.topLink?.titleId || analyticsData?.topLink?.titleEn || "Belum ada klik"}>
-										{analyticsData?.topLink ? (analyticsData.topLink.titleId || analyticsData.topLink.titleEn) : "Belum ada interaksi"}
+									<div className="text-2xl sm:text-3xl font-extrabold text-white">
+										{analyticsData?.exploreClicksPeriod ?? 0}
 									</div>
 									<div className="text-[11px] text-slate-500 mt-2">
-										{analyticsData?.topLink ? `${analyticsData.topLink.clicks} klik (${analyticsData.topLink.percentage}% dari total)` : "Menunggu klik pertama"}
+										Interaksi & kunjungan tab Explore
+									</div>
+								</div>
+
+								{/* 4. Klik Navigasi Contact */}
+								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+									<div className="flex items-center justify-between text-slate-400 mb-2">
+										<span className="text-xs font-semibold uppercase tracking-wider">Klik Kontak (Contact)</span>
+										<span className="p-1.5 rounded-lg bg-emerald-950/60 text-emerald-400">
+											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+											</svg>
+										</span>
+									</div>
+									<div className="text-2xl sm:text-3xl font-extrabold text-white">
+										{analyticsData?.contactClicksPeriod ?? 0}
+									</div>
+									<div className="text-[11px] text-slate-500 mt-2">
+										Interaksi & kunjungan tab Kontak
 									</div>
 								</div>
 							</div>
@@ -4272,11 +4278,11 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6">
 								<div className="flex items-center justify-between mb-4">
 									<div>
-										<h3 className="text-sm font-bold text-white">Aktivitas Tren Klik Harian</h3>
-										<p className="text-xs text-slate-400">Frekuensi interaksi pengunjung per hari</p>
+										<h3 className="text-sm font-bold text-white">Aktivitas Tren Interaksi Harian</h3>
+										<p className="text-xs text-slate-400">Frekuensi klik tautan dan eksplorasi pengunjung per hari</p>
 									</div>
 									<div className="text-xs text-slate-400 font-mono">
-										Total {analyticsData?.timeSeries?.reduce((acc, curr) => acc + curr.clicks, 0) ?? 0} klik
+										Total {analyticsData?.timeSeries?.reduce((acc, curr) => acc + curr.clicks, 0) ?? 0} interaksi
 									</div>
 								</div>
 
@@ -4315,7 +4321,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 																}}
 															>
 																<div className="absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg">
-																	{item.clicks} klik
+																	{item.clicks} interaksi
 																</div>
 															</div>
 															<span className="text-[10px] text-slate-500 whitespace-nowrap">
@@ -4507,10 +4513,10 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 								<div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
 									<div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-										Versi Publikasi
+										Status Publikasi
 									</div>
-									<div className="text-lg font-bold text-violet-400 font-mono">
-										v{pubMeta?.version ?? 1}
+									<div className="text-lg font-bold text-emerald-400 font-mono">
+										Aktif
 									</div>
 									<div className="text-xs text-slate-500 mt-2">
 										{hasUnpublished ? "Draft belum diterbitkan" : "Sinkron dengan publik"}
@@ -5792,14 +5798,10 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							<span className="text-xl">🚀</span>
 						</div>
 						<h3 className="text-lg font-bold text-white mb-2">Terbitkan Seluruh Perubahan?</h3>
-						<p className="text-xs sm:text-sm text-slate-300 mb-4 leading-relaxed">
-							Perubahan pada <strong>Profil</strong>, <strong>Tautan</strong>, dan <strong>Kontak</strong> yang ada di draft akan langsung dipromosikan ke pengunjung publik secara atomik.
+						<p className="text-xs sm:text-sm text-slate-300 mb-5 leading-relaxed">
+							Semua perubahan pada profil, tema visual, tata letak, tautan, kontak, dan karya yang tersimpan di ruang kerja draft akan langsung dipromosikan ke pengunjung publik secara atomik.
 						</p>
-						<div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 mb-4 text-xs text-slate-400">
-							<div>• Target Versi: <span className="text-emerald-400 font-bold">v{(pubMeta?.version || 1) + 1}</span></div>
-							<div>• Diterbitkan Oleh: <span className="text-slate-200">{user.email}</span></div>
-						</div>
-						<div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+						<div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
 							<button
 								type="button"
 								disabled={isPublishing}
@@ -5812,9 +5814,9 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 								type="button"
 								disabled={isPublishing}
 								onClick={handlePublishChanges}
-								className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition-colors cursor-pointer"
+								className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
 							>
-								{isPublishing ? "Mempublikasikan..." : "Ya, Terbitkan Sekarang"}
+								{isPublishing ? "Menerbitkan..." : "Ya, Terbitkan Sekarang"}
 							</button>
 						</div>
 					</div>

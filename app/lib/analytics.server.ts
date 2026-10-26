@@ -62,6 +62,15 @@ export interface ClickAnalyticsSummary {
 	linkBreakdown: LinkClickBreakdown[];
 	timeSeries: DailyClickPoint[];
 	topReferrers: ReferrerCount[];
+	// V4.1 Enhanced Interaction Metrics (Links, Explore, Contact)
+	totalInteractionsPeriod: number;
+	linkClicksPeriod: number;
+	exploreClicksPeriod: number;
+	contactClicksPeriod: number;
+	todayInteractions: number;
+	last7DaysInteractions: number;
+	last30DaysInteractions: number;
+	totalInteractionsAllTime: number;
 	visitors?: VisitorAnalyticsSummary;
 }
 
@@ -150,13 +159,21 @@ export async function getClickSummary(
 	const thirtyDaysIso = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
 	try {
-		// 1. Total counts across multiple periods
-		const [periodRes, todayRes, sevenDaysRes, thirtyDaysRes, allTimeRes] = await Promise.all([
+		// 1. Total counts across multiple periods (Links and Navigation Interactions)
+		const [
+			periodRes, todayRes, sevenDaysRes, thirtyDaysRes, allTimeRes,
+			pvPageCountsRes, todayPvRes, sevenDaysPvRes, thirtyDaysPvRes, allTimePvRes
+		] = await Promise.all([
 			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime(?);").bind(dateBoundary).first<{ count: number }>(),
 			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime('now', 'start of day');").first<{ count: number }>(),
 			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime('now', '-7 days');").first<{ count: number }>(),
 			db.prepare("SELECT count(*) as count FROM click_events WHERE datetime(clicked_at) >= datetime('now', '-30 days');").first<{ count: number }>(),
 			db.prepare("SELECT count(*) as count FROM click_events;").first<{ count: number }>(),
+			db.prepare("SELECT page, count(*) as count FROM page_views WHERE datetime(viewed_at) >= datetime(?) GROUP BY page;").bind(dateBoundary).all<{ page: string; count: number }>(),
+			db.prepare("SELECT count(*) as count FROM page_views WHERE page IN ('explore', 'contact') AND datetime(viewed_at) >= datetime('now', 'start of day');").first<{ count: number }>(),
+			db.prepare("SELECT count(*) as count FROM page_views WHERE page IN ('explore', 'contact') AND datetime(viewed_at) >= datetime('now', '-7 days');").first<{ count: number }>(),
+			db.prepare("SELECT count(*) as count FROM page_views WHERE page IN ('explore', 'contact') AND datetime(viewed_at) >= datetime('now', '-30 days');").first<{ count: number }>(),
+			db.prepare("SELECT count(*) as count FROM page_views WHERE page IN ('explore', 'contact');").first<{ count: number }>(),
 		]);
 
 		const totalClicksPeriod = periodRes?.count ?? 0;
@@ -164,6 +181,21 @@ export async function getClickSummary(
 		const last7DaysClicks = sevenDaysRes?.count ?? 0;
 		const last30DaysClicks = thirtyDaysRes?.count ?? 0;
 		const totalAllTime = allTimeRes?.count ?? 0;
+
+		const pvMap = new Map<string, number>();
+		(pvPageCountsRes.results ?? []).forEach((row) => {
+			if (row.page) pvMap.set(row.page, row.count);
+		});
+
+		const exploreClicksPeriod = pvMap.get("explore") ?? 0;
+		const contactClicksPeriod = pvMap.get("contact") ?? 0;
+		const linkClicksPeriod = totalClicksPeriod;
+		const totalInteractionsPeriod = linkClicksPeriod + exploreClicksPeriod + contactClicksPeriod;
+
+		const todayInteractions = todayClicks + (todayPvRes?.count ?? 0);
+		const last7DaysInteractions = last7DaysClicks + (sevenDaysPvRes?.count ?? 0);
+		const last30DaysInteractions = last30DaysClicks + (thirtyDaysPvRes?.count ?? 0);
+		const totalInteractionsAllTime = totalAllTime + (allTimePvRes?.count ?? 0);
 
 		// 2. Link breakdown (joins published links with clicks)
 		const linksQuery = range === "all"
@@ -212,17 +244,16 @@ export async function getClickSummary(
 
 		const topLink = linkBreakdown.length > 0 && linkBreakdown[0].clicks > 0 ? linkBreakdown[0] : null;
 
-		// 3. Time Series Daily Trend
-		// Fetch counts grouped by date
+		// 3. Time Series Daily Trend (Combining Link Clicks and Explore/Contact Navigation)
 		const timeSeriesRes = await db
 			.prepare(
-				`SELECT substr(replace(clicked_at, 'T', ' '), 1, 10) as day, count(*) as count
-				 FROM click_events
-				 WHERE datetime(clicked_at) >= datetime(?)
-				 GROUP BY day
-				 ORDER BY day ASC;`
+				`SELECT substr(replace(ts, 'T', ' '), 1, 10) as day, count(*) as count FROM (
+					SELECT clicked_at as ts FROM click_events WHERE datetime(clicked_at) >= datetime(?)
+					UNION ALL
+					SELECT viewed_at as ts FROM page_views WHERE page IN ('explore', 'contact') AND datetime(viewed_at) >= datetime(?)
+				) GROUP BY day ORDER BY day ASC;`
 			)
-			.bind(dateBoundary)
+			.bind(dateBoundary, dateBoundary)
 			.all<{ day: string; count: number }>();
 
 		const dayMap = new Map<string, number>();
@@ -285,6 +316,15 @@ export async function getClickSummary(
 			linkBreakdown,
 			timeSeries,
 			topReferrers,
+			// V4.1 Interaction Metrics
+			totalInteractionsPeriod,
+			linkClicksPeriod,
+			exploreClicksPeriod,
+			contactClicksPeriod,
+			todayInteractions,
+			last7DaysInteractions,
+			last30DaysInteractions,
+			totalInteractionsAllTime,
 		};
 	} catch (err: unknown) {
 		console.warn("Failed to aggregate click summary:", err);
@@ -300,6 +340,14 @@ export async function getClickSummary(
 			linkBreakdown: [],
 			timeSeries: [],
 			topReferrers: [],
+			totalInteractionsPeriod: 0,
+			linkClicksPeriod: 0,
+			exploreClicksPeriod: 0,
+			contactClicksPeriod: 0,
+			todayInteractions: 0,
+			last7DaysInteractions: 0,
+			last30DaysInteractions: 0,
+			totalInteractionsAllTime: 0,
 		};
 	}
 }
