@@ -33,7 +33,7 @@ export const MEDIA_SIZE_LIMITS: Record<MediaCategory, number> = {
 	avatar: 5 * 1024 * 1024, // 5 MiB
 	cover: 15 * 1024 * 1024, // 15 MiB
 	background: 50 * 1024 * 1024, // 50 MiB (covers both 15 MiB images and 50 MiB videos)
-	general: 15 * 1024 * 1024,
+	general: 50 * 1024 * 1024, // 50 MiB (covers both 15 MiB images and 50 MiB videos)
 	icon: 2 * 1024 * 1024, // 2 MiB (icons)
 };
 
@@ -93,7 +93,7 @@ export function detectMediaFormat(buffer: Uint8Array): DetectedFormat | null {
 		return { mediaType: "video", mimeType: "video/webm", extension: "webm" };
 	}
 
-	// 5. MP4 / AVIF (ISO Base Media File Format: bytes 4-7 = 'ftyp')
+	// 5. MP4 / AVIF / QuickTime MOV (ISO Base Media File Format: bytes 4-7 = 'ftyp')
 	const ftypString = String.fromCharCode(buffer[4], buffer[5], buffer[6], buffer[7]);
 	if (ftypString === "ftyp") {
 		const brand = String.fromCharCode(buffer[8], buffer[9], buffer[10], buffer[11]);
@@ -101,8 +101,18 @@ export function detectMediaFormat(buffer: Uint8Array): DetectedFormat | null {
 		if (brand === "avif" || brand === "avis") {
 			return { mediaType: "image", mimeType: "image/avif", extension: "avif" };
 		}
+		// QuickTime MOV brand: qt  
+		if (brand === "qt  ") {
+			return { mediaType: "video", mimeType: "video/quicktime", extension: "mov" };
+		}
 		// Standard MP4 brands (isom, mp41, mp42, dash, etc.)
 		return { mediaType: "video", mimeType: "video/mp4", extension: "mp4" };
+	}
+
+	// 6. QuickTime MOV without ftyp (root atoms: moov, mdat, wide, free)
+	const qtBoxType = String.fromCharCode(buffer[4], buffer[5], buffer[6], buffer[7]);
+	if (qtBoxType === "moov" || qtBoxType === "mdat" || qtBoxType === "wide" || qtBoxType === "free") {
+		return { mediaType: "video", mimeType: "video/quicktime", extension: "mov" };
 	}
 
 	return null;
@@ -154,7 +164,7 @@ export function validateUpload(
 	if (!format) {
 		return {
 			isValid: false,
-			error: "Format file tidak didukung atau rusak. Hanya gambar (JPEG, PNG, WebP, AVIF) dan video latar (MP4, WebM) yang diizinkan.",
+			error: "Format file tidak didukung atau rusak. Hanya gambar (JPEG, PNG, WebP, AVIF) dan video (MP4, WebM, MOV) yang diizinkan.",
 			statusCode: 415,
 		};
 	}
@@ -170,10 +180,10 @@ export function validateUpload(
 		}
 	}
 
-	if (category === "background" && format.mediaType === "image" && buffer.length > 15 * 1024 * 1024) {
+	if ((category === "background" || category === "general") && format.mediaType === "image" && buffer.length > 15 * 1024 * 1024) {
 		return {
 			isValid: false,
-			error: "Gambar latar belakang maksimal 15 MiB.",
+			error: "File gambar maksimal 15 MiB.",
 			statusCode: 413,
 		};
 	}

@@ -320,6 +320,7 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 	const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 	const [uploadError, setUploadError] = useState<string | null>(null);
 	const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
+	const [isUploadSourceDialogOpen, setIsUploadSourceDialogOpen] = useState(false);
 
 	// Explore items & Categories state (Single-Tier Customizable Main Categories)
 	const [exploreItems, setExploreItems] = useState<ExploreItemRecord[]>(loaderData.draftExplore || []);
@@ -1622,10 +1623,48 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 		}
 	};
 
+	const closeUploadSourceDialog = useCallback(() => {
+		setIsUploadSourceDialogOpen(false);
+		if (typeof window !== "undefined" && window.history.state?.modal === "upload-source") {
+			window.history.back();
+		}
+	}, []);
+
+	// Back button and Escape key support for Upload Source Dialog (Mobile ergonomics)
+	useEffect(() => {
+		if (!isUploadSourceDialogOpen) return;
+
+		const handlePopState = () => {
+			setIsUploadSourceDialogOpen(false);
+		};
+
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") {
+				closeUploadSourceDialog();
+			}
+		};
+
+		if (typeof window !== "undefined") {
+			window.history.pushState({ modal: "upload-source" }, "");
+			window.addEventListener("popstate", handlePopState);
+			window.addEventListener("keydown", handleKeyDown);
+		}
+
+		return () => {
+			if (typeof window !== "undefined") {
+				window.removeEventListener("popstate", handlePopState);
+				window.removeEventListener("keydown", handleKeyDown);
+			}
+		};
+	}, [isUploadSourceDialogOpen, closeUploadSourceDialog]);
+
 	const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const files = e.target.files;
 		if (!files || files.length === 0) return;
 		const file = files[0];
+
+		// Dismiss the source selection dialog
+		closeUploadSourceDialog();
 
 		const targetCategory =
 			mediaTarget === "avatar"
@@ -1634,7 +1673,24 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 				? "cover"
 				: mediaTarget === "background"
 				? "background"
+				: mediaCategoryFilter === "avatar" || mediaCategoryFilter === "cover" || mediaCategoryFilter === "background"
+				? mediaCategoryFilter
 				: "general";
+
+		// Client-side validation: if target is avatar or cover or background_poster, strictly reject video
+		const lowerName = file.name.toLowerCase();
+		const isTargetImageOnly = mediaTarget === "avatar" || mediaTarget === "cover" || mediaTarget === "background_poster";
+		const isVideo = file.type.startsWith("video/") || lowerName.endsWith(".mp4") || lowerName.endsWith(".webm") || lowerName.endsWith(".mov");
+
+		if (isTargetImageOnly && isVideo) {
+			const errorMsg = studioLang === "id"
+				? `Target ${mediaTarget} hanya menerima format gambar (JPEG, PNG, WebP, AVIF).`
+				: `Target ${mediaTarget} only accepts image formats (JPEG, PNG, WebP, AVIF).`;
+			setUploadError(errorMsg);
+			showToast(errorMsg, "error");
+			e.target.value = "";
+			return;
+		}
 
 		setIsUploadingMedia(true);
 		setUploadError(null);
@@ -1652,18 +1708,19 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 			const data = (await res.json()) as { asset?: MediaAssetRecord; error?: string };
 
 			if (!res.ok) {
-				setUploadError(data.error || "Gagal mengunggah file media.");
-				showToast(data.error || "Gagal mengunggah media", "error");
+				const errMsg = data.error || (studioLang === "id" ? "Gagal mengunggah file media." : "Failed to upload media file.");
+				setUploadError(errMsg);
+				showToast(errMsg, "error");
 				return;
 			}
 
 			if (data.asset) {
-				showToast("Media berhasil diunggah!", "success");
+				showToast(studioLang === "id" ? "Media berhasil diunggah!" : "Media uploaded successfully!", "success");
 				fetchMediaList(mediaCategoryFilter);
 				handleSelectMedia(data.asset);
 			}
 		} catch (err: unknown) {
-			const msg = err instanceof Error ? err.message : "Error upload";
+			const msg = err instanceof Error ? err.message : (studioLang === "id" ? "Terjadi kesalahan saat mengunggah." : "Upload error");
 			setUploadError(msg);
 			showToast(msg, "error");
 		} finally {
@@ -6382,29 +6439,26 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 							</div>
 
 							<div className="flex items-center gap-2">
-								{/* Upload Button */}
-								<label
+								{/* Upload Button: Opens Source Selection Dialog */}
+								<button
+									type="button"
+									onClick={() => setIsUploadSourceDialogOpen(true)}
+									disabled={isUploadingMedia}
 									className={`px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-md ${
-										isUploadingMedia ? "opacity-50 pointer-events-none" : ""
+										isUploadingMedia ? "opacity-50 pointer-events-none cursor-not-allowed" : ""
 									}`}
 								>
+									{isUploadingMedia && (
+										<span className="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+									)}
 									<span>{isUploadingMedia ? (studioLang === "id" ? "Mengunggah..." : "Uploading...") : "+ Upload Media"}</span>
-									<input
-										type="file"
-										accept={
-											mediaTarget === "avatar" || mediaTarget === "cover" || mediaTarget === "background_poster"
-												? "image/jpeg,image/png,image/webp,image/avif"
-												: "image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm"
-										}
-										onChange={handleUploadFile}
-										className="hidden"
-									/>
-								</label>
+								</button>
 
 								<button
 									type="button"
 									onClick={() => setIsMediaModalOpen(false)}
 									className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-xs cursor-pointer"
+									aria-label="Close Media Library"
 								>
 									✕
 								</button>
@@ -6458,15 +6512,23 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									{studioLang === "id" ? "Memuat koleksi media dari Cloudflare R2..." : "Loading media collection from Cloudflare R2..."}
 								</div>
 							) : mediaList.length === 0 ? (
-								<div className="py-16 text-center border-2 border-dashed border-slate-800 rounded-2xl">
+								<div className="py-16 text-center border-2 border-dashed border-slate-800 rounded-2xl flex flex-col items-center">
 									<p className="text-sm text-slate-400 mb-2">
 										{studioLang === "id" ? "Belum ada file media di kategori ini." : "No media files in this category yet."}
 									</p>
-									<p className="text-xs text-slate-500">
+									<p className="text-xs text-slate-500 mb-3.5">
 										{studioLang === "id"
 											? <>Klik tombol <strong>+ Upload Media</strong> di kanan atas untuk mengunggah.</>
 											: <>Click <strong>+ Upload Media</strong> button in top right to upload.</>}
 									</p>
+									<button
+										type="button"
+										onClick={() => setIsUploadSourceDialogOpen(true)}
+										className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors cursor-pointer shadow-sm inline-flex items-center gap-1.5"
+									>
+										<span>+</span>
+										<span>{studioLang === "id" ? "Upload Media Sekarang" : "Upload Media Now"}</span>
+									</button>
 								</div>
 							) : (
 								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
@@ -6485,11 +6547,26 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 														loading="lazy"
 													/>
 												) : (
-													<video
-														src={`/api/studio/media/${asset.id}/preview`}
-														muted
-														className="w-full h-full object-cover"
-													/>
+													<div className="w-full h-full relative flex items-center justify-center bg-slate-950">
+														<video
+															src={`/api/studio/media/${asset.id}/preview`}
+															muted
+															playsInline
+															preload="metadata"
+															className="w-full h-full object-cover"
+														/>
+														{/* Play Icon Badge Overlay */}
+														<div className="absolute inset-0 flex items-center justify-center bg-black/35 group-hover:bg-black/15 transition-colors pointer-events-none">
+															<span className="w-9 h-9 rounded-full bg-black/60 border border-white/25 text-white flex items-center justify-center shadow-lg backdrop-blur-sm group-hover:scale-110 transition-transform">
+																<svg className="w-4 h-4 fill-current ml-0.5" viewBox="0 0 24 24">
+																	<path d="M8 5v14l11-7z" />
+																</svg>
+															</span>
+														</div>
+														<span className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-violet-600/90 text-white backdrop-blur-sm shadow-2xs">
+															VIDEO
+														</span>
+													</div>
 												)}
 												<span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider bg-black/70 text-white backdrop-blur-sm">
 													{asset.media_category}
@@ -6501,8 +6578,13 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 
 											{/* Info & Actions */}
 											<div className="p-2.5 flex flex-col gap-1.5 flex-1 justify-between">
-												<div className="truncate text-xs font-medium text-slate-200" title={asset.original_filename}>
-													{asset.original_filename}
+												<div>
+													<div className="truncate text-xs font-medium text-slate-200" title={asset.original_filename}>
+														{asset.original_filename}
+													</div>
+													<div className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
+														{asset.mime_type}
+													</div>
 												</div>
 
 												<div className="flex items-center gap-1.5 pt-1 border-t border-slate-800/80">
@@ -6528,6 +6610,125 @@ export default function Studio({ loaderData }: Route.ComponentProps) {
 									))}
 								</div>
 							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* =========================================================================
+			    MODALS: MEDIA UPLOAD SOURCE SELECTION DIALOG (ANDROID GALLERY & STORAGE)
+			    ========================================================================= */}
+			{isUploadSourceDialogOpen && (
+				<div
+					className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+					onClick={(e) => {
+						if (e.target === e.currentTarget) closeUploadSourceDialog();
+					}}
+				>
+					<div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
+						{/* Header */}
+						<div className="flex items-center justify-between pb-3 border-b border-slate-800">
+							<div>
+								<h3 className="text-base font-bold text-white">
+									{studioLang === "id" ? "Pilih Sumber Media" : "Select Media Source"}
+								</h3>
+								<p className="text-xs text-slate-400 mt-0.5">
+									{studioLang === "id"
+										? "Pilih metode penjelajahan file pada perangkat Anda"
+										: "Choose how to browse files on your device"}
+								</p>
+							</div>
+							<button
+								type="button"
+								onClick={closeUploadSourceDialog}
+								className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer"
+								aria-label="Close"
+							>
+								✕
+							</button>
+						</div>
+
+						{/* Helpful hint for Android video picker issue */}
+						<div className="p-3 rounded-2xl bg-violet-950/40 border border-violet-800/40 text-violet-200 text-xs flex items-start gap-2.5">
+							<span className="text-base leading-none mt-0.5">💡</span>
+							<p className="leading-relaxed">
+								{studioLang === "id"
+									? "Tips Android: Jika video tidak muncul di aplikasi Google Foto, pilih File Manager untuk membuka penyimpanan perangkat."
+									: "Android tip: If videos do not appear in Google Photos, choose File Manager to browse device storage directly."}
+							</p>
+						</div>
+
+						{/* Options */}
+						<div className="flex flex-col gap-3">
+							{/* Option 1: Galeri / Foto & Video */}
+							<label className="flex items-center gap-3.5 p-4 rounded-2xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-violet-500/50 cursor-pointer transition-all group">
+								<input
+									type="file"
+									accept={
+										mediaTarget === "avatar" || mediaTarget === "cover" || mediaTarget === "background_poster"
+											? "image/*,image/jpeg,image/png,image/webp,image/avif"
+											: "image/*,video/*,image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm,video/quicktime"
+									}
+									onChange={handleUploadFile}
+									className="sr-only"
+								/>
+								<div className="w-12 h-12 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+									<svg className="w-6 h-6 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.75">
+										<path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+									</svg>
+								</div>
+								<div className="flex-1 min-w-0">
+									<h4 className="text-sm font-bold text-white group-hover:text-violet-300 transition-colors">
+										{studioLang === "id" ? "Galeri / Foto & Video" : "Gallery / Photos & Videos"}
+									</h4>
+									<p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+										{studioLang === "id"
+											? "Buka pemilih media sistem untuk foto dan video yang tersimpan."
+											: "Open system media picker for saved photos and videos."}
+									</p>
+								</div>
+								<span className="text-slate-500 group-hover:text-violet-400 text-lg transition-colors">
+									→
+								</span>
+							</label>
+
+							{/* Option 2: File Manager / Jelajahi Penyimpanan */}
+							<label className="flex items-center gap-3.5 p-4 rounded-2xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-amber-500/50 cursor-pointer transition-all group">
+								<input
+									type="file"
+									onChange={handleUploadFile}
+									className="sr-only"
+								/>
+								<div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+									<svg className="w-6 h-6 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.75">
+										<path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+									</svg>
+								</div>
+								<div className="flex-1 min-w-0">
+									<h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors">
+										{studioLang === "id" ? "File Manager / Jelajahi Penyimpanan" : "File Manager / Browse Storage"}
+									</h4>
+									<p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+										{studioLang === "id"
+											? "Jelajahi seluruh penyimpanan internal / folder perangkat jika video tidak muncul di Google Foto."
+											: "Browse all internal storage and device folders if videos do not appear in Google Photos."}
+									</p>
+								</div>
+								<span className="text-slate-500 group-hover:text-amber-400 text-lg transition-colors">
+									→
+								</span>
+							</label>
+						</div>
+
+						{/* Footer / Cancel Button */}
+						<div className="pt-2 flex justify-end">
+							<button
+								type="button"
+								onClick={closeUploadSourceDialog}
+								className="w-full sm:w-auto px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer text-center"
+							>
+								{studioLang === "id" ? "Batal" : "Cancel"}
+							</button>
 						</div>
 					</div>
 				</div>
