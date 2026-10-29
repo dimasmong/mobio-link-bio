@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { ExploreConfig, ExploreItem, Language, ExplorePhoto } from "../data/profile";
 import { getLocalizedText, TRANSLATIONS } from "../lib/i18n";
 import {
@@ -184,6 +184,74 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 		});
 	}, [config.items, activeCategory, config.categories]);
 
+	// Category horizontal arrow scroll navigation
+	const categoriesContainerRef = useRef<HTMLDivElement>(null);
+	const [canScrollLeft, setCanScrollLeft] = useState(false);
+	const [canScrollRight, setCanScrollRight] = useState(false);
+
+	const updateCategoryScrollState = useCallback(() => {
+		const el = categoriesContainerRef.current;
+		if (!el) return;
+		const { scrollLeft, scrollWidth, clientWidth } = el;
+		const tolerance = 4;
+		const atStart = scrollLeft <= tolerance;
+		const atEnd = scrollLeft + clientWidth >= scrollWidth - tolerance;
+		setCanScrollLeft(!atStart);
+		setCanScrollRight(!atEnd);
+	}, []);
+
+	const scrollCategories = (direction: "left" | "right") => {
+		const el = categoriesContainerRef.current;
+		if (!el) return;
+		const scrollAmount = Math.max(160, Math.floor(el.clientWidth * 0.65));
+		el.scrollBy({
+			left: direction === "left" ? -scrollAmount : scrollAmount,
+			behavior: "smooth",
+		});
+		setTimeout(updateCategoryScrollState, 350);
+	};
+
+	useEffect(() => {
+		updateCategoryScrollState();
+
+		const el = categoriesContainerRef.current;
+		if (!el) return;
+
+		let resizeObserver: ResizeObserver | null = null;
+		if (typeof ResizeObserver !== "undefined") {
+			resizeObserver = new ResizeObserver(() => {
+				updateCategoryScrollState();
+			});
+			resizeObserver.observe(el);
+		}
+
+		window.addEventListener("resize", updateCategoryScrollState);
+
+		return () => {
+			if (resizeObserver) resizeObserver.disconnect();
+			window.removeEventListener("resize", updateCategoryScrollState);
+		};
+	}, [displayCategories, updateCategoryScrollState]);
+
+	// Keep active category pill visible inside scroll container
+	useEffect(() => {
+		if (!categoriesContainerRef.current || !activeCategory) return;
+		const container = categoriesContainerRef.current;
+		const activeButton = container.querySelector<HTMLButtonElement>(`button[data-category-id="${activeCategory}"]`);
+		if (activeButton) {
+			const containerLeft = container.scrollLeft;
+			const containerRight = containerLeft + container.clientWidth;
+			const btnLeft = activeButton.offsetLeft;
+			const btnRight = btnLeft + activeButton.offsetWidth;
+
+			if (btnLeft < containerLeft) {
+				container.scrollTo({ left: Math.max(0, btnLeft - 8), behavior: "smooth" });
+			} else if (btnRight > containerRight) {
+				container.scrollTo({ left: btnRight - container.clientWidth + 8, behavior: "smooth" });
+			}
+		}
+	}, [activeCategory]);
+
 	// Slides for active lightbox item
 	const slides: ExplorePhoto[] = useMemo(() => {
 		if (!activeLightboxItem) return [];
@@ -278,33 +346,73 @@ export function ExploreSection({ config, lang }: ExploreSectionProps) {
 				)}
 			</div>
 
-			{/* Single-Tier Category Filter Pills (Phase 2) */}
+			{/* Single-Tier Category Filter Navigation with Horizontal Arrow Controls */}
 			{hasItems && displayCategories.length > 1 && (
 				<div className="mb-6 flex justify-center w-full">
-					<div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 px-1 no-scrollbar scroll-smooth">
-						{displayCategories.map((cat) => {
-							const isCatActive = activeCategory === cat.id;
-							return (
-								<button
-									key={cat.id}
-									type="button"
-									onClick={() => setActiveCategory(cat.id)}
-									className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
-										isCatActive
-											? "bg-[var(--accent-color)] text-[var(--accent-foreground)] shadow-sm font-bold scale-102"
-											: "glass-liquid-secondary text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
-									}`}
-								>
-									{cat.color && (
-										<span
-											className="w-2 h-2 rounded-full shrink-0"
-											style={{ backgroundColor: isCatActive ? "currentColor" : cat.color }}
-										/>
-									)}
-									<span>{getLocalizedText(cat.name, lang, cat.id)}</span>
-								</button>
-							);
-						})}
+					<div className="flex items-center gap-1.5 sm:gap-2 w-full max-w-full">
+						{/* Left Navigation Arrow */}
+						<button
+							type="button"
+							onClick={() => scrollCategories("left")}
+							disabled={!canScrollLeft}
+							aria-disabled={!canScrollLeft}
+							aria-label={lang === "id" ? "Geser kategori ke kiri" : "Scroll categories left"}
+							className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
+								!canScrollLeft
+									? "opacity-25 cursor-not-allowed text-theme-muted glass-liquid-secondary border border-transparent pointer-events-none"
+									: "glass-liquid-secondary text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)] hover:scale-105 active:scale-95 cursor-pointer shadow-sm border border-[var(--glass-border-subtle)]"
+							}`}
+						>
+							<ChevronLeftIcon className="w-4 h-4" />
+						</button>
+
+						{/* Scrollable Category Track */}
+						<div
+							ref={categoriesContainerRef}
+							onScroll={updateCategoryScrollState}
+							className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 px-1 no-scrollbar scroll-smooth flex-1 min-w-0"
+						>
+							{displayCategories.map((cat) => {
+								const isCatActive = activeCategory === cat.id;
+								return (
+									<button
+										key={cat.id}
+										data-category-id={cat.id}
+										type="button"
+										onClick={() => setActiveCategory(cat.id)}
+										className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer flex items-center gap-1.5 shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
+											isCatActive
+												? "bg-[var(--accent-color)] text-[var(--accent-foreground)] shadow-sm font-bold scale-102"
+												: "glass-liquid-secondary text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)]"
+										}`}
+									>
+										{cat.color && (
+											<span
+												className="w-2 h-2 rounded-full shrink-0"
+												style={{ backgroundColor: isCatActive ? "currentColor" : cat.color }}
+											/>
+										)}
+										<span>{getLocalizedText(cat.name, lang, cat.id)}</span>
+									</button>
+								);
+							})}
+						</div>
+
+						{/* Right Navigation Arrow */}
+						<button
+							type="button"
+							onClick={() => scrollCategories("right")}
+							disabled={!canScrollRight}
+							aria-disabled={!canScrollRight}
+							aria-label={lang === "id" ? "Geser kategori ke kanan" : "Scroll categories right"}
+							className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-color)] ${
+								!canScrollRight
+									? "opacity-25 cursor-not-allowed text-theme-muted glass-liquid-secondary border border-transparent pointer-events-none"
+									: "glass-liquid-secondary text-theme-secondary hover:text-theme-primary hover:bg-[var(--glass-surface-hover)] hover:scale-105 active:scale-95 cursor-pointer shadow-sm border border-[var(--glass-border-subtle)]"
+							}`}
+						>
+							<ChevronRightIcon className="w-4 h-4" />
+						</button>
 					</div>
 				</div>
 			)}
